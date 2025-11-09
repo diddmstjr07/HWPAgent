@@ -1,0 +1,25 @@
+# Environment
+.env
+venv/
+.venv/
+*.pyc
+__pycache__/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Tooling caches
+.pytest_cache/
+*.log
+
+# Build / run artifacts
+output/
+modules/output/
+*.db
+*.sqlite3
+hwp_agent.db
+output/*.hwp
+output/*.hwpx

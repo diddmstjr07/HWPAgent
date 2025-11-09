@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>HWP Agent - 실시간 문서 편집기</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- 한컴 훈민정음 폰트 CSS -->
+    <link rel="stylesheet" href="/static/css/hunminjeongeum.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 왼쪽: 입력 패널 -->
+        <div class="panel left-panel">
+            <div class="panel-header">
+                <h1>HWP AGENT</h1>
+                <p>AI 기반 실시간 문서 생성</p>
+            </div>
+            
+            <div class="input-section" id="initialInputSection">
+                <textarea 
+                    id="userRequest" 
+                    placeholder="어떤 문서를 작성할까요?&#10;&#10;예시:&#10;기후변화에 대한 사회탐구 보고서&#10;회사 소개서&#10;프로젝트 제안서"
+                    rows="6"
+                ></textarea>
+                
+                <button id="generateBtn" class="btn btn-primary">
+                    <span class="btn-text">생성하기</span>
+                    <span class="spinner" style="display: none;">생성중...</span>
+                </button>
+            </div>
+
+            <!-- 작업 모드 선택 -->
+            <div class="mode-selector" id="modeSelector" style="display: none;">
+                <button class="mode-btn" id="directEditBtn" data-mode="direct">
+                    <i class="bi bi-cursor-text"></i> 직접 편집하기
+                </button>
+                <button class="mode-btn" id="modifyBtn" data-mode="modify">
+                    <i class="bi bi-pencil"></i> AI 수정 요청
+                </button>
+                <button class="mode-btn" id="formatBtn" data-mode="format">
+                    <i class="bi bi-type"></i> 서식 조정하기
+                </button>
+            </div>
+
+            <!-- 통합 입력 섹션 -->
+            <div class="unified-input-section" id="unifiedInputSection" style="display: none;">
+                <textarea 
+                    id="unifiedRequest" 
+                    placeholder=""
+                    rows="7"
+                ></textarea>
+                <div class="action-buttons">
+                    <button id="backBtn" class="btn btn-outline">
+                        <i class="bi bi-arrow-left"></i> 돌아가기
+                    </button>
+                    <button id="applyBtn" class="btn btn-primary">
+                        <span class="btn-text">적용하기</span>
+                        <span class="spinner" style="display: none;">처리중...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 오른쪽: 편집기 패널 -->
+        <div class="panel right-panel">
+            <div class="editor-header">
+                <div class="header-main">
+                    <input 
+                        type="text" 
+                        id="docTitle" 
+                        class="title-input" 
+                        placeholder="문서 제목"
+                        value=""
+                    >
+                    
+                    <div class="editor-actions">
+                        <select id="formatSelect" class="format-select">
+                            <option value="pdf" selected>PDF</option>
+                            <option value="hwp">HWP</option>
+                            <option value="docx">DOCX</option>
+                            <option value="md">Markdown</option>
+                        </select>
+                        <button id="styleBtn" class="btn btn-style">
+                            서식
+                        </button>
+                        <button id="saveBtn" class="btn btn-save" disabled>
+                            저장
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 진행 바 - 제목 아래 -->
+            <div id="progressBar" class="progress-bar" style="display: none;">
+                <div class="progress-bar-inner"></div>
+            </div>
+
+            <div class="editor-container">
+                <!-- HTML 실시간 미리보기 -->
+                <div id="htmlPreviewContainer" class="html-preview-container" style="display: none;">
+                    <div class="document-preview">
+                        <div id="previewTitle" class="preview-title"></div>
+                        <div id="previewContent" class="preview-content" contenteditable="false"></div>
+                    </div>
+                </div>
+                
+                <!-- 직접 편집 모드 버튼 -->
+                <div id="editModeToggle" class="edit-mode-toggle" style="display: none;">
+                    <button id="toggleEditBtn" class="btn-toggle-edit">
+                        <i class="bi bi-pencil-square"></i> 편집 모드
+                    </button>
+                </div>
+                
+                <!-- PDF 뷰어 -->
+                <div id="pdfViewerContainer" class="pdf-viewer-container">
+                    <div id="pdfPlaceholder" class="pdf-placeholder">
+                        <div class="placeholder-content">
+                            <h2>문서 미리보기</h2>
+                            <p>왼쪽에서 문서를 생성하면<br>여기에 실시간으로 표시됩니다</p>
+                        </div>
+                    </div>
+                    <iframe id="pdfViewer" class="pdf-viewer" style="display: none;"></iframe>
+                    <div id="pdfLoading" class="pdf-loading" style="display: none;">
+                        <div class="spinner-large">생성중..</div>
+                        <p>PDF 생성 중</p>
+                    </div>
+                </div>
+                
+                <textarea id="contentEditor" style="display: none;"></textarea>
+            </div>
+
+            <div class="editor-stats">
+                <span id="charCount">0자</span>
+                <span class="stats-divider">·</span>
+                <span id="wordCount">0단어</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 알림 토스트 -->
+    <div id="toast" class="toast"></div>
+
+    <!-- 서식 설정 모달 -->
+    <div id="styleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>문서 서식 설정</h2>
+                <button class="modal-close" onclick="closeStyleModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>폰트</label>
+                    <select id="fontName" class="form-control">
+                        <option value="맑은 고딕" selected>맑은 고딕</option>
+                        <option value="함초롬돋움">함초롬돋움</option>
+                        <option value="나눔고딕">나눔고딕</option>
+                        <option value="굴림">굴림</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>본문 크기</label>
+                    <input type="number" id="fontSize" class="form-control" value="11" min="8" max="20">
+                </div>
+                <div class="form-group">
+                    <label>제목 크기</label>
+                    <input type="number" id="titleSize" class="form-control" value="18" min="14" max="30">
+                </div>
+                <div class="form-group">
+                    <label>제목 스타일</label>
+                    <select id="headingSize" class="form-control">
+                        <option value="12">Small</option>
+                        <option value="14" selected>Medium</option>
+                        <option value="16">Large</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>줄 간격</label>
+                    <select id="lineSpacing" class="form-control">
+                        <option value="1.0">1.0</option>
+                        <option value="1.15">1.15</option>
+                        <option value="1.5" selected>1.5</option>
+                        <option value="2.0">2.0</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeStyleModal()">취소</button>
+                <button class="btn btn-primary" onclick="applyStyle()">적용</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
