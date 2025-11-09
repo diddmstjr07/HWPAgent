@@ -20,6 +20,25 @@ const htmlPreviewContainer = document.getElementById('htmlPreviewContainer');
 const previewTitle = document.getElementById('previewTitle');
 const previewContent = document.getElementById('previewContent');
 
+// 브랜드 로고 페이드-인
+const initBrandLogoReveal = () => {
+    const brandLogo = document.querySelector('.brand-mark');
+    if (brandLogo) {
+        const revealLogo = () => brandLogo.classList.add('is-visible');
+        if (brandLogo.complete) {
+            revealLogo();
+        } else {
+            brandLogo.addEventListener('load', revealLogo, { once: true });
+        }
+    }
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBrandLogoReveal);
+} else {
+    initBrandLogoReveal();
+}
+
 // 현재 PDF 파일명 저장
 let currentPdfFile = null;
 

@@ -3,6 +3,9 @@
 
 <div align="center">
   <h1>HWP Agent</h1>
+  <p>
+    <img src="static/images/logo.png" alt="HWP Agent Logo" width="140">
+  </p>
   <p>Gemini + LangChain 기반 한국어 HWP/HWPX 문서 자동 생성·포맷팅 에이전트</p>
   <p>
     <a href="https://github.com/diddmstjr07/HWPAgent/issues">Report Bug</a>
