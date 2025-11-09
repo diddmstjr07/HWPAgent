@@ -123,12 +123,11 @@
 
 body {
     font-family: 'NanumSquareRound', 'Gothic A1', 'Nunito', 'Quicksand', sans-serif;
-    background: var(--bg-canvas);
-    background-image: var(--gradient-hero);
+    background: radial-gradient(circle at top, #f8fbff 0%, #dff1ff 40%, #f3e6ff 75%, #fdf7ff 100%);
     color: var(--text-primary);
     min-height: 100vh;
     overflow-x: hidden;
-    overflow-y: hidden;
+    overflow-y: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -170,13 +169,53 @@ body::after {
     pointer-events: none;
 }
 
+.snowfield {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.snowfield span {
+    position: absolute;
+    top: -10%;
+    width: 10px;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+    animation: snowFall linear infinite;
+    filter: blur(0.3px);
+}
+
+.snowfield span:nth-child(1) { left: 5%; animation-duration: 12s; animation-delay: 0s; transform: scale(0.8); }
+.snowfield span:nth-child(2) { left: 20%; animation-duration: 16s; animation-delay: -2s; transform: scale(1.1); }
+.snowfield span:nth-child(3) { left: 35%; animation-duration: 14s; animation-delay: -4s; transform: scale(0.9); }
+.snowfield span:nth-child(4) { left: 50%; animation-duration: 18s; animation-delay: -1s; transform: scale(1.2); }
+.snowfield span:nth-child(5) { left: 65%; animation-duration: 15s; animation-delay: -3s; transform: scale(0.7); }
+.snowfield span:nth-child(6) { left: 80%; animation-duration: 17s; animation-delay: -5s; transform: scale(1.3); }
+.snowfield span:nth-child(7) { left: 12%; animation-duration: 19s; animation-delay: -6s; transform: scale(0.9); }
+.snowfield span:nth-child(8) { left: 28%; animation-duration: 13s; animation-delay: -7s; transform: scale(1); }
+.snowfield span:nth-child(9) { left: 44%; animation-duration: 16s; animation-delay: -8s; transform: scale(0.8); }
+.snowfield span:nth-child(10) { left: 58%; animation-duration: 18s; animation-delay: -9s; transform: scale(1.1); }
+.snowfield span:nth-child(11) { left: 72%; animation-duration: 20s; animation-delay: -10s; transform: scale(0.95); }
+.snowfield span:nth-child(12) { left: 88%; animation-duration: 14s; animation-delay: -11s; transform: scale(1.05); }
+
+@keyframes snowFall {
+    0% { transform: translate3d(0, -10%, 0) scale(var(--snow-scale, 1)); opacity: 0; }
+    10% { opacity: 1; }
+    50% { transform: translate3d(-10px, 50vh, 0) scale(var(--snow-scale, 1)); }
+    100% { transform: translate3d(10px, 110vh, 0) scale(var(--snow-scale, 1)); opacity: 0; }
+}
+
 /* ============================================
    LAYOUT SYSTEM
    ============================================ */
 
 .container {
     display: flex;
-    height: 100vh;
+    min-height: 100vh;
     max-width: 100%;
     padding: var(--space-6);
     gap: var(--space-6);
@@ -198,7 +237,8 @@ body::after {
 
 /* LEFT PANEL - Input & Controls */
 .left-panel {
-    width: 420px;
+    width: min(420px, 100%);
+    flex-shrink: 0;
     padding: var(--space-8) var(--space-6);
     display: flex;
     flex-direction: column;
@@ -293,8 +333,8 @@ body::after {
 }
 
 .brand-mark {
-    width: 72px;
-    height: 72px;
+    width: clamp(72px, 9vw, 130px);
+    height: clamp(72px, 9vw, 130px);
     object-fit: contain;
     filter: drop-shadow(0 10px 20px rgba(99, 102, 241, 0.25));
     z-index: 1;
@@ -314,6 +354,7 @@ body::after {
     flex-direction: column;
     gap: var(--space-1);
     z-index: 1;
+    align-items: flex-start;
 }
 
 .brand-copy h1 {
@@ -879,9 +920,10 @@ body::after {
 
 .panel-header h1 {
     font-family: 'NanumSquareRound', 'Gothic A1', 'Comfortaa', sans-serif;
-    font-size: 3rem;
+    font-size: 2.4rem;
     font-weight: 900;
     margin-bottom: var(--space-4);
+    margin-top: 10px;
     letter-spacing: -1px;
     line-height: 1.1;
     color: var(--primary);
@@ -1826,8 +1868,13 @@ textarea:focus {
 
 /* 데스크탑 (1200px 이하) */
 @media (max-width: 1200px) {
+    .container {
+        padding: var(--space-4);
+        gap: var(--space-4);
+    }
+    
     .left-panel {
-        width: 380px;
+        width: min(400px, 100%);
     }
     
     .panel-header h1 {
@@ -1843,23 +1890,20 @@ textarea:focus {
 @media (max-width: 1024px) {
     .container {
         flex-direction: column;
-        height: auto;
+        align-items: stretch;
         min-height: 100vh;
     }
     
     .left-panel {
         width: 100%;
-        height: auto;
-        min-height: auto;
-        max-height: 50vh;
+        flex-direction: column;
         border-right: none;
-        border-bottom: 1px solid var(--border-primary);
         padding: var(--space-6) var(--space-5);
     }
     
     .right-panel {
-        height: auto;
-        min-height: 50vh;
+        width: 100%;
+        min-height: 60vh;
     }
     
     .panel-header h1 {
@@ -1867,27 +1911,31 @@ textarea:focus {
     }
     
     .panel-header p {
-        font-size: 0.8rem;
+        font-size: 0.9rem;
+    }
+    
+    .brand-hero {
+        padding: var(--space-4);
     }
     
     .input-section textarea {
-        rows: 4;
         font-size: 0.95rem;
     }
     
     .editor-header {
-        padding: var(--space-4) var(--space-6);
+        padding: var(--space-4) var(--space-5);
         flex-wrap: wrap;
         gap: var(--space-3);
     }
     
     .title-input {
-        font-size: 1.5rem;
+        font-size: 1.6rem;
     }
     
     .editor-actions {
         width: 100%;
-        justify-content: space-between;
+        justify-content: flex-start;
+        gap: var(--space-3);
     }
     
     .document-preview {
@@ -1901,15 +1949,6 @@ textarea:focus {
     .preview-content {
         font-size: 0.95rem;
     }
-    
-    .mode-selector {
-        gap: var(--space-2);
-    }
-    
-    .mode-btn {
-        padding: var(--space-3) var(--space-4);
-        font-size: 0.85rem;
-    }
 }
 
 /* 모바일 (768px 이하) */
@@ -1920,17 +1959,13 @@ textarea:focus {
         --space-12: 2.5rem;
     }
     
-    body {
-        font-size: 14px;
-    }
-    
     .container {
-        padding: 0;
+        padding: var(--space-3);
     }
     
     .left-panel {
         padding: var(--space-5) var(--space-4);
-        max-height: 60vh;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.25);
     }
     
     .panel-header h1 {
@@ -1939,14 +1974,22 @@ textarea:focus {
     }
     
     .panel-header p {
-        font-size: 0.75rem;
+        font-size: 0.85rem;
+    }
+    
+    .brand-hero {
+        flex-direction: row;
+        gap: var(--space-3);
+    }
+    
+    .brand-copy h1 {
+        font-size: 1.6rem;
     }
     
     .input-section textarea,
     .unified-input-section textarea {
         font-size: 0.9rem;
         padding: var(--space-3);
-        rows: 3;
     }
     
     .btn {
@@ -2092,6 +2135,15 @@ textarea:focus {
 
 /* 소형 모바일 (480px 이하) */
 @media (max-width: 480px) {
+    .brand-hero {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .brand-copy {
+        align-items: center;
+    }
+    
     .panel-header h1 {
         font-size: 1.5rem;
     }
