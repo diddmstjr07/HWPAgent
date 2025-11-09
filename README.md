@@ -1,5 +1,14 @@
 # HWP Agent
 
+<p align="center">
+  <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/python-3.10+-blue.svg"></a>
+  <a href="https://flask.palletsprojects.com/"><img alt="Flask" src="https://img.shields.io/badge/flask-3.x-green.svg"></a>
+  <a href="https://ai.google.dev/"><img alt="Gemini API" src="https://img.shields.io/badge/gemini-api-orange.svg"></a>
+  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-TBD-lightgrey.svg"></a>
+  <a href="https://github.com/diddmstjr07/HWPAgent/issues"><img alt="Issues" src="https://img.shields.io/github/issues/diddmstjr07/HWPAgent.svg"></a>
+  <a href="https://github.com/diddmstjr07/HWPAgent/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/diddmstjr07/HWPAgent.svg"></a>
+</p>
+
 Gemini + LangChain 기반으로 한국어 HWP/HWPX 문서를 자동 생성하고 저장하는 경량 문서 작성 에이전트입니다.
 
 ## 주요 기능
