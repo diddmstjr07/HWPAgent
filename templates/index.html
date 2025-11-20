@@ -2,151 +2,75 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>HWP Agent - Gemini 기반 문서 자동 생성</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HWP Agent - Gemini 문서 생성</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="icon" href="/static/images/logo.png" type="image/png">
 </head>
 <body>
-    <div class="snowfield">
-        <span></span><span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span><span></span>
-    </div>
-    <div class="container">
-        <!-- 왼쪽: 입력 및 제어판 -->
-        <aside class="panel left-panel">
-            <header class="panel-header">
-                <div class="brand-hero">
-                    <img src="/static/images/logo.png" alt="HWP Agent 로고" class="brand-mark">
-                    <div class="brand-copy">
-                        <h1>HWP Agent</h1>
-                        <p>AI 문서 자동 생성</p>
-                    </div>
-                </div>
-            </header>
-
-            <section class="input-section" id="initialInputSection">
-                <textarea 
-                    id="userRequest" 
-                    placeholder="어떤 문서를 작성할까요?&#10;&#10;예:&#10; - 기후변화에 대한 사회탐구 보고서&#10; - 2024년 2분기 실적 보고서"
-                    rows="5"
-                ></textarea>
-                
-                <div class="template-upload-group">
-                    <div class="template-upload-header">
-                        <label>문서 양식 (선택)</label>
-                        <input type="file" id="templateFileInput" accept=".docx,.hwp,.hml,.txt,.md" hidden>
-                        <button id="templateUploadBtn" class="btn btn-secondary" type="button">
-                            <i class="bi bi-file-earmark-arrow-up"></i> 양식 업로드
-                        </button>
-                    </div>
-                    <div id="templatePreview" class="template-preview" style="display: none;">
-                        <div class="template-preview-header">
-                            <span class="template-name" id="templateName"></span>
-                            <button id="templateRemoveBtn" class="btn btn-text" type="button"><i class="bi bi-x-lg"></i></button>
-                        </div>
-                        <pre id="templatePreviewText"></pre>
-                    </div>
-                </div>
-
-                <button id="generateBtn" class="btn btn-primary" type="button">
-                    <i class="bi bi-stars"></i>
-                    <span class="btn-text">문서 생성</span>
-                    <div class="spinner" style="display: none;"></div>
+    <div class="main-container">
+        <header class="app-header">
+            <div class="brand">
+                <img src="/static/images/logo.png" alt="HWP Agent 로고">
+                <span>HWP Agent</span>
+            </div>
+            <div id="headerActions" class="header-actions" style="display: none;">
+                <button id="styleBtn" class="btn btn-secondary"><i class="bi bi-palette"></i> 서식</button>
+                <select id="formatSelect" class="form-control" style="width: auto;">
+                    <option value="docx" selected>DOCX</option>
+                    <option value="pdf">PDF</option>
+                    <option value="hwp">HWP</option>
+                    <option value="md">Markdown</option>
+                </select>
+                <button id="saveBtn" class="btn btn-primary">
+                    <i class="bi bi-download"></i>
+                    <span id="saveBtnText">저장</span>
                 </button>
-            </section>
-            
-            <!-- 수정/조정 섹션 (생성 후 표시) -->
-            <section id="refineControlSection" class="refine-section" style="display: none;">
-                <h3><i class="bi bi-magic"></i> AI로 다듬기</h3>
-                <div class="mode-selector">
-                    <button class="mode-btn" data-mode="direct"><i class="bi bi-cursor-text"></i> 직접 편집</button>
-                    <button class="mode-btn" data-mode="refine"><i class="bi bi-pencil-sparkles"></i> AI 수정 요청</button>
-                    <button class="mode-btn" data-mode="format"><i class="bi bi-text-paragraph"></i> 서식 조정</button>
-                </div>
-                 <div class="unified-input-section" style="display: none;">
-                    <textarea id="unifiedRequest" placeholder="수정 또는 서식 조정 내용을 입력하세요..." rows="4"></textarea>
-                    <div class="action-buttons">
-                         <button id="backBtn" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> 뒤로</button>
-                         <button id="applyBtn" class="btn btn-primary">
-                             <span class="btn-text">적용</span>
-                             <div class="spinner" style="display: none;"></div>
-                         </button>
-                    </div>
-                </div>
-            </section>
-            
-            <footer class="riro-utility-stack">
-                <div class="riro-action-stack">
-                     <button id="riroLoginOpenBtn" class="btn btn-secondary" type="button">
-                        <i class="bi bi-person-bounding-box"></i> 리로스쿨 로그인
-                    </button>
-                    <div id="riroUserActions" style="display: none;">
-                        <button id="riroScheduleBtn" class="btn btn-secondary" type="button">
-                            <i class="bi bi-calendar-check"></i> 리로스쿨 일정
-                        </button>
-                        <button id="riroLogoutBtn" class="btn btn-outline riro-logout-btn" type="button">
-                            <i class="bi bi-box-arrow-right"></i> 로그아웃
-                        </button>
-                    </div>
-                </div>
-            </footer>
-        </aside>
+            </div>
+        </header>
 
-        <!-- 오른쪽: 문서 편집기 패널 -->
-        <main class="panel right-panel">
-            <header class="editor-header">
-                <div class="header-main">
-                    <input type="text" id="docTitle" class="title-input" placeholder="문서 제목을 입력하세요">
-                    <div class="editor-actions">
-                        <button id="styleBtn" class="btn btn-style"><i class="bi bi-palette"></i> 서식</button>
-                        <select id="formatSelect" class="format-select">
-                            <option value="pdf">PDF</option>
-                            <option value="hwp">HWP</option>
-                            <option value="docx" selected>DOCX</option>
-                            <option value="md">Markdown</option>
-                        </select>
-                        <button id="saveBtn" class="btn btn-save" disabled>
-                            <i class="bi bi-download"></i> <span id="saveBtnText">저장</span>
-                        </button>
-                    </div>
-                </div>
-                <div id="progressBar" class="progress-bar" style="display: none;"><div class="progress-bar-inner"></div></div>
-            </header>
-
-            <div class="editor-container">
-                <div id="htmlPreviewContainer" class="html-preview-container">
-                     <div id="placeholder" class="pdf-placeholder">
-                         <div class="placeholder-content">
-                            <div class="placeholder-illustration">
-                                <div class="doc-icon"><i class="bi bi-file-earmark-text"></i></div>
-                            </div>
-                             <h2>AI가 문서를 생성합니다</h2>
-                             <p>왼쪽 패널에서 원하는 문서 내용을<br>자세히 설명하고 생성 버튼을 누르세요.</p>
-                         </div>
-                     </div>
-                    <div id="documentPreview" class="document-preview" style="display: none;">
-                        <h1 id="previewTitle" class="preview-title"></h1>
-                        <div id="previewContent" class="preview-content" contenteditable="false"></div>
-                    </div>
-                </div>
-                 <div id="editModeToggle" class="edit-mode-toggle" style="display: none;">
-                    <button id="toggleEditBtn" class="btn-toggle-edit"><i class="bi bi-pencil-square"></i> 편집 모드</button>
-                </div>
+        <main class="results-container">
+            <div id="placeholder" class="placeholder">
+                <div class="doc-icon"><i class="bi bi-file-earmark-text"></i></div>
+                <h2>AI 문서 작성을 시작해 보세요</h2>
+                <p>만들고 싶은 문서에 대해 아래 입력창에 설명해주세요.</p>
             </div>
 
-            <footer class="editor-stats">
-                <span id="charCount">0자</span>
-                <span id="wordCount">0단어</span>
-            </footer>
+            <div id="documentPreview" class="document-preview" style="display: none;">
+                <h1 id="previewTitle" class="preview-title"></h1>
+                <div id="previewContent" class="preview-content"></div>
+            </div>
         </main>
+        
+        <footer class="input-area">
+            <div id="refineControlSection" class="refine-section" style="display: none;">
+                <!-- AI 수정 모드 컨트롤이 여기에 동적으로 추가될 수 있습니다. -->
+            </div>
+             <div id="initialInputSection">
+                <textarea 
+                    id="userRequest" 
+                    placeholder="예: 기후 변화에 대한 사회탐구 보고서를 작성해줘"
+                    rows="3"
+                ></textarea>
+                <div class="action-buttons">
+                    <button id="templateUploadBtn" class="btn btn-secondary" type="button" title="양식 파일 업로드">
+                        <i class="bi bi-file-earmark-arrow-up"></i>
+                    </button>
+                    <input type="file" id="templateFileInput" accept=".docx,.hwp,.hml,.txt,.md" hidden>
+                    
+                    <button id="generateBtn" class="btn btn-primary" type="button">
+                        <span class="btn-text">생성</span>
+                        <div class="spinner" style="display: none;"></div>
+                    </button>
+                </div>
+             </div>
+        </footer>
     </div>
 
-    <!-- 토스트 메시지 -->
+    <!-- Modals -->
     <div id="toast" class="toast"></div>
 
-    <!-- 서식 설정 모달 -->
     <div id="styleModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -154,103 +78,45 @@
                 <button class="modal-close" id="styleModalCloseBtn">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="fontId">전체 폰트</label>
-                        <select id="fontId" class="form-control"></select>
-                    </div>
-                    <div class="form-group">
-                        <label for="fontSize">본문 크기</label>
-                        <input type="number" id="fontSize" class="form-control" value="11" min="8" max="24" step="0.5">
-                    </div>
+                <div class="form-group">
+                    <label for="fontId">전체 폰트</label>
+                    <select id="fontId" class="form-control"></select>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="lineSpacing">줄 간격</label>
-                        <input type="number" id="lineSpacing" class="form-control" value="1.5" min="1" max="2.5" step="0.1">
-                    </div>
-                     <div class="form-group">
-                        <label for="paragraphSpacing">문단 간격 (pt)</label>
-                        <input type="number" id="paragraphSpacing" class="form-control" value="8" min="0" max="32">
-                    </div>
+                <div class="form-group">
+                    <label for="fontSize">본문 크기</label>
+                    <input type="number" id="fontSize" class="form-control" value="11" min="8" max="24" step="0.5">
                 </div>
-                 <div class="font-upload-control">
+                <div class="form-group">
+                    <label for="lineSpacing">줄 간격</label>
+                    <input type="number" id="lineSpacing" class="form-control" value="1.5" min="1" max="2.5" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="paragraphSpacing">문단 간격 (pt)</label>
+                    <input type="number" id="paragraphSpacing" class="form-control" value="8" min="0" max="32">
+                </div>
+                <div class="form-group">
                     <label>사용자 폰트 업로드</label>
-                    <div class="font-upload-actions">
+                     <div class="font-upload-actions">
                         <input type="file" id="fontFileInput" accept=".ttf,.otf" hidden>
-                        <button id="fontUploadBtn" type="button" class="btn btn-outline"><i class="bi bi-upload"></i> 폰트 파일 선택</button>
+                        <button id="fontUploadBtn" type="button" class="btn btn-secondary"><i class="bi bi-upload"></i> 폰트 파일 선택</button>
                         <span id="fontFileStatus">선택된 폰트 없음</span>
                     </div>
-                    <small>TTF/OTF 파일을 업로드하면 PDF 생성 시 내장됩니다.</small>
                 </div>
-                <hr>
                 <div class="form-group">
                      <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="treatImagesAsText">
-                        <label class="form-check-label" for="treatImagesAsText">
-                            이미지를 텍스트(자리표시자)로 처리
-                        </label>
+                        <label class="form-check-label" for="treatImagesAsText">이미지를 텍스트(자리표시자)로 처리</label>
                     </div>
-                    <small>이미지 생성/다운로드 없이 <code>[이미지: 키워드]</code> 형식의 텍스트로만 처리합니다.</small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button id="styleModalCancelBtn" class="btn btn-secondary">취소</button>
+                <button class="btn btn-secondary">취소</button>
                 <button id="styleModalApplyBtn" class="btn btn-primary">적용</button>
             </div>
         </div>
     </div>
     
-    <!-- 리로스쿨 로그인 모달 -->
-    <div id="riroLoginModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="bi bi-unlock"></i> 리로스쿨 로그인</h2>
-                <button class="modal-close" id="riroLoginCloseBtn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="riroSchool">학교 도메인</label>
-                    <input id="riroSchool" type="text" class="form-control" placeholder="예: okgwa (옥과고등학교)">
-                    <small>리로스쿨 URL에서 <code>https://<strong>여기</strong>.riroschool.kr</code> 부분을 입력하세요.</small>
-                </div>
-                <div class="form-group">
-                    <label for="riroId">아이디</label>
-                    <input id="riroId" type="text" class="form-control" placeholder="아이디를 입력하세요">
-                </div>
-                <div class="form-group">
-                    <label for="riroPw">비밀번호</label>
-                    <input id="riroPw" type="password" class="form-control" placeholder="비밀번호를 입력하세요">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="riroLoginCancelBtn" class="btn btn-secondary">취소</button>
-                <button id="riroLoginSubmitBtn" class="btn btn-primary">
-                    <span class="btn-text">로그인</span>
-                    <div class="spinner" style="display: none;"></div>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 리로스쿨 일정 모달 -->
-    <div id="riroScheduleModal" class="modal">
-        <div class="modal-content" style="width: 90%; max-width: 1200px;">
-            <div class="modal-header">
-                <h2><i class="bi bi-calendar-week"></i> 리로스쿨 일정 및 과제</h2>
-                <button class="modal-close" id="riroScheduleCloseBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="riroCalendarContainer">
-                <!-- 캘린더가 여기에 렌더링됩니다 -->
-            </div>
-             <div class="modal-footer">
-                <button id="riroScheduleDismissBtn" class="btn btn-secondary">닫기</button>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>
