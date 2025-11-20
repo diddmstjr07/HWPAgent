@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
     
     // Main containers
-    const headerActions = document.getElementById('headerActions');
+    const documentActions = document.getElementById('documentActions');
     const resultsContainer = document.querySelector('.results-container');
     const placeholder = document.getElementById('placeholder');
     const documentPreview = document.getElementById('documentPreview');
@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const generateBtn = document.getElementById('generateBtn');
     const templateUploadBtn = document.getElementById('templateUploadBtn');
     const templateFileInput = document.getElementById('templateFileInput');
+    const templatePreview = document.getElementById('templatePreview');
+    const templateName = document.getElementById('templateName');
+    const templateRemoveBtn = document.getElementById('templateRemoveBtn');
 
     // Preview area
     const previewTitle = document.getElementById('previewTitle');
@@ -23,15 +26,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveBtn = document.getElementById('saveBtn');
     const styleBtn = document.getElementById('styleBtn');
     const formatSelect = document.getElementById('formatSelect');
+    const riroLoginOpenBtn = document.getElementById('riroLoginOpenBtn');
 
     // Modals & Toast
     const toast = document.getElementById('toast');
     const styleModal = document.getElementById('styleModal');
+    const riroLoginModal = document.getElementById('riroLoginModal');
+    const riroScheduleModal = document.getElementById('riroScheduleModal');
 
     // Global State
     let state = {
         isGenerating: false,
         isSaving: false,
+        isRiroLoggedIn: false,
+        riroUserId: null,
         currentDocumentContent: '',
         currentImagesNeeded: [],
         currentImageUrls: [],
@@ -54,11 +62,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
         initEventListeners();
         loadInitialData();
-        updateUI(); // Set initial UI state
+        updateUI(); 
     }
     
     function loadInitialData() {
         fetchAvailableFonts();
+        // Check local storage for Riro login status
+        state.isRiroLoggedIn = localStorage.getItem('riroLoggedIn') === 'true';
+        state.riroUserId = localStorage.getItem('riroUserId');
     }
 
     // =================================================================
@@ -66,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
     
     function initEventListeners() {
+        // Main input
         generateBtn.addEventListener('click', generateContent);
         userRequest.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -73,14 +85,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 generateContent();
             }
         });
-        
+        userRequest.addEventListener('input', () => {
+            userRequest.style.height = 'auto';
+            userRequest.style.height = (userRequest.scrollHeight) + 'px';
+        });
+
+        // Template upload
         templateUploadBtn.addEventListener('click', () => templateFileInput.click());
         templateFileInput.addEventListener('change', (e) => uploadTemplateFile(e.target.files[0]));
+        templateRemoveBtn.addEventListener('click', () => clearTemplateSelection(true));
         
+        // Header actions
         saveBtn.addEventListener('click', saveDocument);
         styleBtn.addEventListener('click', () => toggleModal(styleModal, true));
+        riroLoginOpenBtn.addEventListener('click', () => {
+            if (state.isRiroLoggedIn) {
+                toggleModal(riroScheduleModal, true);
+            } else {
+                toggleModal(riroLoginModal, true);
+            }
+        });
 
-        // Modal event listeners
+        // Modal common
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) toggleModal(modal, false);
@@ -90,9 +116,13 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => toggleModal(btn.closest('.modal'), false));
         });
         
+        // Style Modal
         document.getElementById('styleModalApplyBtn').addEventListener('click', applyStyle);
         document.getElementById('fontUploadBtn').addEventListener('click', () => document.getElementById('fontFileInput').click());
         document.getElementById('fontFileInput').addEventListener('change', (e) => uploadFontFile(e.target.files[0]));
+
+        // Riro Modals
+        document.getElementById('riroLoginSubmitBtn').addEventListener('click', handleRiroLogin);
     }
     
     // =================================================================
@@ -101,24 +131,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateUI() {
         const hasContent = state.currentDocumentContent.trim().length > 0;
+        documentActions.style.display = hasContent ? 'flex' : 'none';
         
         if (hasContent) {
             placeholder.style.display = 'none';
             documentPreview.style.display = 'block';
-            headerActions.style.display = 'flex';
         } else {
             placeholder.style.display = 'block';
             documentPreview.style.display = 'none';
-            headerActions.style.display = 'none';
         }
     }
 
     function setButtonLoading(button, isLoading) {
         const spinner = button.querySelector('.spinner');
-        const btnText = button.querySelector('.btn-text');
+        const icon = button.querySelector('i');
         button.disabled = isLoading;
-        if (spinner) spinner.style.display = isLoading ? 'inline-block' : 'none';
-        if (btnText) btnText.style.display = isLoading ? 'none' : 'inline-block';
+
+        if (isLoading) {
+            if (icon) icon.style.display = 'none';
+            if (spinner) spinner.style.display = 'inline-block';
+        } else {
+            if (icon) icon.style.display = 'inline-block';
+            if (spinner) spinner.style.display = 'none';
+        }
     }
 
     function showToast(message, type = 'info') {
@@ -130,9 +165,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function toggleModal(modal, show) {
         if (!modal) return;
         if (show) {
-            if (modal === styleModal && !state.fontsLoaded) {
-                 fetchAvailableFonts();
-            }
+            if (modal === styleModal && !state.fontsLoaded) fetchAvailableFonts();
+            if (modal === riroScheduleModal) renderRiroCalendar();
             modal.classList.add('show');
         } else {
             modal.classList.remove('show');
@@ -140,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // =================================================================
-    // Core Features: Generate, Save, etc.
+    // Core Features
     // =================================================================
 
     async function generateContent() {
@@ -153,7 +187,6 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isGenerating = true;
         setButtonLoading(generateBtn, true);
         
-        // Reset view
         state.currentDocumentContent = '';
         state.currentImagesNeeded = [];
         state.currentImageUrls = [];
@@ -201,7 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-            showToast('문서 생성이 완료되었습니다.', 'success');
         } catch (error) {
             showToast(`생성 오류: ${error.message}`, 'error');
         } finally {
@@ -216,10 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const title = previewTitle.textContent.trim() || '문서';
         const content = state.currentDocumentContent;
 
-        if (!content) {
-            showToast('저장할 내용이 없습니다.', 'error');
-            return;
-        }
+        if (!content) return;
 
         state.isSaving = true;
         setButtonLoading(saveBtn, true);
@@ -228,14 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title,
-                    content,
-                    format,
-                    style: state.currentStyle,
-                    images_needed: state.currentImagesNeeded,
-                    image_urls: state.currentImageUrls
-                }),
+                body: JSON.stringify({ title, content, format, style: state.currentStyle, images_needed: state.currentImagesNeeded, image_urls: state.currentImageUrls }),
             });
 
             const data = await response.json();
@@ -301,6 +323,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Helper Functions: Templates, Fonts, Styles
     // =================================================================
     
+    function clearTemplateSelection(showNotice) {
+        state.currentTemplate = { name: '', text: '', id: null };
+        templatePreview.style.display = 'none';
+        templateFileInput.value = '';
+        if (showNotice) showToast('양식이 제거되었습니다.', 'info');
+    }
+
     async function uploadTemplateFile(file) {
         if (!file) return;
         const formData = new FormData();
@@ -309,10 +338,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/template/upload', { method: 'POST', body: formData });
             const data = await response.json();
             if (!data.success) throw new Error(data.error);
+
             state.currentTemplate = { name: data.template_name, text: data.template_text, id: data.template_id };
+            templateName.textContent = data.template_name;
+            templatePreview.style.display = 'block';
             showToast(`양식 '${data.template_name}'이 적용되었습니다.`, 'success');
+            
         } catch (error) {
             showToast(`양식 업로드 실패: ${error.message}`, 'error');
+            clearTemplateSelection(false);
         }
     }
     
@@ -367,16 +401,92 @@ document.addEventListener('DOMContentLoaded', () => {
             font_id: document.getElementById('fontId').value,
             font_size: parseFloat(document.getElementById('fontSize').value),
             line_spacing: parseFloat(document.getElementById('lineSpacing').value),
-            paragraph_spacing: parseFloat(document.getElementById('paragraphSpacing').value),
             treat_images_as_text: document.getElementById('treatImagesAsText').checked
         };
         showToast('서식이 적용되었습니다.', 'success');
         toggleModal(styleModal, false);
     }
     
-    function handleRiroLogin() {
-        showToast('리로스쿨 기능은 현재 개발 중입니다.', 'info');
+    // =================================================================
+    // RiroSchool Functionality
+    // =================================================================
+
+    async function handleRiroLogin() {
+        const school = document.getElementById('riroSchool').value.trim();
+        const username = document.getElementById('riroId').value.trim();
+        const password = document.getElementById('riroPw').value.trim();
+        if (!school || !username || !password) {
+            showToast('모든 필드를 입력해주세요.', 'error');
+            return;
+        }
+
+        const loginBtn = document.getElementById('riroLoginSubmitBtn');
+        setButtonLoading(loginBtn, true);
+
+        try {
+            const response = await fetch('/api/riroschool/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ school, username, password, grade: '1', year: '2025' })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                state.isRiroLoggedIn = true;
+                state.riroUserId = data.riro_id || username;
+                localStorage.setItem('riroLoggedIn', 'true');
+                localStorage.setItem('riroUserId', state.riroUserId);
+                localStorage.setItem('riroEvents', JSON.stringify(data.events || {}));
+                showToast('리로스쿨 로그인 성공!', 'success');
+                toggleModal(riroLoginModal, false);
+                toggleModal(riroScheduleModal, true);
+            } else {
+                throw new Error(data.error || '리로스쿨 로그인 실패');
+            }
+        } catch (error) {
+            showToast(error.message, 'error');
+        } finally {
+            setButtonLoading(loginBtn, false);
+        }
     }
+
+    function renderRiroCalendar() {
+        const calendarEl = document.getElementById('riroCalendarContainer');
+        if (!calendarEl) return;
+
+        const events = JSON.parse(localStorage.getItem('riroEvents') || '{}');
+        const calendarEvents = Object.keys(events).map(date => ({
+            title: events[date].map(e => e.title).join(', '),
+            start: date,
+            allDay: true,
+            extendedProps: {
+                details: events[date]
+            }
+        }));
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: ''
+            },
+            events: calendarEvents,
+            eventClick: function(info) {
+                const guide = info.event.extendedProps.details?.[0]?.guide;
+                if(guide) {
+                    userRequest.value = guide;
+                    showToast('과제 가이드라인을 불러왔습니다.', 'success');
+                    toggleModal(riroScheduleModal, false);
+                } else {
+                    showToast('해당 일정에 등록된 과제 가이드라인이 없습니다.', 'info');
+                }
+            }
+        });
+        calendar.render();
+    }
+    
+    // =================================================================
     
     marked.setOptions({
         breaks: true,
