@@ -114,21 +114,21 @@ FONT_PRESETS: List[Dict[str, str]] = [
         'display_name': 'Noto Sans KR',
         'docx_name': 'Noto Sans KR',
         'filename': 'NotoSansKR-Regular.otf',
-        'url': 'https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Korean/NotoSansKR-Regular.otf'
+        'url': 'https://github.com/notofonts/noto-cjk-kr/raw/main/OTF/NotoSansCJKkr-Regular.otf'
     },
     {
         'id': 'noto-serif-kr',
         'display_name': 'Noto Serif KR',
         'docx_name': 'Noto Serif KR',
         'filename': 'NotoSerifKR-Regular.otf',
-        'url': 'https://github.com/googlefonts/noto-cjk/raw/main/Serif/OTF/Korean/NotoSerifKR-Regular.otf'
+        'url': 'https://github.com/notofonts/noto-cjk-kr/raw/main/OTF/NotoSerifCJKkr-Regular.otf'
     },
     {
         'id': 'pretendard',
         'display_name': 'Pretendard',
         'docx_name': 'Pretendard',
         'filename': 'Pretendard-Regular.otf',
-        'url': 'https://github.com/orioncactus/pretendard/raw/main/public/static/Pretendard-Regular.otf'
+        'url': 'https://github.com/orioncactus/pretendard/raw/main/packages/pretendard/dist/public/static/Pretendard-Regular.otf'
     },
     {
         'id': 'gothic-a1',
