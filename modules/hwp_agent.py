@@ -72,14 +72,19 @@ class HWPAgent:
         self,
         user_request: str,
         output_format: str = "hwpx",
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        document_template: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         본문 문단별 연관 이미지 삽입 + 문서 생성
         """
         try:
             print("📝 Gemini API로 콘텐츠 생성 중...")
-            result = self.content_generator.generate_document_content(user_request, context)
+            result = self.content_generator.generate_document_content(
+                user_request,
+                context,
+                document_template=document_template
+            )
 
             title = result.get("title", "문서")
             body = result.get("body", "")

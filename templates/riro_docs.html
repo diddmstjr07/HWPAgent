@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiRoSchool 문서 목록</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --page-bg: radial-gradient(circle at top, #f9fbff 0%, #eef2ff 45%, #fdf7ff 85%);
+            --primary: #6366f1;
+            --primary-light: #8b5cf6;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-tertiary: #94a3b8;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --radius-2xl: 24px;
+            --radius-3xl: 28px;
+            --radius-full: 9999px;
+            --duration-fast: 0.2s;
+            --duration-normal: 0.3s;
+            --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: var(--page-bg);
+            min-height: 100vh;
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+        
+        .riro-docs-wrapper {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem 5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+        }
+        
+        .hero-section {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .hero-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%);
+            border-radius: var(--radius-3xl);
+            border: 1px solid rgba(99, 102, 241, 0.12);
+            box-shadow: 
+                0 24px 45px rgba(15, 23, 42, 0.1),
+                0 8px 25px rgba(99, 102, 241, 0.08);
+            padding: 3rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+        
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.3), transparent);
+        }
+        
+        .hero-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+            border-radius: 50%;
+            z-index: -1;
+        }
+        
+        .hero-card h1 {
+            font-size: 2.5rem;
+            margin: 0 0 0.75rem;
+            background: linear-gradient(135deg, #1e293b 0%, #475569 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        
+        .hero-card p {
+            margin: 0;
+            color: var(--text-secondary);
+            max-width: 520px;
+            line-height: 1.6;
+            font-size: 1.1rem;
+        }
+        
+        .hero-actions {
+            margin-left: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 2;
+        }
+        
+        .hero-actions button,
+        .hero-actions a {
+            border-radius: var(--radius-full);
+            padding: 0.85rem 1.75rem;
+            font-weight: 600;
+            border: none;
+            text-decoration: none;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--duration-normal) var(--ease-out);
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+        
+        .hero-actions .primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            transform: translateY(0);
+        }
+        
+        .hero-actions .primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+        }
+        
+        .hero-actions .primary:active {
+            transform: translateY(1px);
+        }
+        
+        .hero-actions .secondary {
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            background: rgba(255, 255, 255, 0.7);
+            color: var(--primary);
+            backdrop-filter: blur(10px);
+        }
+        
+        .hero-actions .secondary:hover {
+            background: rgba(99, 102, 241, 0.05);
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+        
+        .docs-section {
+            position: relative;
+        }
+        
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.75rem;
+            perspective: 1000px;
+        }
+        
+        .doc-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%);
+            border-radius: var(--radius-2xl);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            padding: 1.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            box-shadow: 
+                0 10px 25px rgba(15, 23, 42, 0.06),
+                0 5px 10px rgba(15, 23, 42, 0.04);
+            transition: all var(--duration-normal) var(--ease-out);
+            position: relative;
+            overflow: hidden;
+            transform-style: preserve-3d;
+            transform: translateY(0) rotateX(0);
+            cursor: pointer;
+        }
+        
+        .doc-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform var(--duration-normal) var(--ease-out);
+        }
+        
+        .doc-card:hover {
+            transform: translateY(-8px) rotateX(5deg);
+            box-shadow: 
+                0 25px 50px rgba(15, 23, 42, 0.12),
+                0 15px 30px rgba(99, 102, 241, 0.08);
+            border-color: rgba(99, 102, 241, 0.15);
+        }
+        
+        .doc-card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .doc-card h2 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+        
+        .doc-card p {
+            margin: 0;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .doc-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--text-tertiary);
+        }
+        
+        .doc-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: auto;
+        }
+        
+        .doc-actions button,
+        .doc-actions a {
+            flex: 1;
+            border-radius: var(--radius-full);
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            border: none;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-out);
+            font-size: 0.9rem;
+        }
+        
+        .doc-actions .load-btn {
+            background: linear-gradient(135deg, #6366f1, #7c3aed);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+        
+        .doc-actions .load-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+        
+        .doc-actions .load-btn:active {
+            transform: translateY(1px);
+        }
+        
+        .doc-actions .detail-btn {
+            border: 1px solid rgba(15, 23, 42, 0.15);
+            background: rgba(255, 255, 255, 0.7);
+            color: var(--text-secondary);
+            backdrop-filter: blur(10px);
+        }
+        
+        .doc-actions .detail-btn:hover {
+            background: rgba(15, 23, 42, 0.03);
+            border-color: rgba(15, 23, 42, 0.25);
+        }
+        
+        .empty-state {
+            padding: 3rem 2rem;
+            border-radius: var(--radius-2xl);
+            border: 2px dashed rgba(99, 102, 241, 0.2);
+            text-align: center;
+            color: var(--text-tertiary);
+            background: rgba(255, 255, 255, 0.8);
+            grid-column: 1 / -1;
+            font-size: 1.1rem;
+        }
+        
+        .floating-elements {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .floating-element {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.05));
+            animation: float 20s infinite linear;
+        }
+        
+        .floating-element:nth-child(1) {
+            width: 120px;
+            height: 120px;
+            top: 10%;
+            left: 5%;
+            animation-delay: 0s;
+        }
+        
+        .floating-element:nth-child(2) {
+            width: 80px;
+            height: 80px;
+            top: 70%;
+            left: 10%;
+            animation-delay: -5s;
+        }
+        
+        .floating-element:nth-child(3) {
+            width: 150px;
+            height: 150px;
+            top: 20%;
+            right: 5%;
+            animation-delay: -10s;
+        }
+        
+        .floating-element:nth-child(4) {
+            width: 100px;
+            height: 100px;
+            top: 80%;
+            right: 8%;
+            animation-delay: -15s;
+        }
+        
+        @keyframes float {
+            0% {
+                transform: translateY(0) rotate(0deg) translateX(0);
+            }
+            25% {
+                transform: translateY(-20px) rotate(90deg) translateX(10px);
+            }
+            50% {
+                transform: translateY(0) rotate(180deg) translateX(0);
+            }
+            75% {
+                transform: translateY(20px) rotate(270deg) translateX(-10px);
+            }
+            100% {
+                transform: translateY(0) rotate(360deg) translateX(0);
+            }
+        }
+        
+        .particles-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .particle {
+            position: absolute;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 50%;
+            animation: particle-float 15s infinite linear;
+        }
+        
+        @keyframes particle-float {
+            0% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.5;
+            }
+            90% {
+                opacity: 0.5;
+            }
+            100% {
+                transform: translateY(-100vh) translateX(20px);
+                opacity: 0;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .riro-docs-wrapper {
+                padding: 2rem 1rem 3rem;
+                gap: 2rem;
+            }
+            
+            .hero-card {
+                padding: 2rem 1.5rem;
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .hero-card h1 {
+                font-size: 2rem;
+            }
+            
+            .hero-actions {
+                margin-left: 0;
+                width: 100%;
+            }
+            
+            .docs-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="particles-container" id="particles"></div>
+    <div class="floating-elements">
+        <div class="floating-element"></div>
+        <div class="floating-element"></div>
+        <div class="floating-element"></div>
+        <div class="floating-element"></div>
+    </div>
+    
+    <div class="riro-docs-wrapper">
+        <div class="hero-section">
+            <div class="hero-card">
+                <div>
+                    <p style="margin:0; text-transform:uppercase; font-size:0.85rem; letter-spacing:0.12em; color:rgba(15,23,42,0.6); font-weight:500;">RiRoSchool Archive</p>
+                    <h1>최근에 만든 문서를 한 번에</h1>
+                    <p>리로스쿨에서 생성된 작업물을 한 곳에서 모아 보고, 다시 불러와 메인 편집기에서 이어서 수정할 수 있습니다.</p>
+                </div>
+                <div class="hero-actions">
+                    <button class="primary" id="newDocBtn">새 문서 작성</button>
+                    <a class="secondary" href="/">메인 편집기로 돌아가기</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="docs-section">
+            <div id="docsList" class="docs-grid">
+                <div class="empty-state">문서를 불러오는 중입니다...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 파티클 생성
+        function createParticles() {
+            const container = document.getElementById('particles');
+            const particleCount = 30;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                
+                const size = Math.random() * 6 + 2;
+                const left = Math.random() * 100;
+                const delay = Math.random() * 15;
+                const duration = Math.random() * 10 + 10;
+                
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                particle.style.left = `${left}%`;
+                particle.style.animationDelay = `${delay}s`;
+                particle.style.animationDuration = `${duration}s`;
+                
+                container.appendChild(particle);
+            }
+        }
+        
+        // 문서 목록 로드
+        async function loadDocs() {
+            const container = document.getElementById('docsList');
+            try {
+                const response = await fetch('/api/riroschool/documents');
+                if (response.status === 401) {
+                    container.innerHTML = '<div class="empty-state">리로스쿨 로그인 후 이용 가능합니다.</div>';
+                    return;
+                }
+                const data = await response.json();
+                if (!data.success || !data.documents?.length) {
+                    container.innerHTML = '<div class="empty-state">아직 저장된 문서가 없습니다.</div>';
+                    return;
+                }
+                window.__riroDocs = data.documents;
+                renderDocs(data.documents);
+            } catch (error) {
+                console.error(error);
+                container.innerHTML = '<div class="empty-state">문서를 불러오지 못했습니다.</div>';
+            }
+        }
+
+        // 문서 목록 렌더링
+        function renderDocs(docs) {
+            const container = document.getElementById('docsList');
+            if (!docs.length) {
+                container.innerHTML = '<div class="empty-state">아직 저장된 문서가 없습니다.</div>';
+                return;
+            }
+            
+            // 카드에 스타거링 효과 추가
+            container.innerHTML = docs.map((doc, index) => {
+                const snippet = (doc.content || '').replace(/<[^>]+>/g, '').trim().slice(0, 160);
+                const created = new Date(doc.created_at || Date.now()).toLocaleString('ko-KR', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                const imageCount = Array.isArray(doc.image_urls) ? doc.image_urls.filter(Boolean).length : 0;
+                
+                return `
+                    <article class="doc-card" data-doc-index="${index}">
+                        <h2>${doc.title || '제목 없는 문서'}</h2>
+                        <p>${snippet || '내용이 없습니다.'}</p>
+                        <div class="doc-meta">
+                            <span>${created}</span>
+                            <span>${imageCount} 이미지</span>
+                        </div>
+                        <div class="doc-actions">
+                            <button class="load-btn" data-doc-index="${index}">불러오기</button>
+                            <a class="detail-btn" href="/riroschool/docs/${doc.id}">상세보기</a>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+            
+            // 카드에 마우스 이동 시 3D 효과 추가
+            container.querySelectorAll('.doc-card').forEach((card) => {
+                card.addEventListener('mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    
+                    const angleY = (x - centerX) / 20;
+                    const angleX = (centerY - y) / 20;
+                    
+                    card.style.transform = `translateY(-8px) rotateX(${angleX}deg) rotateY(${angleY}deg)`;
+                });
+                
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = 'translateY(0) rotateX(0) rotateY(0)';
+                    setTimeout(() => {
+                        card.style.transform = '';
+                    }, 300);
+                });
+            });
+            
+            // 불러오기 버튼 이벤트 리스너 추가
+            container.querySelectorAll('.load-btn').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = Number(btn.dataset.docIndex);
+                    const doc = window.__riroDocs?.[idx];
+                    if (!doc) return;
+                    localStorage.setItem('riro_doc_draft', JSON.stringify(doc));
+                    window.location.href = '/';
+                });
+            });
+            
+            // 카드 클릭 시 상세 페이지로 이동
+            container.querySelectorAll('.doc-card').forEach((card) => {
+                card.addEventListener('click', (e) => {
+                    // 버튼 클릭이 아닌 경우에만 상세 페이지로 이동
+                    if (!e.target.closest('.doc-actions')) {
+                        const idx = Number(card.dataset.docIndex);
+                        const doc = window.__riroDocs?.[idx];
+                        if (doc) {
+                            window.location.href = `/riroschool/docs/${doc.id}`;
+                        }
+                    }
+                });
+            });
+        }
+
+        // DOM 로드 완료 시 실행
+        document.addEventListener('DOMContentLoaded', () => {
+            createParticles();
+            loadDocs();
+            
+            const newDocBtn = document.getElementById('newDocBtn');
+            if (newDocBtn) {
+                newDocBtn.addEventListener('click', () => {
+                    localStorage.removeItem('riro_doc_draft');
+                    window.location.href = '/';
+                });
+            }
+        });
+    </script>
+</body>
+</html>

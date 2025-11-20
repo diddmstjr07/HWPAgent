@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiRo 문서 보기</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body {
+            background: radial-gradient(circle at top, #fdf2ff 0%, #e9f2ff 65%, #ffffff 100%);
+            min-height: 100vh;
+        }
+        .doc-view-wrapper {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem 4rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .doc-view-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        .doc-view-header h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        .doc-view-header .back-link {
+            padding: 0.5rem 1.2rem;
+            border-radius: var(--radius-full);
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 700;
+            border: 1px solid rgba(99, 102, 241, 0.25);
+        }
+        .doc-meta {
+            font-size: 0.9rem;
+            color: var(--text-tertiary);
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .doc-content {
+            background: #fff;
+            border-radius: var(--radius-2xl);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+        }
+        .doc-content pre {
+            white-space: pre-wrap;
+            font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+            line-height: 1.7;
+            color: var(--text-secondary);
+        }
+        .doc-toolbar {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .doc-toolbar button {
+            border: none;
+            border-radius: var(--radius-full);
+            padding: 0.6rem 1.4rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: var(--text-inverse);
+        }
+        .btn-outline {
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            background: transparent;
+            color: var(--primary);
+        }
+        .image-grid {
+            margin-top: 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+        }
+        .image-grid img {
+            width: 100%;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+        }
+    </style>
+</head>
+<body>
+    <div class="doc-view-wrapper">
+        <div class="doc-view-header">
+            <div>
+                <p style="margin:0; color: var(--text-tertiary); font-size:0.85rem;">RIRO 저장 문서</p>
+                <h1 id="docTitle">문서를 불러오는 중입니다...</h1>
+            </div>
+            <a class="back-link" href="/riroschool/docs">← 목록으로</a>
+        </div>
+        <div class="doc-meta" id="docMeta"></div>
+        <div class="doc-toolbar">
+            <button class="btn-primary" id="loadToEditorBtn">편집기로 불러오기</button>
+            <button class="btn-outline" id="copyContentBtn">내용 복사</button>
+            <a class="btn-outline" style="text-decoration:none; display:inline-flex; align-items:center;" href="/">메인으로 이동</a>
+        </div>
+        <div class="doc-content">
+            <pre id="docContent">문서를 불러오는 중입니다...</pre>
+            <div class="image-grid" id="docImages" style="display:none;"></div>
+        </div>
+    </div>
+    <script>
+        const docId = {{ doc_id }};
+        async function loadDocument() {
+            const titleEl = document.getElementById('docTitle');
+            const contentEl = document.getElementById('docContent');
+            const metaEl = document.getElementById('docMeta');
+            const imageWrap = document.getElementById('docImages');
+            try {
+                const response = await fetch(`/api/riroschool/documents/${docId}`);
+                if (response.status === 401) {
+                    titleEl.textContent = '로그인이 필요합니다.';
+                    contentEl.textContent = '리로스쿨 계정으로 로그인한 뒤 다시 시도해주세요.';
+                    return;
+                }
+                const data = await response.json();
+                if (!data.success) {
+                    titleEl.textContent = '문서를 찾을 수 없습니다.';
+                    contentEl.textContent = data.error || '';
+                    return;
+                }
+                const doc = data.document;
+                titleEl.textContent = doc.title || '제목 없는 문서';
+                contentEl.textContent = doc.content || '(내용 없음)';
+                const created = new Date(doc.created_at || Date.now()).toLocaleString('ko-KR');
+                metaEl.textContent = `생성일: ${created}`;
+                const images = Array.isArray(doc.image_urls)
+                    ? doc.image_urls
+                        .map(item => typeof item === 'string' ? item : item?.url)
+                        .filter(Boolean)
+                    : [];
+                if (images.length) {
+                    imageWrap.innerHTML = images.map(url => `<img src="${url}" alt="생성 이미지">`).join('');
+                    imageWrap.style.display = 'grid';
+                }
+                document.getElementById('loadToEditorBtn').addEventListener('click', () => {
+                    localStorage.setItem('riro_doc_draft', JSON.stringify(doc));
+                    window.location.href = '/';
+                });
+                document.getElementById('copyContentBtn').addEventListener('click', async () => {
+                    await navigator.clipboard.writeText(doc.content || '');
+                    alert('내용을 복사했습니다.');
+                });
+            } catch (error) {
+                titleEl.textContent = '문서를 불러오는 중 오류가 발생했습니다.';
+                contentEl.textContent = error.message;
+            }
+        }
+        document.addEventListener('DOMContentLoaded', loadDocument);
+    </script>
+</body>
+</html>

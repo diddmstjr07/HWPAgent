@@ -40,3 +40,23 @@ class DocumentHistory:
             'created_at': self.created_at,
             'updated_at': self.updated_at
         }
+
+class RiroDocument:
+    """리로스쿨 사용자 문서"""
+    def __init__(self, id, riro_id, title, content, image_urls=None, created_at=None):
+        self.id = id
+        self.riro_id = riro_id
+        self.title = title
+        self.content = content
+        self.image_urls = image_urls or []
+        self.created_at = created_at or datetime.now().isoformat()
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'riro_id': self.riro_id,
+            'title': self.title,
+            'content': self.content,
+            'image_urls': self.image_urls,
+            'created_at': self.created_at
+        }

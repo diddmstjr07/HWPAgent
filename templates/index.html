@@ -29,8 +29,7 @@
             <div class="panel-header">
                 <div class="brand-hero">
                     <div class="brand-copy">
-                        <h1>수행 도우미</h1>
-                        <p>AI 기반 문서 생성</p>
+                        <h1>DOC Agent</h1>
                     </div>
                 </div>
             </div>
@@ -41,10 +40,35 @@
                     placeholder="어떤 문서를 작성할까요?&#10;&#10;예시:&#10;기후변화에 대한 사회탐구 보고서&#10;회사 소개서&#10;프로젝트 제안서"
                     rows="6"
                 ></textarea>
+                <div class="template-upload-group">
+                    <div class="template-upload-header">
+                        <div>
+                            <label>문서 양식 (선택)</label>
+                            <p class="input-hint">양식 업로드하기 버튼으로 기존 DOC/HWP 파일을 선택하면 해당 형식에 맞춰 내용을 채워줍니다.</p>
+                        </div>
+                        <button id="templateUploadBtn" class="btn btn-outline" type="button">
+                            양식 업로드하기
+                        </button>
+                        <input type="file" id="templateFileInput" accept=".docx,.hwp,.txt,.md" hidden>
+                    </div>
+                    <div id="templatePreview" class="template-preview" style="display: none;">
+                        <div class="template-preview-header">
+                            <div>
+                                <span class="template-name" id="templateName"></span>
+                                <span class="template-status">적용됨</span>
+                            </div>
+                            <button id="templateRemoveBtn" class="btn btn-text" type="button">제거</button>
+                        </div>
+                        <pre id="templatePreviewText"></pre>
+                    </div>
+                </div>
                 
-                <button id="generateBtn" class="btn btn-primary">
+                <button id="generateBtn" class="btn btn-primary" type="button">
                     <span class="btn-text">생성하기</span>
                     <span class="spinner" style="display: none;">생성중...</span>
+                </button>
+                <button id="riroArchiveBtn" class="btn btn-outline" style="display: none;" type="button">
+                    리로 문서 불러오기
                 </button>
             </div>
 
@@ -78,6 +102,20 @@
                     </button>
                 </div>
             </div>
+
+            <div class="riro-utility-stack">
+                <div class="riro-action-stack">
+                    <button id="riroLoginOpenBtn" class="btn btn-secondary" type="button">
+                        리로스쿨 로그인
+                    </button>
+                    <button id="riroScheduleBtn" class="btn btn-secondary" style="display: none;" type="button">
+                        리로스쿨 일정
+                    </button>
+                    <button id="riroLogoutBtn" class="btn btn-outline riro-logout-btn" style="display: none;" type="button">
+                        리로스쿨 로그아웃
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- 오른쪽: 편집기 패널 -->
@@ -99,9 +137,6 @@
                             <option value="docx">DOCX</option>
                             <option value="md">Markdown</option>
                         </select>
-                        <button id="styleBtn" class="btn btn-style">
-                            서식
-                        </button>
                         <button id="saveBtn" class="btn btn-save" disabled>
                             저장
                         </button>
@@ -168,43 +203,118 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>폰트</label>
-                    <select id="fontName" class="form-control">
-                        <option value="맑은 고딕" selected>맑은 고딕</option>
-                        <option value="함초롬돋움">함초롬돋움</option>
-                        <option value="나눔고딕">나눔고딕</option>
-                        <option value="굴림">굴림</option>
-                    </select>
+                    <label for="bodyFontSelect">본문 폰트</label>
+                    <select id="bodyFontSelect" class="form-control"></select>
                 </div>
                 <div class="form-group">
-                    <label>본문 크기</label>
-                    <input type="number" id="fontSize" class="form-control" value="11" min="8" max="20">
+                    <label for="headingFontSelect">소제목 폰트</label>
+                    <select id="headingFontSelect" class="form-control"></select>
                 </div>
                 <div class="form-group">
-                    <label>제목 크기</label>
-                    <input type="number" id="titleSize" class="form-control" value="18" min="14" max="30">
+                    <label for="titleFontSelect">표지 제목 폰트</label>
+                    <select id="titleFontSelect" class="form-control"></select>
                 </div>
-                <div class="form-group">
-                    <label>제목 스타일</label>
-                    <select id="headingSize" class="form-control">
-                        <option value="12">Small</option>
-                        <option value="14" selected>Medium</option>
-                        <option value="16">Large</option>
-                    </select>
+                <div class="form-group font-upload-control">
+                    <label>사용자 폰트 업로드</label>
+                    <div class="font-upload-actions">
+                        <button id="fontUploadBtn" type="button" class="btn btn-outline">폰트 업로드</button>
+                        <input type="file" id="fontFileInput" accept=".ttf,.otf" hidden>
+                        <span id="fontFileStatus">선택된 폰트 없음</span>
+                        <button id="fontRemoveBtn" type="button" class="btn btn-text">기록 지우기</button>
+                    </div>
+                    <small>TTF/OTF를 업로드하면 PDF에도 동일한 글꼴이 내장됩니다.</small>
                 </div>
-                <div class="form-group">
-                    <label>줄 간격</label>
-                    <select id="lineSpacing" class="form-control">
-                        <option value="1.0">1.0</option>
-                        <option value="1.15">1.15</option>
-                        <option value="1.5" selected>1.5</option>
-                        <option value="2.0">2.0</option>
-                    </select>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="titleSize">표지 제목 크기</label>
+                        <input type="number" id="titleSize" class="form-control" value="24" min="16" max="48">
+                    </div>
+                    <div class="form-group">
+                        <label for="heading1Size">1차 소제목 (Heading 1)</label>
+                        <input type="number" id="heading1Size" class="form-control" value="20" min="12" max="40">
+                    </div>
+                    <div class="form-group">
+                        <label for="heading2Size">2차 소제목 (Heading 2)</label>
+                        <input type="number" id="heading2Size" class="form-control" value="18" min="10" max="36">
+                    </div>
+                    <div class="form-group">
+                        <label for="heading3Size">3차 소제목 (Heading 3)</label>
+                        <input type="number" id="heading3Size" class="form-control" value="16" min="9" max="32">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fontSize">본문 크기</label>
+                        <input type="number" id="fontSize" class="form-control" value="13" min="8" max="28">
+                    </div>
+                    <div class="form-group">
+                        <label for="lineSpacing">줄 간격</label>
+                        <select id="lineSpacing" class="form-control">
+                            <option value="1.2">1.2</option>
+                            <option value="1.5" selected>1.5</option>
+                            <option value="1.8">1.8</option>
+                            <option value="2.0">2.0</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeStyleModal()">취소</button>
                 <button class="btn btn-primary" onclick="applyStyle()">적용</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 리로스쿨 로그인 모달 -->
+    <div id="riroLoginModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>리로스쿨 로그인</h2>
+                <button class="modal-close" id="riroLoginCloseBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="riroSchool">학교 도메인</label>
+                    <input id="riroSchool" type="text" class="form-control" placeholder="예: okgwa (옥과고등학교)">
+                    <small style="color: var(--text-tertiary); font-size: 0.8rem; margin-top: 4px; display: block;">
+                        팁: 리로스쿨 URL에서 https://<strong>여기</strong>.riroschool.kr 부분을 입력하세요
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="riroId">아이디</label>
+                    <input id="riroId" type="text" class="form-control" placeholder="아이디를 입력하세요">
+                </div>
+                <div class="form-group">
+                    <label for="riroPw">비밀번호</label>
+                    <input id="riroPw" type="password" class="form-control" placeholder="비밀번호를 입력하세요">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="riroLoginCancelBtn">취소</button>
+                <button class="btn btn-primary" id="riroLoginSubmitBtn">로그인</button>
+            </div>
+            <div id="riroLoginOverlay" class="riro-login-overlay" style="display: none;">
+                <div class="riro-login-spinner"></div>
+                <p>리로스쿨 계정과 동기화 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 리로스쿨 일정 모달 -->
+    <div id="riroScheduleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>리로스쿨 일정</h2>
+                <button class="modal-close" id="riroScheduleCloseBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="riro-calendar-container">
+                    <div id="riroCalendarContainer"></div>
+                    <div id="riroDayPopup" class="riro-day-popup" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="riroScheduleDismissBtn">닫기</button>
             </div>
         </div>
     </div>

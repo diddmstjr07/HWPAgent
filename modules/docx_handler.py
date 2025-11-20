@@ -39,20 +39,37 @@ class DOCXHandler:
             생성된 파일 경로
         """
         # 기본 설정 (개선된 스타일)
-        if style_config is None:
-            style_config = {
-                'font_name': '함초롬바탕',  # 한글 폰트
-                'font_name_english': '함초롬바탕',  # 영문 폰트
-                'font_size': 11,
-                'title_size': 22,
-                'heading_size': 16,
-                'line_spacing': 1.6,
-                'paragraph_spacing': 8,
-                'margin_top': 2.5,  # cm
-                'margin_bottom': 2.5,
-                'margin_left': 2.5,
-                'margin_right': 2.5
-            }
+        base_style = {
+            'font_name': '함초롬바탕',
+            'font_name_english': 'HCR Batang',
+            'heading_font_name': '함초롬바탕',
+            'title_font_name': '함초롬바탕',
+            'font_size': 11,
+            'title_size': 22,
+            'heading_level1_size': 16,
+            'heading_level2_size': 14,
+            'heading_level3_size': 13,
+            'line_spacing': 1.6,
+            'paragraph_spacing': 9,
+            'margin_top': 2.5,
+            'margin_bottom': 2.5,
+            'margin_left': 2.5,
+            'margin_right': 2.5,
+            'treat_images_as_text': False,
+            'image_placeholder_text': '※ 참고 이미지: {keyword}'
+        }
+        config = base_style.copy()
+        if style_config:
+            config.update(style_config)
+        else:
+            config.update(base_style)
+        primary_font = config.get('font_name', base_style['font_name'])
+        config['font_name'] = primary_font
+        config['font_name_english'] = config.get('font_name_english', primary_font)
+        config['heading_font_name'] = primary_font
+        config['title_font_name'] = primary_font
+        config['treat_images_as_text'] = bool(config.get('treat_images_as_text', False))
+        config['image_placeholder_text'] = config.get('image_placeholder_text', '※ 참고 이미지: {keyword}')
         
         if filename is None:
             filename = f"{title}.docx"
@@ -63,16 +80,16 @@ class DOCXHandler:
         doc = Document()
         
         # 페이지 여백 설정
-        self._set_page_margins(doc, style_config)
-        
+        self._set_page_margins(doc, config)
+
         # 기본 스타일 설정
-        self._set_default_style(doc, style_config)
-        
+        self._set_default_style(doc, config)
+
         # 표지 생성
-        self._create_cover(doc, title, style_config)
-        
+        self._create_cover(doc, title, config)
+
         # 본문 추가
-        self._add_content(doc, content, style_config, images)
+        self._add_content(doc, content, config, images)
         
         # 저장
         doc.save(output_path)
@@ -94,7 +111,7 @@ class DOCXHandler:
         
         # 폰트 설정
         font = style.font
-        font.name = config.get('font_name_english', '함초롬바탕')  # 영문 폰트
+        font.name = config.get('font_name_english', 'HCR Batang')  # 영문 폰트
         font.size = Pt(config.get('font_size', 11))
         
         # 한글 폰트 설정 (중요!)
@@ -122,7 +139,7 @@ class DOCXHandler:
         title_run = title_para.add_run(title)
         title_run.bold = True
         title_run.font.size = Pt(config.get('title_size', 22))
-        title_run.font.name = config.get('font_name_english', '함초롬바탕')
+        title_run.font.name = config.get('title_font_name', config.get('heading_font_name', config.get('font_name_english', 'HCR Batang')))
         title_run.font.color.rgb = RGBColor(30, 30, 30)  # 부드러운 검정
         
         # 한글 폰트도 적용
@@ -137,58 +154,51 @@ class DOCXHandler:
         doc.add_page_break()
     
     def _add_content(self, doc: Document, content: str, config: Dict[str, Any], images: Optional[List[str]] = None):
-        """본문 추가 (서식 포함, 이미지 자동 삽입, [gen_img] 태그 처리)"""
+        """본문 추가 (서식 + 이미지 텍스트 표현 지원)"""
         import re
-        
+
         lines = content.split('\n')
         image_index = 0
-        
-        for i, line in enumerate(lines):
-            original_line = line  # 원본 보관
-            line = line.strip()
-            
-            # [gen_img] 태그 처리: 태그를 제거하고 이미지 삽입
-            gen_img_match = re.search(r'\[gen_img\](.+?)\[/gen_img\]', line)
-            if gen_img_match:
-                # 태그 제거된 텍스트
-                line = re.sub(r'\[gen_img\].+?\[/gen_img\]', '', line).strip()
-                
-                # 태그 전후 텍스트 처리
-                if line:
-                    self._add_paragraph(doc, line, config)
-                
-                # 이미지 삽입
-                if images and image_index < len(images):
-                    self._add_image(doc, images[image_index], config)
-                    image_index += 1
-                
-                continue
-            
-            if not line:
+        treat_images_as_text = bool(config.get('treat_images_as_text'))
+        placeholder_only = treat_images_as_text
+        tag_pattern = re.compile(r'\[gen_img\](.+?)\[/gen_img\]')
+
+        for raw_line in lines:
+            stripped = raw_line.strip()
+            tag_matches = tag_pattern.findall(stripped)
+            working_line = tag_pattern.sub('', stripped).strip() if tag_matches else stripped
+
+            if not working_line and not tag_matches:
                 doc.add_paragraph()
                 continue
-            
-            # 제목 레벨 감지
-            if line.startswith('#'):
-                # ## 로 시작하는지 확인 (원본 라인 사용)
-                is_level2_heading = original_line.strip().startswith('##') and not original_line.strip().startswith('###')
-                
-                self._add_heading(doc, line, config)
-                
-                # ## 헤딩 뒤에 이미지 삽입
-                if images and image_index < len(images) and is_level2_heading:
-                    self._add_image(doc, images[image_index], config)
-                    image_index += 1
-                    
-            # 리스트 감지
-            elif line.startswith('- ') or line.startswith('* '):
-                self._add_list_item(doc, line[2:], config)
-            # 번호 리스트
-            elif line[0].isdigit() and '. ' in line:
-                self._add_numbered_item(doc, line, config)
-            # 일반 텍스트
-            else:
-                self._add_paragraph(doc, line, config)
+
+            if working_line:
+                if working_line.startswith('#'):
+                    is_level2_heading = working_line.startswith('##') and not working_line.startswith('###')
+                    self._add_heading(doc, working_line, config)
+                    if not placeholder_only and is_level2_heading and images and image_index < len(images):
+                        self._add_image(doc, images[image_index], config)
+                        image_index += 1
+                elif working_line.startswith('- ') or working_line.startswith('* '):
+                    self._add_list_item(doc, working_line[2:], config)
+                elif working_line[0].isdigit() and '. ' in working_line:
+                    self._add_numbered_item(doc, working_line, config)
+                else:
+                    self._add_paragraph(doc, working_line, config)
+            elif not tag_matches:
+                doc.add_paragraph()
+
+            if tag_matches:
+                for keyword in tag_matches:
+                    if placeholder_only:
+                        self._add_image_placeholder(doc, keyword.strip(), config)
+                        continue
+                    if images and image_index < len(images):
+                        self._add_image(doc, images[image_index], config)
+                        image_index += 1
+                    else:
+                        # 이미지가 부족하면 품격 있는 캡션으로 대체
+                        self._add_image_placeholder(doc, keyword.strip(), config)
     
     def _add_heading(self, doc: Document, line: str, config: Dict[str, Any]):
         """제목 추가"""
@@ -200,11 +210,17 @@ class DOCXHandler:
         level = min(level, 3)  # 최대 레벨 3
         
         heading = doc.add_heading(line, level=level)
+        heading_sizes = {
+            1: config.get('heading_level1_size', config.get('heading_size', 16)),
+            2: config.get('heading_level2_size', config.get('heading_level1_size', 15) - 1),
+            3: config.get('heading_level3_size', config.get('heading_level2_size', 14) - 1)
+        }
+        target_font = config.get('heading_font_name', config.get('font_name', '함초롬바탕'))
+        target_size = heading_sizes.get(level, heading_sizes[3])
         
-        # 제목 스타일 커스터마이징
         for run in heading.runs:
-            run.font.name = config.get('font_name', '맑은 고딕')
-            run.font.size = Pt(config.get('heading_size', 14) - (level * 2))
+            run.font.name = target_font
+            run.font.size = Pt(target_size)
             run.font.color.rgb = RGBColor(0, 0, 0)
     
     def _add_list_item(self, doc: Document, text: str, config: Dict[str, Any]):
@@ -212,7 +228,7 @@ class DOCXHandler:
         para = doc.add_paragraph(text, style='List Bullet')
         
         for run in para.runs:
-            run.font.name = config.get('font_name', '맑은 고딕')
+            run.font.name = config.get('font_name', '함초롬바탕')
             run.font.size = Pt(config.get('font_size', 11))
     
     def _add_numbered_item(self, doc: Document, text: str, config: Dict[str, Any]):
@@ -220,13 +236,17 @@ class DOCXHandler:
         para = doc.add_paragraph(text, style='List Number')
         
         for run in para.runs:
-            run.font.name = config.get('font_name', '맑은 고딕')
+            run.font.name = config.get('font_name', '함초롬바탕')
             run.font.size = Pt(config.get('font_size', 11))
     
     def _add_paragraph(self, doc: Document, text: str, config: Dict[str, Any]):
         """일반 문단 추가"""
         para = doc.add_paragraph()
-        
+        paragraph_format = para.paragraph_format
+        paragraph_format.line_spacing = config.get('line_spacing', 1.6)
+        paragraph_format.space_after = Pt(config.get('paragraph_spacing', 8) / 2)
+        paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+
         # 굵게/기울임 등 인라인 서식 처리
         self._add_formatted_text(para, text, config)
     
@@ -234,7 +254,7 @@ class DOCXHandler:
         """서식이 포함된 텍스트 추가 (한영 폰트 모두 적용)"""
         # **굵게**, *기울임* 등 마크다운 스타일 파싱
         import re
-        
+
         # 간단한 파싱 (실제로는 더 복잡한 파서 필요)
         parts = re.split(r'(\*\*.*?\*\*|\*.*?\*|__.*?__|_.*?_)', text)
         
@@ -243,7 +263,7 @@ class DOCXHandler:
                 continue
             
             run = para.add_run(part.strip('*_'))
-            run.font.name = config.get('font_name_english', '함초롬바탕')
+            run.font.name = config.get('font_name_english', 'HCR Batang')
             run.font.size = Pt(config.get('font_size', 11))
             
             # 한글 폰트 적용
@@ -256,7 +276,7 @@ class DOCXHandler:
             # 기울임
             elif part.startswith('*') or part.startswith('_'):
                 run.italic = True
-    
+
     def _add_image(self, doc: Document, image_path: str, config: Dict[str, Any]):
         """이미지 삽입 (자동 크기 조절)"""
         try:
@@ -277,3 +297,23 @@ class DOCXHandler:
             
         except Exception as e:
             print(f"[ERROR] Failed to add image {image_path}: {str(e)}")
+
+    def _add_image_placeholder(self, doc: Document, keyword: str, config: Dict[str, Any]):
+        """이미지 대신 텍스트 캡션을 추가하여 정갈한 느낌을 부여"""
+        template = config.get('image_placeholder_text', '※ 참고 이미지: {keyword}') or '※ 참고 이미지: {keyword}'
+        safe_keyword = keyword.strip() or '삽화'
+        if '{keyword}' in template:
+            placeholder = template.replace('{keyword}', safe_keyword)
+        else:
+            placeholder = f"{template} {safe_keyword}"
+
+        para = doc.add_paragraph()
+        para.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+        para.paragraph_format.space_before = Pt(4)
+        para.paragraph_format.space_after = Pt(8)
+        run = para.add_run(placeholder)
+        run.italic = True
+        run.font.name = config.get('font_name_english', 'HCR Batang')
+        run.font.size = Pt(config.get('font_size', 11))
+        if hasattr(run._element.rPr, 'rFonts'):
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', '함초롬바탕'))

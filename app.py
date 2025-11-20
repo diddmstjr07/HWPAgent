@@ -9,22 +9,316 @@ import json
 import io
 import base64
 from pathlib import Path
+from typing import Optional, Dict, Any, List
 from modules import HWPAgent
 from modules.docx_handler import DOCXHandler
 from modules.pdf_handler import PDFHandler
 from modules.format_adjuster import FormatAdjuster
 from modules.image_searcher import ImageSearcher
+from modules.riroschool_crawler import RiroSchoolCrawler
+from modules.template_parser import extract_template_text, SUPPORTED_TEMPLATE_EXTENSIONS
 from urllib.parse import urlparse, parse_qs
 import fitz  # PyMuPDF
 import time
+import requests
 from dotenv import load_dotenv
 from database import db
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 CORS(app, supports_credentials=True)
+
+OUTPUT_DIR = Path("output")
+OUTPUT_DIR.mkdir(exist_ok=True)
+TEMPLATE_DIR = OUTPUT_DIR / "templates"
+FONT_DIR = OUTPUT_DIR / "fonts"
+IMAGE_DIR = OUTPUT_DIR / "images"
+TEMPLATE_DIR.mkdir(exist_ok=True)
+FONT_DIR.mkdir(exist_ok=True)
+IMAGE_DIR.mkdir(exist_ok=True)
+
+
+def ensure_default_fonts():
+    for preset in FONT_PRESETS:
+        target = FONT_DIR / preset['filename']
+        if target.exists():
+            continue
+        try:
+            print(f"[FONT] Downloading {preset['display_name']}...")
+            response = requests.get(preset['url'], timeout=45)
+            response.raise_for_status()
+            target.write_bytes(response.content)
+            print(f"[FONT] ✅ Saved {preset['display_name']}")
+        except Exception as exc:
+            print(f"[FONT] ❌ Failed to download {preset['display_name']}: {exc}")
+
+
+def list_available_fonts() -> List[Dict[str, Any]]:
+    primary_font = DEFAULT_STYLE_CONFIG['font_name']
+    fonts: List[Dict[str, Any]] = [{
+        'id': PRIMARY_FONT_ID,
+        'display_name': f"{primary_font} (기본)",
+        'docx_name': primary_font,
+        'docx_english_name': DEFAULT_STYLE_CONFIG.get('font_name_english', primary_font),
+        'font_path': '',
+        'source': 'system',
+        'downloaded': True
+    }]
+
+    preset_paths = set()
+    for preset in FONT_PRESETS:
+        target = FONT_DIR / preset['filename']
+        downloaded = target.exists()
+        entry = {
+            'id': preset['id'],
+            'display_name': preset['display_name'],
+            'docx_name': preset['docx_name'],
+            'docx_english_name': preset.get('docx_name', preset['display_name']),
+            'font_path': str(target) if downloaded else '',
+            'source': 'preset',
+            'downloaded': downloaded
+        }
+        fonts.append(entry)
+        if downloaded:
+            try:
+                preset_paths.add(target.resolve())
+            except Exception:
+                pass
+
+    for font_file in FONT_DIR.glob('*'):
+        if not font_file.is_file():
+            continue
+        try:
+            resolved = font_file.resolve()
+        except Exception:
+            resolved = None
+        if resolved and resolved in preset_paths:
+            continue
+        fonts.append({
+            'id': font_file.stem,
+            'display_name': font_file.stem,
+            'docx_name': font_file.stem,
+            'docx_english_name': font_file.stem,
+            'font_path': str(font_file),
+            'source': 'uploaded',
+            'downloaded': True
+        })
+    return fonts
+
+FONT_PRESETS: List[Dict[str, str]] = [
+    {
+        'id': 'noto-sans-kr',
+        'display_name': 'Noto Sans KR',
+        'docx_name': 'Noto Sans KR',
+        'filename': 'NotoSansKR-Regular.otf',
+        'url': 'https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Korean/NotoSansKR-Regular.otf'
+    },
+    {
+        'id': 'noto-serif-kr',
+        'display_name': 'Noto Serif KR',
+        'docx_name': 'Noto Serif KR',
+        'filename': 'NotoSerifKR-Regular.otf',
+        'url': 'https://github.com/googlefonts/noto-cjk/raw/main/Serif/OTF/Korean/NotoSerifKR-Regular.otf'
+    },
+    {
+        'id': 'pretendard',
+        'display_name': 'Pretendard',
+        'docx_name': 'Pretendard',
+        'filename': 'Pretendard-Regular.otf',
+        'url': 'https://github.com/orioncactus/pretendard/raw/main/public/static/Pretendard-Regular.otf'
+    },
+    {
+        'id': 'gothic-a1',
+        'display_name': 'Gothic A1',
+        'docx_name': 'Gothic A1',
+        'filename': 'GothicA1-Regular.ttf',
+        'url': 'https://github.com/google/fonts/raw/main/ofl/gothica1/GothicA1-Regular.ttf'
+    }
+]
+
+DEFAULT_STYLE_CONFIG: Dict[str, Any] = {
+    'font_name': '함초롬바탕',
+    'font_name_english': 'HCR Batang',
+    'heading_font_name': '함초롬바탕',
+    'title_font_name': '함초롬바탕',
+    'font_size': 11,
+    'title_size': 22,
+    'heading_level1_size': 16,
+    'heading_level2_size': 14,
+    'heading_level3_size': 13,
+    'line_spacing': 1.5,
+    'paragraph_spacing': 8,
+    'margin_top': 2.5,
+    'margin_bottom': 2.5,
+    'margin_left': 2.5,
+    'margin_right': 2.5,
+    'font_file_path': '',
+    'heading_font_file_path': '',
+    'title_font_file_path': '',
+    'font_file_id': '',
+    'heading_font_file_id': '',
+    'title_font_file_id': '',
+    'font_id': '',
+    'treat_images_as_text': False,
+    'image_placeholder_text': '※ 참고 이미지: {keyword}'
+}
+
+
+PRIMARY_FONT_ID = f"primary-{DEFAULT_STYLE_CONFIG['font_name']}"
+DEFAULT_STYLE_CONFIG['font_id'] = PRIMARY_FONT_ID
+
+
+ensure_default_fonts()
+
+
+def _clamp(value: float, min_value: float, max_value: float) -> float:
+    return max(min_value, min(max_value, value))
+
+
+def _resolve_uploaded_font_path(font_path: str) -> Optional[str]:
+    try:
+        resolved = Path(font_path).expanduser().resolve()
+        fonts_root = FONT_DIR.resolve()
+        resolved.relative_to(fonts_root)
+        return str(resolved)
+    except Exception:
+        return None
+
+
+def _get_font_entry_by_id(font_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not font_id:
+        return None
+    normalized = str(font_id).strip()
+    if not normalized:
+        return None
+    if normalized == PRIMARY_FONT_ID:
+        return {
+            'id': PRIMARY_FONT_ID,
+            'docx_name': DEFAULT_STYLE_CONFIG['font_name'],
+            'docx_english_name': DEFAULT_STYLE_CONFIG.get('font_name_english', DEFAULT_STYLE_CONFIG['font_name']),
+            'font_path': ''
+        }
+    for preset in FONT_PRESETS:
+        if preset['id'] == normalized:
+            target = FONT_DIR / preset['filename']
+            return {
+                'id': normalized,
+                'docx_name': preset['docx_name'],
+                'docx_english_name': preset.get('docx_name', preset['display_name']),
+                'font_path': str(target) if target.exists() else ''
+            }
+    for font_file in FONT_DIR.glob('*'):
+        if not font_file.is_file():
+            continue
+        if font_file.stem == normalized or font_file.name == normalized:
+            return {
+                'id': normalized,
+                'docx_name': font_file.stem,
+                'docx_english_name': font_file.stem,
+                'font_path': str(font_file)
+            }
+    return None
+
+
+def normalize_style_config(style_config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    config = DEFAULT_STYLE_CONFIG.copy()
+    input_cfg = style_config or {}
+
+    def _as_float(key: str, default: float) -> float:
+        value = input_cfg.get(key)
+        if value is None:
+            return default
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _as_bool(key: str, default: bool) -> bool:
+        value = input_cfg.get(key)
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ('1', 'true', 'yes', 'y', 'on'):
+                return True
+            if lowered in ('0', 'false', 'no', 'n', 'off'):
+                return False
+        return default
+
+    requested_font_id = str(input_cfg.get('font_id') or input_cfg.get('font_file_id') or '').strip()
+    chosen_font_id = requested_font_id or config.get('font_id', PRIMARY_FONT_ID)
+    font_entry = _get_font_entry_by_id(chosen_font_id)
+    if not font_entry and chosen_font_id != PRIMARY_FONT_ID:
+        chosen_font_id = PRIMARY_FONT_ID
+        font_entry = _get_font_entry_by_id(PRIMARY_FONT_ID)
+
+    base_font_name = font_entry.get('docx_name') if font_entry else config['font_name']
+    base_latin_name = font_entry.get('docx_english_name') if font_entry else config.get('font_name_english', config['font_name'])
+
+    primary_font = (input_cfg.get('font_name') or base_font_name or config['font_name']).strip() or config['font_name']
+    latin_font = (input_cfg.get('font_name_english') or base_latin_name or primary_font).strip() or primary_font
+    font_file_id_value = str(input_cfg.get('font_file_id', config.get('font_file_id', ''))).strip()
+    if (not font_file_id_value) and font_entry and font_entry.get('font_path'):
+        font_file_id_value = chosen_font_id
+
+    config.update({
+        'font_id': chosen_font_id,
+        'font_name': primary_font,
+        'font_name_english': latin_font,
+        'heading_font_name': primary_font,
+        'title_font_name': primary_font,
+        'font_size': _as_float('font_size', config['font_size']),
+        'title_size': _as_float('title_size', config['title_size']),
+        'heading_level1_size': _as_float('heading_level1_size', input_cfg.get('heading_size', config['heading_level1_size'])),
+        'heading_level2_size': _as_float('heading_level2_size', config['heading_level2_size']),
+        'heading_level3_size': _as_float('heading_level3_size', config['heading_level3_size']),
+        'line_spacing': _as_float('line_spacing', config['line_spacing']),
+        'paragraph_spacing': _as_float('paragraph_spacing', config['paragraph_spacing']),
+        'margin_top': _as_float('margin_top', config['margin_top']),
+        'margin_bottom': _as_float('margin_bottom', config['margin_bottom']),
+        'margin_left': _as_float('margin_left', config['margin_left']),
+        'margin_right': _as_float('margin_right', config['margin_right']),
+        'font_file_id': font_file_id_value,
+        'heading_font_file_id': font_file_id_value,
+        'title_font_file_id': font_file_id_value
+    })
+
+    body_size = _clamp(config['font_size'], 8, 24)
+    heading3 = _clamp(max(body_size + 0.5, config['heading_level3_size']), body_size + 0.5, 48)
+    heading2 = _clamp(max(heading3 + 0.5, config['heading_level2_size']), heading3 + 0.5, 54)
+    heading1 = _clamp(max(heading2 + 0.5, config['heading_level1_size']), heading2 + 0.5, 60)
+    title_size = _clamp(max(heading1 + 1, config['title_size']), heading1 + 1, 80)
+
+    config['font_size'] = body_size
+    config['heading_level3_size'] = heading3
+    config['heading_level2_size'] = heading2
+    config['heading_level1_size'] = heading1
+    config['title_size'] = title_size
+
+    font_path_override = (font_entry.get('font_path') if font_entry else '') or ''
+    primary_font_path_raw = font_path_override or input_cfg.get('font_file_path') or input_cfg.get('font_path') or config.get('font_file_path') or ''
+    if primary_font_path_raw:
+        safe_path = _resolve_uploaded_font_path(primary_font_path_raw)
+        primary_font_path = safe_path or ''
+    else:
+        primary_font_path = ''
+    config['font_file_path'] = primary_font_path
+    config['heading_font_file_path'] = primary_font_path
+    config['title_font_file_path'] = primary_font_path
+
+    config['treat_images_as_text'] = _as_bool('treat_images_as_text', config.get('treat_images_as_text', False))
+    placeholder_value = input_cfg.get('image_placeholder_text') or config.get('image_placeholder_text')
+    if placeholder_value:
+        config['image_placeholder_text'] = str(placeholder_value)
+    else:
+        config['image_placeholder_text'] = '※ 참고 이미지: {keyword}'
+
+    return config
 
 # IP 주소 기반 사용자 ID 생성
 def get_user_id_from_request():
@@ -41,6 +335,7 @@ docx_handler = DOCXHandler(output_dir="output")
 pdf_handler = PDFHandler(output_dir="output")
 format_adjuster = FormatAdjuster()
 image_searcher = ImageSearcher()
+riro_sessions = {}
 
 def _clean_google_url(url: str) -> str:
     """Google redirect URL 정제"""
@@ -73,18 +368,273 @@ def index():
     """메인 페이지"""
     return render_template('index.html')
 
+@app.route('/riroschool')
+def riroschool_page():
+    """리로스쿨 계정 입력 페이지"""
+    return render_template('riroschool.html')
+
+@app.route('/riroschool/docs')
+def riroschool_docs_page():
+    """리로스쿨 문서 목록 페이지"""
+    return render_template('riro_docs.html')
+
+@app.route('/riroschool/docs/<int:doc_id>')
+def riroschool_doc_detail_page(doc_id):
+    """리로스쿨 문서 상세 페이지"""
+    return render_template('riro_doc_view.html', doc_id=doc_id)
+
+@app.route('/api/riroschool/login', methods=['POST'])
+def riroschool_login():
+    """리로스쿨 로그인 및 이벤트 가져오기"""
+    try:
+        data = request.json
+        school = data.get('school', '').strip()
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        grade = data.get('grade', '1')
+        year = data.get('year', '2025')
+        
+        if not school or not username or not password:
+            return jsonify({
+                'success': False,
+                'error': '학교명, 아이디, 비밀번호를 모두 입력해주세요.'
+            }), 400
+        
+        print(f"[RIRO API] Login request - School: {school}, User: {username}, Grade: {grade}")
+        user_id = get_user_id_from_request()
+        
+        # 크롤러 실행
+        crawler = RiroSchoolCrawler()
+        result = crawler.login_and_get_events(
+            school_name=school,
+            username=username,
+            password=password,
+            grade=grade,
+            year=year
+        )
+        
+        if result['success']:
+            print(f"[RIRO API] Success - Found {len(result['events'])} events")
+            session_payload = {
+                'school': school,
+                'riro_id': username,
+                'grade': grade,
+                'year': year,
+                'base_url': result.get('base_url'),
+                'cookies': result.get('cookies'),
+                'guides': result.get('guides', {}),
+                'updated_at': time.time()
+            }
+            riro_sessions[user_id] = session_payload
+            result.pop('cookies', None)
+            result.pop('base_url', None)
+            result.pop('guides', None)
+            result['riro_id'] = username
+        else:
+            print(f"[RIRO API] Failed - {result['error']}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"[RIRO API ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/riroschool/guide', methods=['POST'])
+def riroschool_guide():
+    """리로스쿨 일정에서 과제 가이드라인 추출"""
+    try:
+        payload = request.json or {}
+        events = payload.get('events') or []
+        event_url = payload.get('eventUrl')
+        date = payload.get('date')
+        user_id = get_user_id_from_request()
+        session_payload = riro_sessions.get(user_id)
+        
+        if not session_payload:
+            return jsonify({'success': False, 'error': '로그인 세션이 만료되었습니다.'}), 401
+        
+        if not event_url:
+            for event in events:
+                candidate = (event or {}).get('url') or (event or {}).get('link')
+                if candidate:
+                    event_url = candidate
+                    break
+        
+        if not event_url and not date:
+            return jsonify({'success': False, 'error': '가져올 이벤트 URL이 없습니다.'}), 400
+        
+        guides_map = session_payload.get('guides') or {}
+        guide_entry = None
+        if date and date in guides_map:
+            guide_entry = guides_map[date]
+        elif event_url:
+            guide_entry = next(
+                (info for info in guides_map.values() if info.get('source') == event_url),
+                None
+            )
+        
+        if not guide_entry:
+            return jsonify({'success': False, 'error': '가이드 라인이 없습니다.'})
+        
+        return jsonify({
+            'success': True,
+            'guide': guide_entry.get('guide', '').strip(),
+            'source': guide_entry.get('source', event_url)
+        })
+    except Exception as exc:
+        print(f"[RIRO GUIDE ERROR] {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+@app.route('/api/riroschool/logout', methods=['POST'])
+def riroschool_logout():
+    """리로스쿨 세션 초기화"""
+    user_id = get_user_id_from_request()
+    if user_id in riro_sessions:
+        riro_sessions.pop(user_id, None)
+    return jsonify({'success': True})
+
+@app.route('/api/riroschool/documents', methods=['GET'])
+def riro_documents_list():
+    """리로스쿨 사용자 문서 목록"""
+    user_id = get_user_id_from_request()
+    session_payload = riro_sessions.get(user_id)
+    if not session_payload:
+        return jsonify({'success': False, 'error': '로그인이 필요합니다.'}), 401
+    docs = db.get_riro_documents(session_payload['riro_id'])
+    return jsonify({
+        'success': True,
+        'documents': [doc.to_dict() for doc in docs]
+    })
+
+@app.route('/api/riroschool/documents', methods=['POST'])
+def riro_documents_save():
+    """리로스쿨 사용자 문서 저장"""
+    user_id = get_user_id_from_request()
+    session_payload = riro_sessions.get(user_id)
+    if not session_payload:
+        return jsonify({'success': False, 'error': '로그인이 필요합니다.'}), 401
+    data = request.json or {}
+    title = (data.get('title') or '문서').strip()
+    content = (data.get('content') or '').strip()
+    image_urls = data.get('image_urls') or []
+    if not content:
+        return jsonify({'success': False, 'error': '내용이 비어있습니다.'}), 400
+    doc = db.save_riro_document(session_payload['riro_id'], title, content, image_urls)
+    return jsonify({'success': True, 'document': doc.to_dict()})
+
+@app.route('/api/riroschool/documents/<int:doc_id>', methods=['GET'])
+def riro_documents_detail(doc_id):
+    user_id = get_user_id_from_request()
+    session_payload = riro_sessions.get(user_id)
+    if not session_payload:
+        return jsonify({'success': False, 'error': '로그인이 필요합니다.'}), 401
+    doc = db.get_riro_document(doc_id, session_payload['riro_id'])
+    if not doc:
+        return jsonify({'success': False, 'error': '문서를 찾을 수 없습니다.'}), 404
+    return jsonify({'success': True, 'document': doc.to_dict()})
+
+
+@app.route('/api/template/upload', methods=['POST'])
+def upload_template():
+    """문서 양식 파일 업로드 및 텍스트 추출"""
+    try:
+        file = request.files.get('template')
+        if not file or not file.filename:
+            return jsonify({'success': False, 'error': '업로드할 파일을 선택해주세요.'}), 400
+        original_name = file.filename
+        suffix = Path(original_name).suffix.lower()
+        if suffix not in SUPPORTED_TEMPLATE_EXTENSIONS:
+            return jsonify({
+                'success': False,
+                'error': '지원하지 않는 파일 형식입니다. (.docx, .hwp, .txt, .md)'
+            }), 400
+
+        safe_stem = secure_filename(Path(original_name).stem) or 'template'
+        filename = f"{safe_stem}{suffix}"
+
+        timestamp = int(time.time() * 1000)
+        save_path = TEMPLATE_DIR / f"{timestamp}_{filename}"
+        file.save(save_path)
+
+        try:
+            template_text = extract_template_text(save_path)
+        except ValueError as exc:
+            if save_path.exists():
+                save_path.unlink()
+            return jsonify({'success': False, 'error': str(exc)}), 400
+
+        return jsonify({
+            'success': True,
+            'template_name': filename,
+            'template_id': save_path.stem,
+            'template_text': template_text
+        })
+    except Exception as exc:
+        print(f"[TEMPLATE] Upload failed: {exc}")
+        return jsonify({'success': False, 'error': '템플릿 업로드 중 오류가 발생했습니다.'}), 500
+
+
+@app.route('/api/font/upload', methods=['POST'])
+def upload_font():
+    """사용자 지정 폰트 업로드"""
+    try:
+        font_file = request.files.get('font')
+        if not font_file or not font_file.filename:
+            return jsonify({'success': False, 'error': '업로드할 폰트를 선택해주세요.'}), 400
+
+        suffix = Path(font_file.filename).suffix.lower()
+        if suffix not in {'.ttf', '.otf'}:
+            return jsonify({'success': False, 'error': 'TTF 또는 OTF 형식만 지원합니다.'}), 400
+
+        safe_stem = secure_filename(Path(font_file.filename).stem) or 'font'
+        timestamp = int(time.time() * 1000)
+        save_path = FONT_DIR / f"{timestamp}_{safe_stem}{suffix}"
+        FONT_DIR.mkdir(parents=True, exist_ok=True)
+        font_file.save(save_path)
+
+        display_name = request.form.get('fontName') or Path(font_file.filename).stem
+
+        return jsonify({
+            'success': True,
+            'font_id': save_path.stem,
+            'font_name': display_name,
+            'font_path': str(save_path)
+        })
+    except Exception as exc:
+        print(f"[FONT] Upload failed: {exc}")
+        return jsonify({'success': False, 'error': '폰트 업로드 중 오류가 발생했습니다.'}), 500
+
+
+@app.route('/api/fonts', methods=['GET'])
+def get_fonts():
+    try:
+        fonts = list_available_fonts()
+        return jsonify({'success': True, 'fonts': fonts})
+    except Exception as exc:
+        print(f"[FONT] Catalog error: {exc}")
+        return jsonify({'success': False, 'error': '폰트 목록을 불러오지 못했습니다.'}), 500
+
 @app.route('/api/generate', methods=['POST'])
 def generate_content():
     """AI 콘텐츠 생성"""
     try:
         data = request.json
-        user_request = data.get('request', '')
-        
+        user_request = (data.get('request') or '').strip()
+        document_template = (data.get('template') or '').strip() or None
+
         if not user_request:
-            return jsonify({'error': '요청 내용을 입력해주세요.'}), 400
+            if document_template:
+                user_request = "제공된 문서 양식의 모든 항목을 알맞은 내용으로 채워 완성된 문서를 작성하세요."
+            else:
+                return jsonify({'error': '요청 내용 또는 양식을 입력해주세요.'}), 400
         
         # 콘텐츠 생성
-        result = agent.process_request(user_request)
+        result = agent.process_request(user_request, document_template=document_template)
         
         return jsonify({
             'success': True,
@@ -102,17 +652,25 @@ def generate_content_stream():
     """스트리밍 AI 콘텐츠 생성"""
     try:
         data = request.json
-        user_request = data.get('request', '')
-        
+        user_request = (data.get('request') or '').strip()
+        document_template = (data.get('template') or '').strip() or None
+
         if not user_request:
-            return jsonify({'error': '요청 내용을 입력해주세요.'}), 400
+            if document_template:
+                user_request = "제공된 문서 양식을 기반으로 모든 항목을 충실하게 작성하세요."
+            else:
+                return jsonify({'error': '요청 내용 또는 양식을 입력해주세요.'}), 400
         
         def generate():
             full_text = ""
             chunk_count = 0
             try:
                 # 스트리밍 모드로 생성
-                stream = agent.content_generator.generate_document_content(user_request, stream=True)
+                stream = agent.content_generator.generate_document_content(
+                    user_request,
+                    stream=True,
+                    document_template=document_template
+                )
                 
                 for chunk in stream:
                     if chunk:  # 빈 청크 무시
@@ -177,7 +735,7 @@ def save_document():
         title = data.get('title', '문서')
         content = data.get('content', '')
         format_type = data.get('format', 'docx')
-        style_config = data.get('style', {})
+        style_config = normalize_style_config(data.get('style'))
         images_needed = data.get('images_needed', [])  # AI가 제안한 이미지 키워드들
         image_urls = data.get('image_urls', [])  # 프론트엔드에서 검색한 이미지 URL
         
@@ -194,7 +752,10 @@ def save_document():
         
         # 이미지 자동 다운로드 ([gen_img] 태그 기반)
         downloaded_images = []
-        if images_needed and len(images_needed) > 0:
+        treat_images_as_text = style_config.get('treat_images_as_text', False)
+        if treat_images_as_text:
+            print("[IMAGE] Textual placeholders enabled - skipping downloads.")
+        elif images_needed and len(images_needed) > 0:
             print(f"[IMAGE] Found {len(images_needed)} image tags")
             print(f"[IMAGE] Keywords: {images_needed}")
             try:
@@ -216,7 +777,7 @@ def save_document():
                         # 파일명에서 특수문자 제거
                         safe_filename = keyword.replace(' ', '_').replace('/', '_').replace('\\', '_')[:50]
                         img_filename = f"{safe_filename}.jpg"
-                        img_path = f"output/images/{img_filename}"
+                        img_path = str(IMAGE_DIR / img_filename)
                         
                         print(f"[IMAGE] Downloading from frontend URL: {url[:100]}...")
                         downloaded_path = image_searcher.download_image(
@@ -234,7 +795,7 @@ def save_document():
                             fallback_url = f"https://picsum.photos/seed/{abs(hash(keyword))%1000}/800/600"
                             fallback_path = image_searcher.download_image(
                                 fallback_url,
-                                img_path,
+                                str(IMAGE_DIR / f"fallback_{img_filename}"),
                                 max_width=1200
                             )
                             if fallback_path:
@@ -250,7 +811,7 @@ def save_document():
                             # 파일명에서 특수문자 제거
                             safe_filename = keyword.replace(' ', '_').replace('/', '_').replace('\\', '_')[:50]
                             img_filename = f"{safe_filename}.jpg"
-                            img_path = f"output/images/{img_filename}"
+                            img_path = str(IMAGE_DIR / img_filename)
                             print(images)
                             downloaded_path = image_searcher.download_image(
                                 images[0]['url'],
@@ -279,7 +840,7 @@ def save_document():
             temp_docx = docx_handler.create_document(
                 title=title,
                 content=content,
-                style_config=style_config if style_config else None,
+                style_config=style_config,
                 images=downloaded_images if downloaded_images else None,
                 filename=f"{title}_temp.docx"
             )
@@ -288,14 +849,15 @@ def save_document():
             print(f"[PDF] Converting DOCX to PDF...")
             file_path = pdf_handler.convert_docx_to_pdf(
                 temp_docx,
-                output_filename=f"{title}.pdf"
+                output_filename=f"{title}.pdf",
+                style_config=style_config
             )
         elif format_type == 'hwp':
             # HWP는 DOCX를 확장자만 .hwp로 변경하여 저장 (이미지 포함)
             temp_path = docx_handler.create_document(
                 title=title,
                 content=content,
-                style_config=style_config if style_config else None,
+                style_config=style_config,
                 images=downloaded_images if downloaded_images else None,
                 filename=f"{title}_temp.docx"
             )
@@ -310,7 +872,7 @@ def save_document():
             file_path = docx_handler.create_document(
                 title=title,
                 content=content,
-                style_config=style_config if style_config else None,
+                style_config=style_config,
                 images=downloaded_images if downloaded_images else None,
                 filename=f"{title}.docx"
             )
@@ -548,6 +1110,7 @@ def pdf_to_images(filename):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 # ============================================
 # IP 기반 사용자 API

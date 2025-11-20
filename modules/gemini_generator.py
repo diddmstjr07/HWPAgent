@@ -138,7 +138,13 @@ class GeminiContentGenerator:
             print(f"[GEMINI STREAM ERROR] {str(e)}")
             raise Exception(f"스트리밍 오류: {str(e)}")
     
-    def generate_document_content(self, user_request: str, context: Optional[Dict[str, Any]] = None, stream: bool = False):
+    def generate_document_content(
+        self,
+        user_request: str,
+        context: Optional[Dict[str, Any]] = None,
+        stream: bool = False,
+        document_template: Optional[str] = None
+    ):
         """
         사용자 요청에 따라 문서 콘텐츠 생성
         
@@ -150,21 +156,46 @@ class GeminiContentGenerator:
             생성된 콘텐츠와 메타데이터
         """
         context_str = str(context) if context else "없음"
+
+        def _escape_braces(value: str) -> str:
+            return value.replace('{', '{{').replace('}', '}}') if value else value
+
+        safe_context = _escape_braces(context_str)
+        safe_request = _escape_braces(user_request)
+        safe_template_text = _escape_braces(document_template) if document_template else ''
         
-        prompt_template = """당신은 전문적인 문서 작성 AI입니다. 사용자의 요청에 따라 한글 문서에 들어갈 내용을 생성합니다.
+        if document_template:
+            structure_guide = "제공된 양식의 제목, 번호, 들여쓰기 구조를 그대로 유지하고 각 항목 뒤에 자연스럽게 내용을 채워 넣으세요. 추가 섹션을 만들지 말고 빈 칸 또한 자연어 문장으로 채우세요."
+        else:
+            structure_guide = "- 서론 (1-2 단락)\n- 본론 (2-3개 소제목, 각 2 단락)\n- 결론 (1-2 단락)\n- 총 분량: 1,500-2,500자 범위"
 
-사용자 요청: {user_request}
+        template_block = ''
+        if document_template:
+            template_block = f"""
+📋 **제공된 문서 양식**
+{safe_template_text}
 
-추가 컨텍스트: {context}
+위 양식의 순서를 그대로 유지하고, 각 항목에 필요한 내용을 채워 넣으세요. 원본 양식에 존재하지 않는 제목이나 번호는 새로 만들지 마세요.
+"""
+
+        prompt_template = f"""당신은 전문적인 문서 작성 AI입니다. 사용자의 요청에 따라 한글 문서에 들어갈 내용을 생성합니다.
+
+사용자 요청: {{user_request}}
+
+추가 컨텍스트: {{context}}
 
 ⚠️ **절대적 규칙:**
 1. 문서를 반드시 끝까지 완성하세요
 2. 문장을 중간에 끝내지 마세요
-3. 결론을 반드시 포함하세요
+3. 결론 또는 마무리 구문을 반드시 포함하세요
 4. "이상입니다", "끝", "완료" 등의 마무리로 끝내세요
 
-다음 형식으로 응답하세요:
+📝 **문서 구조 가이드:**
+{structure_guide}
 
+{template_block}
+
+응답 형식:
 1. 제목: [문서 제목]
 
 2. 본문: [상세 내용 - 마크다운 형식 사용]
@@ -174,18 +205,11 @@ class GeminiContentGenerator:
    - *기울임* 을 사용하여 부가 설명
    - 이미지 추가: [gen_img]검색 키워드[/gen_img] 태그 사용
 
-📝 **문서 구조 가이드:**
-- 서론 (1-2 단락)
-- 본론 (2-3개 소제목, 각 2 단락)
-- 결론 (1-2 단락)
-- 총 분량: 1,500-2,500자 범위 (진짜 짧게 작성)
-
 ✅ **마무리 필수:**
-문서 끝에 반드시 "이상으로 [제목]에 대한 설명을 마칩니다." 추가
+문서 끝에 반드시 "이상으로 [제목]에 대한 설명을 마칩니다."를 포함하세요.
 
 전문적이고 명확하며 체계적인 문서를 작성하세요."""
-        # 프롬프트 생성
-        prompt = prompt_template.format(user_request=user_request, context=context_str)
+        prompt = prompt_template.format(user_request=safe_request, context=safe_context)
 
         if stream:
             # 스트리밍 모드: generator 반환

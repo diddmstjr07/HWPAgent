@@ -31,20 +31,29 @@ class HWPHandler:
         images: Optional[List[str]] = None
     ) -> str:
         """HWP 문서 생성 (DOCX 구조 기반, .hwp 확장자)"""
-        if style_config is None:
-            style_config = {
-                'font_name': '함초롬바탕',
-                'font_name_english': 'Times New Roman',
-                'font_size': 11,
-                'title_size': 22,
-                'heading_size': 16,
-                'line_spacing': 100,
-                'paragraph_spacing': 8,
-                'margin_top': 2.5,
-                'margin_bottom': 2.5,
-                'margin_left': 2.5,
-                'margin_right': 2.5
-            }
+        base_style = {
+            'font_name': '함초롬바탕',
+            'font_name_english': 'Times New Roman',
+            'heading_font_name': '함초롬바탕',
+            'title_font_name': '함초롬바탕',
+            'font_size': 11,
+            'title_size': 22,
+            'heading_level1_size': 16,
+            'heading_level2_size': 14,
+            'heading_level3_size': 13,
+            'line_spacing': 1.6,
+            'paragraph_spacing': 8,
+            'margin_top': 2.5,
+            'margin_bottom': 2.5,
+            'margin_left': 2.5,
+            'margin_right': 2.5
+        }
+
+        style = base_style.copy()
+        if style_config:
+            style.update(style_config)
+        style['heading_font_name'] = style.get('heading_font_name', style.get('font_name', base_style['font_name']))
+        style['title_font_name'] = style.get('title_font_name', style['heading_font_name'])
 
         if filename is None:
             filename = f"{title}.hwp"
@@ -54,11 +63,11 @@ class HWPHandler:
         output_path = self.output_dir / filename
 
         doc = Document()
-        self._set_page_margins(doc, style_config)
-        self._set_default_style(doc, style_config)
+        self._set_page_margins(doc, style)
+        self._set_default_style(doc, style)
 
-        self._create_cover(doc, title, style_config)
-        self._add_content(doc, content, style_config, images)
+        self._create_cover(doc, title, style)
+        self._add_content(doc, content, style, images)
 
         temp_path = output_path.with_suffix(".docx")
         doc.save(temp_path)
@@ -102,7 +111,7 @@ class HWPHandler:
         title_run = title_para.add_run(title)
         title_run.bold = True
         title_run.font.size = Pt(config.get('title_size', 22))
-        title_run.font.name = config.get('font_name_english', 'Times New Roman')
+        title_run.font.name = config.get('title_font_name', config.get('heading_font_name', config.get('font_name_english', 'Times New Roman')))
         title_run.font.color.rgb = RGBColor(20, 20, 20)
         title_run._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', '함초롬바탕'))
 
@@ -145,10 +154,17 @@ class HWPHandler:
         text = line.strip('#').strip()
         heading = doc.add_heading(text, level=min(level, 3))
         heading.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        heading_sizes = {
+            1: config.get('heading_level1_size', config.get('heading_size', 16)),
+            2: config.get('heading_level2_size', config.get('heading_level1_size', 15) - 1),
+            3: config.get('heading_level3_size', config.get('heading_level2_size', 14) - 1)
+        }
+        target_font = config.get('heading_font_name', config.get('font_name', '함초롬바탕'))
+        target_size = heading_sizes.get(level, heading_sizes[3])
         for run in heading.runs:
-            run.font.name = config.get('font_name', '함초롬바탕')
-            run.font.size = Pt(config.get('heading_size', 16) - (level * 2))
-            run._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', '함초롬바탕'))
+            run.font.name = target_font
+            run.font.size = Pt(target_size)
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), target_font)
             run.font.color.rgb = RGBColor(0, 0, 0)
 
     def _add_list_item(self, doc: Document, text: str, config: Dict[str, Any]):
@@ -170,7 +186,7 @@ class HWPHandler:
     def _add_paragraph(self, doc: Document, text: str, config: Dict[str, Any]):
         para = doc.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        para.paragraph_format.line_spacing = Pt(config.get('line_spacing', 100))
+        para.paragraph_format.line_spacing = config.get('line_spacing', 1.6)
         self._add_formatted_text(para, text, config)
 
     def _add_formatted_text(self, para, text: str, config: Dict[str, Any]):

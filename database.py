@@ -5,7 +5,7 @@ import sqlite3
 import json
 from datetime import datetime
 from pathlib import Path
-from models import User, DocumentHistory
+from models import User, DocumentHistory, RiroDocument
 
 class Database:
     def __init__(self, db_path='hwp_agent.db'):
@@ -50,6 +50,23 @@ class Database:
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_document_user 
             ON document_history(user_id, created_at DESC)
+        ''')
+
+        # 리로스쿨 문서 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS riro_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                riro_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                image_urls TEXT,
+                created_at TEXT NOT NULL
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_riro_documents
+            ON riro_documents(riro_id, created_at DESC)
         ''')
         
         conn.commit()
@@ -246,6 +263,87 @@ class Database:
         conn.close()
         
         return deleted
+
+    # ============ RiRoSchool Documents ============
+
+    def save_riro_document(self, riro_id, title, content, image_urls=None):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        payload = json.dumps(image_urls or [])
+        cursor.execute('''
+            INSERT INTO riro_documents (riro_id, title, content, image_urls, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (riro_id, title, content, payload, now))
+        doc_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return RiroDocument(
+            id=doc_id,
+            riro_id=riro_id,
+            title=title,
+            content=content,
+            image_urls=image_urls or [],
+            created_at=now
+        )
+
+    def get_riro_documents(self, riro_id, limit=50):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM riro_documents
+            WHERE riro_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        ''', (riro_id, limit))
+        rows = cursor.fetchall()
+        conn.close()
+        documents = []
+        for row in rows:
+            image_urls = []
+            if row['image_urls']:
+                try:
+                    image_urls = json.loads(row['image_urls'])
+                except json.JSONDecodeError:
+                    image_urls = []
+            documents.append(RiroDocument(
+                id=row['id'],
+                riro_id=row['riro_id'],
+                title=row['title'],
+                content=row['content'],
+                image_urls=image_urls,
+                created_at=row['created_at']
+            ))
+        return documents
+    
+    def get_riro_document(self, doc_id, riro_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM riro_documents
+            WHERE id = ? AND riro_id = ?
+        ''', (doc_id, riro_id))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return None
+        
+        image_urls = []
+        if row['image_urls']:
+            try:
+                image_urls = json.loads(row['image_urls'])
+            except json.JSONDecodeError:
+                image_urls = []
+        
+        return RiroDocument(
+            id=row['id'],
+            riro_id=row['riro_id'],
+            title=row['title'],
+            content=row['content'],
+            image_urls=image_urls,
+            created_at=row['created_at']
+        )
 
 # 전역 데이터베이스 인스턴스
 db = Database()
