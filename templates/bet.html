@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>달팽이 경주</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f9f9f9;
+            --panel: #ffffff;
+            --line: #e6e8ed;
+            --text: #0f1115;
+            --muted: #6c7280;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Space Grotesk', sans-serif;
+            padding: 24px 12px 60px;
+        }
+        .wrap {
+            width: min(960px, 100%);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 22px 18px;
+            box-shadow: 0 8px 28px rgba(15,17,21,0.08);
+        }
+        .head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        h1 { margin: 0; letter-spacing: -0.02em; }
+        .muted { color: var(--muted); }
+        .btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--text);
+            font-weight: 700;
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(15,17,21,0.06);
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+        .btn:active { transform: translateY(1px); box-shadow: 0 3px 10px rgba(15,17,21,0.05); }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #1f2a44;
+        }
+        .status i { color: #4b5563; }
+        .tracklist { display: grid; gap: 14px; margin-top: 10px; }
+        .lane {
+            background: #fbfbfb;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        .lane-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 12px;
+            background: #eef1f7;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .track {
+            position: relative;
+            height: 60px;
+            background: linear-gradient(90deg, #f1f2f6 0%, #f6f7fb 100%);
+            border-radius: 12px;
+            border: 1px solid #eceef3;
+            overflow: hidden;
+        }
+        .rail {
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            top: 50%;
+            height: 2px;
+            background: linear-gradient(90deg, #cfd5e3, #dce1ec);
+            transform: translateY(-50%);
+        }
+        .runner {
+            position: absolute;
+            top: 8px;
+            left: calc(0% - 20px);
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(145deg, #f7f7f9, #eceef3);
+            display: grid;
+            place-items: center;
+            box-shadow: 0 6px 12px rgba(15,17,21,0.12);
+            border: 2px solid #fff;
+            transition: left 0.2s ease-out;
+        }
+        .snail-icon {
+            font-size: 1.4rem;
+            animation: crawl 0.8s ease-in-out infinite alternate;
+        }
+        @keyframes crawl {
+            0% { transform: translateX(0) translateY(0); }
+            100% { transform: translateX(3px) translateY(-1px); }
+        }
+        .log {
+            margin-top: 14px;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="head">
+            <div>
+                <h1>달팽이만 달린다</h1>
+                <div class="muted">불필요한 UI 없이 달리는 모습만 남겼습니다.</div>
+            </div>
+            <button class="btn" id="restart">다시 출발</button>
+        </div>
+        <div class="status" id="status"><i class="bi bi-flag-fill"></i> 출발 대기</div>
+        <div class="tracklist" id="lanes"></div>
+        <div class="log" id="log"></div>
+    </div>
+
+    <script>
+        const snails = [
+            { id: 'a', name: '1번 아쿠아' },
+            { id: 'b', name: '2번 엠버' },
+            { id: 'c', name: '3번 루나' },
+            { id: 'd', name: '4번 볼트' },
+        ];
+
+        const state = { positions: {}, racing: false, timer: null };
+        const lanesEl = document.getElementById('lanes');
+        const statusEl = document.getElementById('status');
+        const logEl = document.getElementById('log');
+
+        const renderLanes = () => {
+            lanesEl.innerHTML = snails.map((s) => `
+                <div class="lane">
+                    <div class="lane-head">
+                        <strong>${s.name}</strong>
+                        <span class="tag">🐌 전진</span>
+                    </div>
+                    <div class="track">
+                        <div class="rail"></div>
+                        <div class="runner" id="runner-${s.id}"><span class="snail-icon">🐌</span></div>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        const resetRace = () => {
+            state.positions = {};
+            snails.forEach((s) => {
+                state.positions[s.id] = 0;
+                const runner = document.getElementById(`runner-${s.id}`);
+                if (runner) runner.style.left = 'calc(0% - 20px)';
+            });
+            statusEl.innerHTML = '<i class="bi bi-flag-fill"></i> 출발 대기';
+            logEl.textContent = '';
+        };
+
+        const step = () => {
+            let finished = null;
+            snails.forEach((s) => {
+                const delta = Math.random() * 4 + 1; // 1~5% 전진
+                state.positions[s.id] = Math.min(100, state.positions[s.id] + delta);
+                const runner = document.getElementById(`runner-${s.id}`);
+                if (runner) runner.style.left = `calc(${state.positions[s.id].toFixed(1)}% - 20px)`;
+                if (state.positions[s.id] >= 100 && !finished) {
+                    finished = s;
+                }
+            });
+            if (finished) {
+                clearInterval(state.timer);
+                state.racing = false;
+                statusEl.innerHTML = `<i class="bi bi-trophy-fill"></i> ${finished.name} 결승!`;
+                logEl.textContent = `${finished.name} 우승`;
+            }
+        };
+
+        const startRace = () => {
+            if (state.racing) return;
+            resetRace();
+            statusEl.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> 출발!';
+            state.racing = true;
+            state.timer = setInterval(step, 220);
+        };
+
+        document.getElementById('restart').addEventListener('click', startRace);
+        renderLanes();
+        resetRace();
+        startRace();
+    </script>
+</body>
+</html>

@@ -49,8 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentStyle: {
             font_id: '',
             font_size: 11,
-            line_spacing: 1.7,
-            paragraph_spacing: 8,
+            line_spacing: 1.3,
+            paragraph_spacing: 6,
             treat_images_as_text: false,
         }
     };
@@ -210,12 +210,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (done) break;
 
                 buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n\n');
+                // SSE는 CRLF(\r\n\r\n) 혹은 LF(\n\n) 둘 다 사용될 수 있으므로 모두 처리
+                const lines = buffer.split(/\r?\n\r?\n/);
                 buffer = lines.pop(); 
 
-                for (const line of lines) {
-                    if (!line.startsWith('data: ')) continue;
-                    const data = JSON.parse(line.substring(6));
+                for (const rawLine of lines) {
+                    const line = rawLine.trim();
+                    if (!line.startsWith('data:')) continue;
+                    const payload = line.replace(/^data:\s*/, '').trim();
+                    if (!payload) continue;
+                    
+                    let data;
+                    try {
+                        data = JSON.parse(payload);
+                    } catch (e) {
+                        console.warn('Stream parse warning:', e, payload);
+                        continue;
+                    }
 
                     if (data.error) throw new Error(data.error);
 

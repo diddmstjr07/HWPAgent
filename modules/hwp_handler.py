@@ -2,7 +2,7 @@
 HWP (워드 기반 한글 문서) 파일 생성 모듈 (함초롬바탕 버전)
 - 내부는 DOCX 기반이지만 확장자만 .hwp로 저장됨
 - 한글, 워드 모두에서 정상적으로 열림
-- 줄간 간격 100pt, 본문 양쪽 정렬, 이미지 중앙 정렬
+- 기본 줄간 1.3배, 본문 양쪽 정렬, 이미지 중앙 정렬
 - 폰트: 함초롬바탕 (HCR Batang)
 """
 
@@ -13,6 +13,55 @@ from docx.oxml.ns import qn
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import os
+import re
+import zipfile
+import xml.etree.ElementTree as ET
+import olefile
+import zlib
+import struct
+
+
+LATEX_SYMBOL_MAP = {
+    r'\times': '×',
+    r'\cdot': '·',
+    r'\pm': '±',
+    r'\mp': '∓',
+    r'\leq': '≤',
+    r'\geq': '≥',
+    r'\neq': '≠',
+    r'\approx': '≈',
+    r'\sim': '∼',
+    r'\infty': '∞',
+    r'\partial': '∂',
+    r'\nabla': '∇',
+    r'\sum': '∑',
+    r'\prod': '∏',
+    r'\int': '∫',
+    r'\oint': '∮',
+    r'\propto': '∝',
+    r'\forall': '∀',
+    r'\exists': '∃',
+    r'\cup': '∪',
+    r'\cap': '∩',
+    r'\subseteq': '⊆',
+    r'\supseteq': '⊇',
+    r'\subset': '⊂',
+    r'\supset': '⊃',
+    r'\in': '∈',
+    r'\notin': '∉',
+    r'\perp': '⊥',
+    r'\angle': '∠'
+}
+
+LATEX_GREEK_MAP = {
+    r'\alpha': 'α', r'\beta': 'β', r'\gamma': 'γ', r'\delta': 'δ', r'\epsilon': 'ε',
+    r'\zeta': 'ζ', r'\eta': 'η', r'\theta': 'θ', r'\iota': 'ι', r'\kappa': 'κ',
+    r'\lambda': 'λ', r'\mu': 'μ', r'\nu': 'ν', r'\xi': 'ξ', r'\pi': 'π',
+    r'\rho': 'ρ', r'\sigma': 'σ', r'\tau': 'τ', r'\upsilon': 'υ', r'\phi': 'φ',
+    r'\chi': 'χ', r'\psi': 'ψ', r'\omega': 'ω',
+    r'\Gamma': 'Γ', r'\Delta': 'Δ', r'\Theta': 'Θ', r'\Lambda': 'Λ', r'\Xi': 'Ξ',
+    r'\Pi': 'Π', r'\Sigma': 'Σ', r'\Phi': 'Φ', r'\Psi': 'Ψ', r'\Omega': 'Ω'
+}
 
 
 class HWPHandler:
@@ -21,6 +70,60 @@ class HWPHandler:
     def __init__(self, output_dir: str = "output"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
+
+    def read_hwp(self, file_path: str) -> str:
+        """HWP 또는 HWPX 파일의 텍스트 내용을 추출합니다."""
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        # 1. Try HWPX (Zip based)
+        if zipfile.is_zipfile(file_path):
+            try:
+                return self._read_hwpx(file_path)
+            except Exception as e:
+                print(f"HWPX reading failed: {e}")
+
+        # 2. Try HWP V5 (OLE based)
+        try:
+            if olefile.isOleFile(file_path):
+                return self._read_hwp_v5(file_path)
+        except Exception as e:
+            print(f"HWP V5 reading failed: {e}")
+
+        return ""
+
+    def _read_hwpx(self, file_path: str) -> str:
+        text_content = []
+        with zipfile.ZipFile(file_path, 'r') as zf:
+            # Find section files
+            section_files = [f for f in zf.namelist() if f.startswith('Contents/section') and f.endswith('.xml')]
+            section_files.sort()
+
+            for section_file in section_files:
+                xml_data = zf.read(section_file)
+                root = ET.fromstring(xml_data)
+
+                # Extract text from <hp:t> tags
+                # Use robust iterator to find 't' tags regardless of namespace prefix
+                for elem in root.iter():
+                    if elem.tag.endswith('}t'): # Matches <hp:t>
+                        if elem.text:
+                            text_content.append(elem.text)
+                    elif elem.tag.endswith('}p'): # Paragraph break
+                        text_content.append('\n')
+
+        return "".join(text_content).strip()
+
+    def _read_hwp_v5(self, file_path: str) -> str:
+        # Try extracting PrvText (Preview Text)
+        with olefile.OleFileIO(file_path) as ole:
+            if ole.exists('PrvText'):
+                # PrvText is usually UTF-16LE
+                stream = ole.openstream('PrvText')
+                content = stream.read().decode('utf-16le', errors='ignore')
+                return content
+
+            return "[HWP V5: 텍스트 미리보기(PrvText) 스트림이 없습니다. 텍스트 추출이 제한됩니다.]"
 
     def create_hwp_document(
         self,
@@ -41,8 +144,8 @@ class HWPHandler:
             'heading_level1_size': 16,
             'heading_level2_size': 14,
             'heading_level3_size': 13,
-            'line_spacing': 1.6,
-            'paragraph_spacing': 8,
+            'line_spacing': 1.3,
+            'paragraph_spacing': 6,
             'margin_top': 2.5,
             'margin_bottom': 2.5,
             'margin_left': 2.5,
@@ -63,6 +166,7 @@ class HWPHandler:
         output_path = self.output_dir / filename
 
         doc = Document()
+        self.figure_counter = 1  # reset numbering per document
         self._set_page_margins(doc, style)
         self._set_default_style(doc, style)
 
@@ -97,8 +201,8 @@ class HWPHandler:
             style._element.rPr.rFonts.set(qn('w:eastAsia'), font_name_korean)
 
         paragraph_format = style.paragraph_format
-        paragraph_format.line_spacing = Pt(config.get('line_spacing', 100))
-        paragraph_format.space_after = Pt(config.get('paragraph_spacing', 8))
+        paragraph_format.line_spacing = config.get('line_spacing', 1.3)
+        paragraph_format.space_after = Pt(config.get('paragraph_spacing', 6))
         paragraph_format.space_before = Pt(0)
         paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
@@ -111,17 +215,18 @@ class HWPHandler:
         title_run = title_para.add_run(title)
         title_run.bold = True
         title_run.font.size = Pt(config.get('title_size', 22))
-        title_run.font.name = config.get('title_font_name', config.get('heading_font_name', config.get('font_name_english', 'Times New Roman')))
+        title_font = config.get('font_name', config.get('title_font_name', config.get('heading_font_name', config.get('font_name_english', 'Times New Roman'))))
+        title_run.font.name = title_font
         title_run.font.color.rgb = RGBColor(20, 20, 20)
-        title_run._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', '함초롬바탕'))
+        title_run._element.rPr.rFonts.set(qn('w:eastAsia'), title_font)
 
         subtitle = doc.add_paragraph("기술 보고서 / Research Report")
         subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = subtitle.add_run()
         run.font.size = Pt(14)
         run.font.color.rgb = RGBColor(100, 100, 100)
-        run.font.name = config.get('font_name_english', 'Times New Roman')
-        run._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', '함초롬바탕'))
+        run.font.name = title_font
+        run._element.rPr.rFonts.set(qn('w:eastAsia'), title_font)
 
         for _ in range(2):
             doc.add_paragraph()
@@ -140,12 +245,18 @@ class HWPHandler:
                 is_level2_heading = original_line.strip().startswith('##') and not original_line.strip().startswith('###')
                 self._add_heading(doc, line, config)
                 if images and image_index < len(images) and is_level2_heading:
-                    self._add_image(doc, images[image_index], config)
+                    caption = line.lstrip('#').strip() or None
+                    self._add_image(doc, images[image_index], config, caption=caption)
                     image_index += 1
             elif line.startswith('- ') or line.startswith('* '):
                 self._add_list_item(doc, line[2:], config)
             elif line[0].isdigit() and '. ' in line:
                 self._add_numbered_item(doc, line, config)
+            elif (line.startswith('$$') and line.endswith('$$') and len(line) > 4) or (line.startswith('\\[') and line.endswith('\\]')):
+                math_expr = line.strip('$')
+                if math_expr.startswith('\\[') and math_expr.endswith('\\]'):
+                    math_expr = math_expr[2:-2].strip()
+                self._add_math_block(doc, math_expr, config)
             else:
                 self._add_paragraph(doc, line, config)
 
@@ -186,34 +297,121 @@ class HWPHandler:
     def _add_paragraph(self, doc: Document, text: str, config: Dict[str, Any]):
         para = doc.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        para.paragraph_format.line_spacing = config.get('line_spacing', 1.6)
+        para.paragraph_format.line_spacing = config.get('line_spacing', 1.3)
+        para.paragraph_format.space_after = Pt(config.get('paragraph_spacing', 6))
         self._add_formatted_text(para, text, config)
 
     def _add_formatted_text(self, para, text: str, config: Dict[str, Any]):
-        import re
         parts = re.split(r'(\*\*.*?\*\*|\*.*?\*|__.*?__|_.*?_)', text)
         for part in parts:
             if not part:
                 continue
-            run = para.add_run(part.strip('*_'))
-            run.font.name = config.get('font_name_english', 'Times New Roman')
-            run._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', '함초롬바탕'))
-            run.font.size = Pt(config.get('font_size', 11))
-            if part.startswith('**') or part.startswith('__'):
-                run.bold = True
-            elif part.startswith('*') or part.startswith('_'):
-                run.italic = True
+            bold = part.startswith('**') or part.startswith('__')
+            italic = (part.startswith('*') and not part.startswith('**')) or (part.startswith('_') and not part.startswith('__'))
+            segment = part.strip('*_')
+            self._append_math_segments(para, segment, config, bold=bold, italic=italic)
 
-    def _add_image(self, doc: Document, image_path: str, config: Dict[str, Any]):
+    def _append_math_segments(self, para, text: str, config: Dict[str, Any], bold: bool = False, italic: bool = False):
+        if not text:
+            return
+        normalized = self._strip_latex_wrappers(text)
+        font_name = config.get('font_name', config.get('font_name_english', 'Times New Roman'))
+        pattern = re.compile(r'(\^|_)(\{([^{}]+)\}|([^\s\^_\{\}]+))')
+        pos = 0
+        for match in pattern.finditer(normalized):
+            start, end = match.span()
+            if start > pos:
+                self._add_text_run(para, normalized[pos:start], font_name, config, bold, italic)
+            content = match.group(3) or match.group(4) or ''
+            superscript = match.group(1) == '^'
+            subscript = match.group(1) == '_'
+            self._add_text_run(para, content, font_name, config, bold, italic, superscript, subscript)
+            pos = end
+        if pos < len(normalized):
+            self._add_text_run(para, normalized[pos:], font_name, config, bold, italic)
+
+    def _add_text_run(
+        self,
+        para,
+        text: str,
+        font_name: str,
+        config: Dict[str, Any],
+        bold: bool = False,
+        italic: bool = False,
+        superscript: bool = False,
+        subscript: bool = False,
+    ):
+        if not text:
+            return
+        run = para.add_run(text)
+        run.font.name = font_name
+        run.font.size = Pt(config.get('font_size', 11))
+        run.bold = bold
+        run.italic = italic
+        run.font.superscript = superscript
+        run.font.subscript = subscript
+        if hasattr(run._element.rPr, 'rFonts'):
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', font_name))
+
+    def _replace_latex_symbols(self, text: str) -> str:
+        replaced = text
+        for latex, symbol in {**LATEX_SYMBOL_MAP, **LATEX_GREEK_MAP}.items():
+            replaced = replaced.replace(latex, symbol)
+        return replaced
+
+    def _strip_latex_wrappers(self, text: str) -> str:
+        if not text:
+            return ''
+        cleaned = text.strip()
+        for token in ('$$', '$', r'\(', r'\)', r'\[', r'\]', r'\left', r'\right'):
+            cleaned = cleaned.replace(token, '')
+        cleaned = re.sub(r'\\frac\{([^{}]+)\}\{([^{}]+)\}', r'(\1)/(\2)', cleaned)
+        cleaned = re.sub(r'\\sqrt\{([^{}]+)\}', r'√(\1)', cleaned)
+        cleaned = self._replace_latex_symbols(cleaned)
+        return cleaned.strip()
+
+    def _add_math_block(self, doc: Document, expression: str, config: Dict[str, Any]):
+        cleaned = self._strip_latex_wrappers(expression)
+        para = doc.add_paragraph()
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        para.paragraph_format.space_before = Pt(6)
+        para.paragraph_format.space_after = Pt(12)
+        run = para.add_run(cleaned)
+        run.font.name = config.get('font_name', '함초롬바탕')
+        run.font.size = Pt(max(config.get('font_size', 11) + 2, 14))
+        if hasattr(run._element.rPr, 'rFonts'):
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', '함초롬바탕'))
+
+    def _add_image(self, doc: Document, image_path: str, config: Dict[str, Any], caption: Optional[str] = None):
         try:
             if not os.path.exists(image_path):
                 print(f"[WARNING] Image not found: {image_path}")
                 return
             para = doc.add_paragraph()
             run = para.add_run()
-            run.add_picture(image_path, width=Inches(5.5))
+            run.add_picture(image_path, width=Inches(4.3))
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            para.paragraph_format.line_spacing = Pt(config.get('line_spacing', 100))
+            para.paragraph_format.line_spacing = config.get('line_spacing', 1.3)
+
+            inferred_caption = caption
+            if inferred_caption is None:
+                stem = Path(image_path).stem.replace('_', ' ')
+                inferred_caption = stem.strip() or "참고 이미지"
+            fig_number = getattr(self, "figure_counter", None)
+            label_prefix = f"그림 {fig_number}. " if fig_number is not None else ""
+
+            caption_para = doc.add_paragraph(f"{label_prefix}{inferred_caption}")
+            caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            caption_para.paragraph_format.space_after = Pt(10)
+            for r in caption_para.runs:
+                r.font.name = config.get('font_name', '함초롬바탕')
+                r._element.rPr.rFonts.set(qn('w:eastAsia'), config.get('font_name', '함초롬바탕'))
+                r.font.size = Pt(max(config.get('font_size', 11) - 1, 9))
+                r.font.color.rgb = RGBColor(90, 90, 90)
+                r.italic = True
+
+            if fig_number is not None:
+                self.figure_counter = fig_number + 1
         except Exception as e:
             print(f"[ERROR] Failed to add image {image_path}: {str(e)}")
 

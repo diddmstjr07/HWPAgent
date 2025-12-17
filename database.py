@@ -5,6 +5,7 @@ import sqlite3
 import json
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 from models import User, DocumentHistory, RiroDocument
 
 class Database:
@@ -29,9 +30,14 @@ class Database:
                 email TEXT UNIQUE NOT NULL,
                 name TEXT NOT NULL,
                 picture TEXT,
-                created_at TEXT NOT NULL
+                password_hash TEXT,
+                created_at TEXT NOT NULL,
+                last_login TEXT
             )
         ''')
+        # legacy DB 대응: 누락된 컬럼을 추가
+        self._ensure_column(cursor, 'users', 'password_hash', 'TEXT')
+        self._ensure_column(cursor, 'users', 'last_login', 'TEXT')
         
         # 문서 히스토리 테이블
         cursor.execute('''
@@ -71,6 +77,13 @@ class Database:
         
         conn.commit()
         conn.close()
+
+    def _ensure_column(self, cursor, table, column, definition):
+        """테이블에 특정 컬럼이 없으면 추가"""
+        cursor.execute(f"PRAGMA table_info({table})")
+        columns = [row['name'] for row in cursor.fetchall()]
+        if column not in columns:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     
     # ============ User 관련 메서드 ============
     
@@ -87,7 +100,8 @@ class Database:
                 id=row['id'],
                 email=row['email'],
                 name=row['name'],
-                picture=row['picture']
+                picture=row['picture'],
+                password_hash=row['password_hash']
             )
         return None
     
@@ -104,11 +118,31 @@ class Database:
                 id=row['id'],
                 email=row['email'],
                 name=row['name'],
-                picture=row['picture']
+                picture=row['picture'],
+                password_hash=row['password_hash']
             )
         return None
+
+    def get_user_credentials(self, email):
+        """이메일로 사용자 계정 조회 (패스워드 포함)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        return {
+            'id': row['id'],
+            'email': row['email'],
+            'name': row['name'],
+            'picture': row['picture'],
+            'password_hash': row['password_hash'],
+            'created_at': row['created_at'],
+            'last_login': row['last_login']
+        }
     
-    def create_or_update_user(self, user_id, email, name, picture):
+    def create_or_update_user(self, user_id, email, name, picture, password_hash=None, last_login=None):
         """사용자 생성 또는 업데이트"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -121,20 +155,44 @@ class Database:
             # 업데이트
             cursor.execute('''
                 UPDATE users 
-                SET email = ?, name = ?, picture = ?
+                SET email = ?, name = ?, picture = ?, password_hash = COALESCE(?, password_hash), last_login = COALESCE(?, last_login)
                 WHERE id = ?
-            ''', (email, name, picture, user_id))
+            ''', (email, name, picture, password_hash, last_login, user_id))
         else:
             # 신규 생성
             cursor.execute('''
-                INSERT INTO users (id, email, name, picture, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, email, name, picture, datetime.now().isoformat()))
+                INSERT INTO users (id, email, name, picture, password_hash, created_at, last_login)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, email, name, picture, password_hash, datetime.now().isoformat(), last_login))
         
         conn.commit()
         conn.close()
         
-        return User(id=user_id, email=email, name=name, picture=picture)
+        return User(id=user_id, email=email, name=name, picture=picture, password_hash=password_hash)
+
+    def create_local_user(self, email, password_hash, name=None, picture=None):
+        """로컬 로그인용 사용자 생성"""
+        user_id = f"user_{uuid4().hex}"
+        now = datetime.now().isoformat()
+        display_name = name or email.split('@')[0]
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO users (id, email, name, picture, password_hash, created_at, last_login)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, email, display_name, picture, password_hash, now, now))
+        conn.commit()
+        conn.close()
+        return User(id=user_id, email=email, name=display_name, picture=picture, password_hash=password_hash)
+
+    def update_last_login(self, user_id):
+        """마지막 로그인 시각 업데이트"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now().isoformat(), user_id))
+        conn.commit()
+        conn.close()
     
     # ============ Document History 관련 메서드 ============
     

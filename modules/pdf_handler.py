@@ -202,7 +202,7 @@ class PDFHandler:
                 3: style_config.get('heading_level3_size', body_size + 1)
             }
             title_size = style_config.get('title_size', heading_sizes[1] + 2)
-            line_spacing = style_config.get('line_spacing', 1.5)
+            line_spacing = style_config.get('line_spacing', 1.3)
 
             styles = getSampleStyleSheet()
             body_style = ParagraphStyle(

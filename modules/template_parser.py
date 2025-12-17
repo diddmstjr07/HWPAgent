@@ -2,25 +2,45 @@
 from pathlib import Path
 from typing import Optional
 import shutil
-
+import fitz  # PyMuPDF
 from docx import Document
+from .hwp_handler import HWPHandler
 
-SUPPORTED_TEMPLATE_EXTENSIONS = {'.docx', '.hwp', '.txt', '.md'}
+SUPPORTED_TEMPLATE_EXTENSIONS = {'.docx', '.hwp', '.hwpx', '.txt', '.md', '.pdf'}
 
 
 def extract_template_text(file_path: Path) -> str:
     """주어진 파일에서 양식 텍스트를 추출"""
     suffix = file_path.suffix.lower()
     if suffix not in SUPPORTED_TEMPLATE_EXTENSIONS:
-        raise ValueError('지원하지 않는 파일 형식입니다. (.docx, .hwp, .txt, .md)')
+        raise ValueError('지원하지 않는 파일 형식입니다. (.docx, .hwp, .hwpx, .pdf, .txt, .md)')
 
     try:
+        if suffix == '.pdf':
+            return _extract_text_from_pdf(file_path)
+        
+        if suffix in {'.hwp', '.hwpx'}:
+            handler = HWPHandler()
+            return handler.read_hwp(str(file_path))
+        
         if suffix in {'.txt', '.md'}:
             return file_path.read_text(encoding='utf-8', errors='ignore').strip()
 
         return _extract_text_from_docx_like(file_path, treat_as_docx=(suffix == '.docx'))
     except Exception as exc:
-        raise ValueError('양식 파일을 읽는 중 오류가 발생했습니다.') from exc
+        raise ValueError(f'파일을 읽는 중 오류가 발생했습니다: {str(exc)}') from exc
+
+
+def _extract_text_from_pdf(file_path: Path) -> str:
+    """PDF 파일에서 텍스트 추출"""
+    text_content = []
+    try:
+        with fitz.open(file_path) as doc:
+            for page in doc:
+                text_content.append(page.get_text())
+        return "\n".join(text_content).strip()
+    except Exception as e:
+        raise ValueError(f"PDF 파싱 실패: {str(e)}")
 
 
 def _extract_text_from_docx_like(file_path: Path, treat_as_docx: bool = True) -> str:

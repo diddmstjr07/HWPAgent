@@ -7,11 +7,12 @@ import json
 
 class User(UserMixin):
     """사용자 모델"""
-    def __init__(self, id, email, name, picture):
+    def __init__(self, id, email, name, picture=None, password_hash=None):
         self.id = id
         self.email = email
         self.name = name
         self.picture = picture
+        self.password_hash = password_hash
     
     def to_dict(self):
         return {

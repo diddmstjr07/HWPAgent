@@ -2,14 +2,17 @@
 """
 HWP Agent Web App - ChatGPT Canvas 스타일의 실시간 문서 편집기
 """
-from flask import Flask, render_template, request, jsonify, send_file, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, send_file, Response, stream_with_context, abort, send_from_directory, redirect, url_for
 from flask_cors import CORS
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import os
 import json
 import io
 import base64
+import shutil
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from datetime import datetime
 from modules import HWPAgent
 from modules.docx_handler import DOCXHandler
 from modules.pdf_handler import PDFHandler
@@ -23,6 +26,7 @@ import time
 import requests
 from dotenv import load_dotenv
 from database import db
+from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 load_dotenv()
@@ -30,6 +34,32 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 CORS(app, supports_credentials=True)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'index'
+login_manager.session_protection = 'strong'
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.get_user(user_id)
+
+BLOCKED_IPS = {"61.52.38.120"}
+
+
+def _get_client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr or ""
+
+
+@app.before_request
+def block_blocklisted_ips():
+    client_ip = _get_client_ip()
+    if client_ip in BLOCKED_IPS:
+        abort(403)
 
 OUTPUT_DIR = Path("output")
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -39,6 +69,8 @@ IMAGE_DIR = OUTPUT_DIR / "images"
 TEMPLATE_DIR.mkdir(exist_ok=True)
 FONT_DIR.mkdir(exist_ok=True)
 IMAGE_DIR.mkdir(exist_ok=True)
+IMAGE_CACHE_DIR = IMAGE_DIR / "cache"
+IMAGE_CACHE_DIR.mkdir(exist_ok=True)
 
 
 def ensure_default_fonts():
@@ -139,6 +171,28 @@ FONT_PRESETS: List[Dict[str, str]] = [
     }
 ]
 
+EXPORT_FORMATS: List[Dict[str, Any]] = [
+    {
+        'id': 'docx',
+        'label': 'Microsoft Word (.docx)',
+        'extension': '.docx',
+        'description': '워드/한글에서 모두 열 수 있는 기본 형식',
+        'default': True
+    },
+    {
+        'id': 'hwp',
+        'label': '한글 (.hwp)',
+        'extension': '.hwp',
+        'description': '한글 워드프로세서 최적화 형식'
+    },
+    {
+        'id': 'pdf',
+        'label': 'PDF (.pdf)',
+        'extension': '.pdf',
+        'description': '읽기 전용 배포용 문서'
+    }
+]
+
 DEFAULT_STYLE_CONFIG: Dict[str, Any] = {
     'font_name': '함초롬바탕',
     'font_name_english': 'HCR Batang',
@@ -149,8 +203,8 @@ DEFAULT_STYLE_CONFIG: Dict[str, Any] = {
     'heading_level1_size': 16,
     'heading_level2_size': 14,
     'heading_level3_size': 13,
-    'line_spacing': 1.5,
-    'paragraph_spacing': 8,
+    'line_spacing': 1.3,
+    'paragraph_spacing': 6,
     'margin_top': 2.5,
     'margin_bottom': 2.5,
     'margin_left': 2.5,
@@ -162,6 +216,8 @@ DEFAULT_STYLE_CONFIG: Dict[str, Any] = {
     'heading_font_file_id': '',
     'title_font_file_id': '',
     'font_id': '',
+    'prepared_by': os.getenv('DOCUMENT_PREPARED_BY', 'HWP Agent AI'),
+    'organization': os.getenv('DOCUMENT_ORGANIZATION', 'HWP Agent Lab'),
     'treat_images_as_text': False,
     'image_placeholder_text': '※ 참고 이미지: {keyword}'
 }
@@ -186,6 +242,86 @@ def _resolve_uploaded_font_path(font_path: str) -> Optional[str]:
         return str(resolved)
     except Exception:
         return None
+
+
+def _save_image_from_data_url(data_url: str, destination: str) -> Optional[str]:
+    if not data_url:
+        return None
+    try:
+        if ',' in data_url:
+            _, encoded = data_url.split(',', 1)
+        else:
+            encoded = data_url
+        binary = base64.b64decode(encoded)
+        dest_path = Path(destination)
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path.write_bytes(binary)
+        print(f"[IMAGE] Saved from data URL -> {dest_path}")
+        return str(dest_path)
+    except Exception as exc:
+        print(f"[IMAGE] Failed to decode data URL: {exc}")
+        return None
+
+
+def _download_backend_image(keyword: str, base_path: str, max_alternatives: int = 3) -> Optional[str]:
+    try:
+        print(f"[IMAGE] Backend search fallback for: {keyword}")
+        results = image_searcher.search_images_google(keyword, count=max_alternatives)
+        base = Path(base_path)
+        for idx, entry in enumerate(results):
+            candidate_path = base if idx == 0 else base.with_stem(f"{base.stem}_alt{idx+1}")
+            downloaded = image_searcher.download_image(
+                entry.get('url'),
+                str(candidate_path),
+                max_width=1200
+            )
+            if downloaded:
+                print(f"[IMAGE] ✅ Backend downloaded: {keyword} -> {downloaded}")
+                return downloaded
+    except Exception as exc:
+            print(f"[IMAGE] Backend fallback failed for {keyword}: {exc}")
+    return None
+
+
+def _copy_local_image(src: str, dest: str) -> Optional[str]:
+    """캐시된 이미지가 있으면 복사"""
+    try:
+        src_path = Path(src)
+        dest_path = Path(dest)
+        if not src_path.exists():
+            return None
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_path, dest_path)
+        print(f"[IMAGE] Copied cached image -> {dest_path}")
+        return str(dest_path)
+    except Exception as exc:
+        print(f"[IMAGE] Failed to copy cached image: {exc}")
+        return None
+
+
+def _prepare_image_preview(keyword: str, url: str, index: int = 0) -> Dict[str, str]:
+    """검색된 이미지를 서버 측에서 미리 다운로드/인코딩하여 브라우저 CORS 문제를 우회"""
+    result = {"local_path": "", "data": ""}
+    if not url:
+        return result
+    try:
+        safe_keyword = secure_filename(keyword) or "image"
+        hash_suffix = abs(hash(url)) % 100000
+        cache_filename = f"{safe_keyword}_{index}_{hash_suffix}.jpg"
+        cache_path = IMAGE_CACHE_DIR / cache_filename
+        saved = image_searcher.download_image(
+            url,
+            str(cache_path),
+            max_width=1200,
+            allow_fallback=False
+        )
+        if saved and Path(saved).exists():
+            encoded = base64.b64encode(Path(saved).read_bytes()).decode("utf-8")
+            result["local_path"] = saved
+            result["data"] = f"data:image/jpeg;base64,{encoded}"
+    except Exception as exc:
+        print(f"[IMAGE] Preview cache failed for {keyword}: {exc}")
+    return result
 
 
 def _get_font_entry_by_id(font_id: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -323,11 +459,121 @@ def normalize_style_config(style_config: Optional[Dict[str, Any]]) -> Dict[str, 
 # IP 주소 기반 사용자 ID 생성
 def get_user_id_from_request():
     """세션 또는 IP 주소를 기반으로 사용자 ID 생성"""
+    try:
+        if current_user and getattr(current_user, "is_authenticated", False):
+            return str(current_user.id)
+    except Exception:
+        pass
     ip = request.remote_addr or 'unknown'
     # X-Forwarded-For 헤더 확인 (프록시 후방 대응)
     if request.headers.get('X-Forwarded-For'):
         ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
     return f"user_{ip.replace('.', '_').replace(':', '_')}"
+
+
+def _normalize_email(value: str) -> str:
+    return str(value or '').strip().lower()
+
+
+# ============================================
+# 인증/세션 API
+# ============================================
+
+@app.route('/api/auth/register', methods=['POST'])
+def register_user():
+    """이메일/비밀번호 기반 계정 생성"""
+    try:
+        payload = request.get_json(silent=True) or {}
+        email = _normalize_email(payload.get('email'))
+        password = payload.get('password') or ''
+        name = (payload.get('name') or '').strip()
+
+        if not email or not password:
+            return jsonify({'error': '이메일과 비밀번호를 입력하세요.'}), 400
+        if '@' not in email:
+            return jsonify({'error': '유효한 이메일을 입력하세요.'}), 400
+
+        existing = db.get_user_credentials(email)
+        if existing and existing.get('password_hash'):
+            return jsonify({'error': '이미 가입된 이메일입니다.'}), 400
+
+        password_hash = generate_password_hash(password)
+        display_name = name or (existing.get('name') if existing else '') or email.split('@')[0]
+        picture = payload.get('picture') or (existing.get('picture') if existing else None)
+
+        if existing:
+            user = db.create_or_update_user(
+                existing['id'],
+                email,
+                display_name,
+                picture,
+                password_hash=password_hash,
+                last_login=datetime.now().isoformat()
+            )
+        else:
+            user = db.create_local_user(email, password_hash, display_name, picture)
+
+        login_user(user)
+        return jsonify({'success': True, 'user': user.to_dict()})
+    except Exception as exc:
+        print(f"[AUTH] register error: {exc}")
+        return jsonify({'error': '계정 생성 중 오류가 발생했습니다.'}), 500
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    """이메일/비밀번호 로그인"""
+    try:
+        payload = request.get_json(silent=True) or {}
+        email = _normalize_email(payload.get('email'))
+        password = payload.get('password') or ''
+
+        if not email or not password:
+            return jsonify({'error': '이메일과 비밀번호를 입력하세요.'}), 400
+
+        record = db.get_user_credentials(email)
+        if not record or not record.get('password_hash'):
+            return jsonify({'error': '이메일 또는 비밀번호가 올바르지 않습니다.'}), 401
+        if not check_password_hash(record['password_hash'], password):
+            return jsonify({'error': '이메일 또는 비밀번호가 올바르지 않습니다.'}), 401
+
+        user = db.get_user(record['id'])
+        if not user:
+            user = db.create_or_update_user(
+                record['id'],
+                record['email'],
+                record['name'] or email.split('@')[0],
+                record.get('picture'),
+                password_hash=record['password_hash'],
+                last_login=datetime.now().isoformat()
+            )
+        else:
+            db.update_last_login(user.id)
+
+        login_user(user)
+        return jsonify({'success': True, 'user': user.to_dict()})
+    except Exception as exc:
+        print(f"[AUTH] login error: {exc}")
+        return jsonify({'error': '로그인 처리 중 문제가 발생했습니다.'}), 500
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    """현재 세션 로그아웃"""
+    try:
+        logout_user()
+        return jsonify({'success': True})
+    except Exception as exc:
+        print(f"[AUTH] logout error: {exc}")
+        return jsonify({'error': '로그아웃에 실패했습니다.'}), 500
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def whoami():
+    """세션 확인용"""
+    if current_user and getattr(current_user, "is_authenticated", False):
+        return jsonify({'authenticated': True, 'user': current_user.to_dict()})
+    return jsonify({'authenticated': False})
 
 # 전역 에이전트
 agent = HWPAgent(output_dir="output")
@@ -338,17 +584,24 @@ image_searcher = ImageSearcher()
 riro_sessions = {}
 
 def _clean_google_url(url: str) -> str:
-    """Google redirect URL 정제"""
-    if url and url.startswith("https://www.google.com/url?"):
+    """Google redirect URL 정제 및 imgres 링크에서 실제 이미지 URL 추출"""
+    if not url:
+        return url
+
+    if url.startswith("https://www.google.com/"):
         parsed = urlparse(url)
         qs = parse_qs(parsed.query)
-        if "q" in qs:
+        # 일반 redirect 형태 (?q=)
+        if "q" in qs and qs["q"]:
             return qs["q"][0]
+        # 이미지 상세 페이지 링크 (?imgurl=)
+        if "imgurl" in qs and qs["imgurl"]:
+            return qs["imgurl"][0]
     return url
 
 def _contains_invalid_url(images: list) -> bool:
     """Facebook Lookaside 등 비정상 링크가 포함되어 있는지 검사"""
-    invalid_domains = ["lookaside.fbsbx.com", "fbcdn.net", "googleusercontent.com", "instagram", "facebook"]
+    invalid_domains = ["lookaside.fbsbx.com", "fbcdn.net", "instagram", "facebook"]
     for img in images:
         url = img.get("url", "")
         if any(domain in url for domain in invalid_domains):
@@ -357,16 +610,127 @@ def _contains_invalid_url(images: list) -> bool:
 
 def _filter_invalid_images(images: list) -> list:
     """비정상 링크 제거"""
-    invalid_domains = ["lookaside.fbsbx.com", "fbcdn.net", "googleusercontent.com"]
+    invalid_domains = ["lookaside.fbsbx.com", "fbcdn.net"]
     return [
         img for img in images
         if not any(domain in img.get("url", "") for domain in invalid_domains)
     ]
 
+
+def _normalize_riro_events(events_payload: Any) -> List[Dict[str, Any]]:
+    """리로스쿨 이벤트 페이로드를 단일 리스트로 정규화"""
+    if not events_payload:
+        return []
+    normalized: List[Dict[str, Any]] = []
+    if isinstance(events_payload, list):
+        for item in events_payload:
+            if not item:
+                continue
+            entry = dict(item)
+            if entry.get("date") and isinstance(entry["date"], str):
+                entry["date"] = entry["date"]
+            normalized.append(entry)
+    elif isinstance(events_payload, dict):
+        for date_key, value in events_payload.items():
+            if isinstance(value, list):
+                for item in value:
+                    if not item:
+                        continue
+                    entry = dict(item)
+                    entry.setdefault("date", date_key)
+                    normalized.append(entry)
+            elif isinstance(value, dict):
+                entry = dict(value)
+                entry.setdefault("date", date_key)
+                normalized.append(entry)
+    try:
+        normalized.sort(key=lambda x: x.get("date") or "")
+    except Exception:
+        pass
+    return normalized
+
+
+def _build_riro_context_text(user_id: Optional[str] = None) -> Optional[str]:
+    """리로스쿨 세션의 수행평가/과제 정보를 요약하여 텍스트로 반환"""
+    lookup_id = user_id or get_user_id_from_request()
+    session_payload = riro_sessions.get(lookup_id)
+    if not session_payload:
+        return None
+
+    guides_map = session_payload.get("guides") or {}
+    events = session_payload.get("events_list") or _normalize_riro_events(session_payload.get("events"))
+    if not events:
+        return None
+
+    lines: List[str] = []
+    for evt in events[:8]:
+        date = evt.get("date") or "날짜 미정"
+        title = evt.get("title") or "제목 없음"
+        guide_text = evt.get("guide")
+        if not guide_text and guides_map:
+            key = evt.get("url") or date
+            guide_text = (guides_map.get(key) or guides_map.get(date) or {}).get("guide")
+        preview = ""
+        if guide_text:
+            snippet = guide_text.strip()
+            if len(snippet) > 180:
+                snippet = snippet[:180].rstrip() + "..."
+            preview = f" — {snippet}"
+        lines.append(f"- {date}: {title}{preview}")
+
+    if not lines:
+        return None
+
+    return (
+        "리로스쿨에서 불러온 수행평가/과제 일정 요약입니다. 학생의 일정과 제출 가이드를 고려해 답변하세요.\n"
+        + "\n".join(lines)
+    )
+
 @app.route('/')
+@app.route('/index.html')
 def index():
     """메인 페이지"""
     return render_template('index.html')
+
+
+@app.route('/login')
+def login_page():
+    """독립 로그인 페이지"""
+    if current_user and getattr(current_user, "is_authenticated", False):
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+@app.route('/offline.html')
+def offline():
+    """오프라인용 단순 페이지"""
+    return render_template('offline.html')
+
+@app.route('/manifest.json')
+def manifest():
+    """PWA manifest 파일"""
+    response = send_from_directory('static', 'manifest.json')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.mimetype = 'application/manifest+json'
+    return response
+
+@app.route('/icons/<path:filename>')
+def pwa_icons(filename):
+    """PWA 아이콘 전달"""
+    icon_dir = Path(app.static_folder) / "icons"
+    return send_from_directory(icon_dir, filename)
+
+@app.route('/service-worker.js')
+def service_worker():
+    """서비스 워커 스크립트"""
+    response = send_from_directory('static', 'service-worker.js')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.mimetype = 'application/javascript'
+    return response
+
+@app.route('/bet')
+def bet_page():
+    """달팽이 경주 토토 페이지"""
+    return render_template('bet.html')
 
 @app.route('/riroschool')
 def riroschool_page():
@@ -414,7 +778,16 @@ def riroschool_login():
         )
         
         if result['success']:
-            print(f"[RIRO API] Success - Found {len(result['events'])} events")
+            events_list = _normalize_riro_events(result.get('events'))
+            events_by_date = result.get('events_by_date') or {}
+            if not events_by_date and events_list:
+                for evt in events_list:
+                    date_key = evt.get('date')
+                    if not date_key:
+                        continue
+                    events_by_date.setdefault(date_key, []).append(evt)
+
+            print(f"[RIRO API] Success - Found {len(events_list)} events")
             session_payload = {
                 'school': school,
                 'riro_id': username,
@@ -422,6 +795,8 @@ def riroschool_login():
                 'year': year,
                 'base_url': result.get('base_url'),
                 'cookies': result.get('cookies'),
+                'events': events_by_date,
+                'events_list': events_list,
                 'guides': result.get('guides', {}),
                 'updated_at': time.time()
             }
@@ -429,6 +804,9 @@ def riroschool_login():
             result.pop('cookies', None)
             result.pop('base_url', None)
             result.pop('guides', None)
+            result['events'] = events_list
+            result['events_by_date'] = events_by_date
+            result['event_count'] = len(events_list)
             result['riro_id'] = username
         else:
             print(f"[RIRO API] Failed - {result['error']}")
@@ -472,7 +850,10 @@ def riroschool_guide():
         guide_entry = None
         if date and date in guides_map:
             guide_entry = guides_map[date]
-        elif event_url:
+        if not guide_entry and event_url:
+            if event_url in guides_map:
+                guide_entry = guides_map[event_url]
+        if not guide_entry and event_url:
             guide_entry = next(
                 (info for info in guides_map.values() if info.get('source') == event_url),
                 None
@@ -551,7 +932,7 @@ def upload_template():
         if suffix not in SUPPORTED_TEMPLATE_EXTENSIONS:
             return jsonify({
                 'success': False,
-                'error': '지원하지 않는 파일 형식입니다. (.docx, .hwp, .txt, .md)'
+                'error': '지원하지 않는 파일 형식입니다. (.docx, .hwp, .pdf, .txt, .md)'
             }), 400
 
         safe_stem = secure_filename(Path(original_name).stem) or 'template'
@@ -572,7 +953,8 @@ def upload_template():
             'success': True,
             'template_name': filename,
             'template_id': save_path.stem,
-            'template_text': template_text
+            'template_text': template_text,
+            'template_file': str(save_path)
         })
     except Exception as exc:
         print(f"[TEMPLATE] Upload failed: {exc}")
@@ -619,6 +1001,120 @@ def get_fonts():
         print(f"[FONT] Catalog error: {exc}")
         return jsonify({'success': False, 'error': '폰트 목록을 불러오지 못했습니다.'}), 500
 
+
+@app.route('/api/formats', methods=['GET'])
+def get_available_formats():
+    return jsonify({'success': True, 'formats': EXPORT_FORMATS})
+
+@app.route('/api/interact', methods=['POST'])
+def interact_auto():
+    """자동 의도 파악 및 스트리밍"""
+    try:
+        data = request.json
+        user_request = (data.get('request') or '').strip()
+        document_template = (data.get('template') or '').strip() or None
+        chat_history = data.get('history') or []  # 대화 기록 추출
+        user_id = get_user_id_from_request()
+        riro_context_text = _build_riro_context_text(user_id)
+        
+        if not user_request:
+             return jsonify({'error': '요청 내용을 입력해주세요.'}), 400
+
+        def generate():
+            # 1. 의도 파악 (템플릿이 있어도 사용자의 요청에 따라 판단)
+            try:
+                intent = agent.content_generator.classify_intent(user_request)
+            except Exception as e:
+                print(f"[INTENT ERROR] {str(e)}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                return
+
+            print(f"[INTENT DETECTED] {intent}")
+            
+            # 2. 모드 정보 전송
+            yield f"data: {json.dumps({'type': 'mode', 'mode': intent})}\n\n"
+            
+            # 3. 해당 모드로 스트리밍 위임
+            if intent == "document":
+                # 문서 생성 시에도 이전 대화 맥락을 context로 주입
+                history_text = ""
+                if chat_history:
+                    # 최근 10개 대화만
+                    recent_history = chat_history[-10:]
+                    history_text = "\n".join([f"[{msg.get('role', 'user')}]: {msg.get('text', '')}" for msg in recent_history])
+
+                context_data = {'previous_conversation': history_text}
+                if riro_context_text:
+                    context_data['riroschool_assignments'] = riro_context_text
+                if riro_context_text:
+                    context_data['riroschool_assignments'] = riro_context_text
+
+                full_text = ""
+                chunk_count = 0
+                try:
+                    stream = agent.content_generator.generate_document_content(
+                        user_request,
+                        context=context_data, # 컨텍스트 전달
+                        stream=True,
+                        document_template=document_template
+                    )
+                    
+                    for chunk in stream:
+                        if chunk:
+                            full_text += chunk
+                            chunk_count += 1
+                            yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+                    
+                    # 파싱 및 완료 처리
+                    parsed = agent.content_generator._parse_generated_content(full_text)
+                    final_result = {
+                        'title': parsed.get('title', '문서'),
+                        'body': full_text,
+                        'images_needed': parsed.get('images_needed', []),
+                        'tables_needed': parsed.get('tables_needed', [])
+                    }
+                    yield f"data: {json.dumps({'done': True, 'result': final_result})}\n\n"
+                    
+                except Exception as e:
+                    print(f"[DOC STREAM ERROR] {str(e)}")
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            else:
+                # 채팅 모드: 히스토리 전달
+                full_text = ""
+                
+                # [수정] 템플릿이 있다면 컨텍스트에 추가
+                chat_prompt = user_request
+                if document_template:
+                     chat_prompt = f"다음은 사용자가 업로드한 문서/양식의 내용입니다. 질문에 답변할 때 참고하세요.\n\n[문서 내용 시작]\n{document_template}\n[문서 내용 끝]\n\n사용자 요청: {user_request}"
+                if riro_context_text:
+                    chat_prompt = f"{riro_context_text}\n\n{chat_prompt}"
+                if riro_context_text:
+                    chat_prompt = f"{riro_context_text}\n\n{chat_prompt}"
+
+                try:
+                    stream = agent.content_generator.generate_chat_stream(chat_prompt, history=chat_history)
+                    for chunk in stream:
+                        if chunk:
+                            full_text += chunk
+                            yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+                    yield f"data: {json.dumps({'done': True, 'result': {'body': full_text}})}\n\n"
+                except Exception as e:
+                    print(f"[CHAT STREAM ERROR] {str(e)}")
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+
+    except Exception as e:
+        print(f"[ERROR] interact endpoint failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/generate', methods=['POST'])
 def generate_content():
     """AI 콘텐츠 생성"""
@@ -626,6 +1122,9 @@ def generate_content():
         data = request.json
         user_request = (data.get('request') or '').strip()
         document_template = (data.get('template') or '').strip() or None
+        chat_history = data.get('history') or []
+        user_id = get_user_id_from_request()
+        riro_context_text = _build_riro_context_text(user_id)
 
         if not user_request:
             if document_template:
@@ -633,9 +1132,26 @@ def generate_content():
             else:
                 return jsonify({'error': '요청 내용 또는 양식을 입력해주세요.'}), 400
         
-        # 콘텐츠 생성
-        result = agent.process_request(user_request, document_template=document_template)
+        # 문서 생성 컨텍스트 구성
+        history_text = ""
+        if chat_history:
+             recent = chat_history[-10:]
+             history_text = "\n".join([f"[{msg.get('role', 'user')}]: {msg.get('text', '')}" for msg in recent])
+
+        context_payload = {'previous_conversation': history_text}
+        if riro_context_text:
+            context_payload['riroschool_assignments'] = riro_context_text
         
+        # 콘텐츠 생성
+        result = agent.process_request(
+            user_request, 
+            document_template=document_template,
+            context=context_payload
+        )
+        
+        if not result.get('success', True):
+            return jsonify({'error': result.get('error', 'Unknown error')}), 500
+            
         return jsonify({
             'success': True,
             'title': result.get('title', ''),
@@ -654,6 +1170,9 @@ def generate_content_stream():
         data = request.json
         user_request = (data.get('request') or '').strip()
         document_template = (data.get('template') or '').strip() or None
+        chat_history = data.get('history') or []
+        user_id = get_user_id_from_request()
+        riro_context_text = _build_riro_context_text(user_id)
 
         if not user_request:
             if document_template:
@@ -661,6 +1180,11 @@ def generate_content_stream():
             else:
                 return jsonify({'error': '요청 내용 또는 양식을 입력해주세요.'}), 400
         
+        history_text = ""
+        if chat_history:
+             recent = chat_history[-10:]
+             history_text = "\n".join([f"[{msg.get('role', 'user')}]: {msg.get('text', '')}" for msg in recent])
+
         def generate():
             full_text = ""
             chunk_count = 0
@@ -669,7 +1193,8 @@ def generate_content_stream():
                 stream = agent.content_generator.generate_document_content(
                     user_request,
                     stream=True,
-                    document_template=document_template
+                    document_template=document_template,
+                    context={'previous_conversation': history_text}
                 )
                 
                 for chunk in stream:
@@ -678,40 +1203,20 @@ def generate_content_stream():
                         chunk_count += 1
                         yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
                 
-                # 모든 청크가 처리된 후
-                print(f"\n[STREAM] All chunks processed, waiting for finalization...")
-                import time
-                time.sleep(0.5)  # 추가 대기
+                # ... (중략) ...
                 
-                # 스트리밍 완료 로그
-                print(f"\n{'='*60}")
-                print(f"[STREAM COMPLETE] Received {chunk_count} chunks")
-                print(f"[STREAM COMPLETE] Total length: {len(full_text)} characters")
-                print(f"[STREAM COMPLETE] First 300 chars:\n{full_text[:300]}")
-                print(f"[STREAM COMPLETE] Last 300 chars:\n{full_text[-300:]}")
-                print(f"{'='*60}\n")
-                
-                # 파싱: 제목 추출
                 parsed = agent.content_generator._parse_generated_content(full_text)
-                print(f"[PARSED] Title: {parsed.get('title', 'NO TITLE')}")
-                print(f"[PARSED] Body length: {len(parsed.get('body', ''))} characters")
-                
-                # 중요: full_text 전체를 body로 사용 (파싱 실패 방지)
                 final_result = {
                     'title': parsed.get('title', '문서'),
-                    'body': full_text,  # 파싱된 body 대신 원본 사용
+                    'body': full_text,
                     'images_needed': parsed.get('images_needed', []),
                     'tables_needed': parsed.get('tables_needed', [])
                 }
-                
-                print(f"[FINAL] Sending body length: {len(final_result['body'])} characters\n")
                 
                 yield f"data: {json.dumps({'done': True, 'result': final_result})}\n\n"
                 
             except Exception as e:
                 print(f"[ERROR] Stream generation failed: {str(e)}")
-                import traceback
-                traceback.print_exc()
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
         
         return Response(
@@ -727,6 +1232,47 @@ def generate_content_stream():
         print(f"[ERROR] API endpoint failed: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/chat-stream', methods=['POST'])
+def chat_stream():
+    """프리픽스 없이 채팅형 응답 스트리밍"""
+    try:
+        data = request.json
+        user_request = (data.get('request') or '').strip()
+        chat_history = data.get('history') or []
+        user_id = get_user_id_from_request()
+        riro_context_text = _build_riro_context_text(user_id)
+        
+        if not user_request:
+            return jsonify({'error': '요청 내용을 입력해주세요.'}), 400
+
+        def generate():
+            full_text = ""
+            try:
+                chat_prompt = user_request
+                if riro_context_text:
+                    chat_prompt = f"{riro_context_text}\n\n{user_request}"
+                stream = agent.content_generator.generate_chat_stream(chat_prompt, history=chat_history)
+                for chunk in stream:
+                    if chunk:
+                        full_text += chunk
+                        yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'result': {'body': full_text}})}\n\n"
+            except Exception as e:
+                print(f"[CHAT STREAM ERROR] {str(e)}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] chat_stream failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/save', methods=['POST'])
 def save_document():
     """문서 저장 (이미지 자동 검색 및 삽입 포함)"""
@@ -736,6 +1282,7 @@ def save_document():
         content = data.get('content', '')
         format_type = data.get('format', 'docx')
         style_config = normalize_style_config(data.get('style'))
+        template_file = (data.get('template_file') or '').strip()
         images_needed = data.get('images_needed', [])  # AI가 제안한 이미지 키워드들
         image_urls = data.get('image_urls', [])  # 프론트엔드에서 검색한 이미지 URL
         
@@ -749,6 +1296,19 @@ def save_document():
         
         if not content:
             return jsonify({'error': '내용이 비어있습니다.'}), 400
+
+        template_path = None
+        if template_file:
+            try:
+                candidate = Path(template_file).resolve()
+                TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
+                candidate.relative_to(TEMPLATE_DIR.resolve())
+                if candidate.exists():
+                    template_path = str(candidate)
+                else:
+                    print(f"[TEMPLATE] Provided template not found: {candidate}")
+            except Exception:
+                print(f"[TEMPLATE] Invalid template path: {template_file}")
         
         # 이미지 자동 다운로드 ([gen_img] 태그 기반)
         downloaded_images = []
@@ -769,29 +1329,41 @@ def save_document():
                             
                         keyword = img_data.get('keyword', f'image_{i}')
                         url = img_data.get('url')
-                        
-                        if not url:
-                            print(f"[IMAGE] No URL for keyword: {keyword}")
+                        data_url = img_data.get('data')
+                        local_path = img_data.get('local_path')
+
+                        if not url and not data_url and not local_path:
+                            print(f"[IMAGE] No URL or data for keyword: {keyword}")
                             continue
-                        
+
                         # 파일명에서 특수문자 제거
                         safe_filename = keyword.replace(' ', '_').replace('/', '_').replace('\\', '_')[:50]
                         img_filename = f"{safe_filename}.jpg"
                         img_path = str(IMAGE_DIR / img_filename)
-                        
-                        print(f"[IMAGE] Downloading from frontend URL: {url[:100]}...")
-                        downloaded_path = image_searcher.download_image(
-                            url,
-                            img_path,
-                            max_width=1200
-                        )
-                        
-                        if downloaded_path:
-                            downloaded_images.append(downloaded_path)
-                            print(f"[IMAGE] ✅ Downloaded: {keyword} -> {downloaded_path}")
+
+                        saved_path = None
+                        if data_url:
+                            saved_path = _save_image_from_data_url(data_url, img_path)
+
+                        if not saved_path and local_path:
+                            saved_path = _copy_local_image(local_path, img_path)
+
+                        if not saved_path and url:
+                            print(f"[IMAGE] Downloading from frontend URL: {url[:100]}...")
+                            saved_path = image_searcher.download_image(
+                                url,
+                                img_path,
+                                max_width=1200
+                            )
+
+                        if not saved_path:
+                            saved_path = _download_backend_image(keyword, img_path)
+
+                        if saved_path:
+                            downloaded_images.append(saved_path)
+                            print(f"[IMAGE] ✅ Linked: {keyword} -> {saved_path}")
                         else:
-                            # Fallback: Lorem Picsum 사용
-                            print(f"[IMAGE] ❌ Failed to download: {keyword}, trying fallback...")
+                            print(f"[IMAGE] ❌ Failed to persist: {keyword}, using generic fallback...")
                             fallback_url = f"https://picsum.photos/seed/{abs(hash(keyword))%1000}/800/600"
                             fallback_path = image_searcher.download_image(
                                 fallback_url,
@@ -806,25 +1378,14 @@ def save_document():
                     print(f"[IMAGE] No frontend URLs, searching images...")
                     for keyword in images_needed[:5]:  # 최대 5개
                         print(f"[IMAGE] Searching: {keyword}")
-                        images = image_searcher.search_images_google(keyword, count=1)
-                        if images:
-                            # 파일명에서 특수문자 제거
-                            safe_filename = keyword.replace(' ', '_').replace('/', '_').replace('\\', '_')[:50]
-                            img_filename = f"{safe_filename}.jpg"
-                            img_path = str(IMAGE_DIR / img_filename)
-                            print(images)
-                            downloaded_path = image_searcher.download_image(
-                                images[0]['url'],
-                                img_path,
-                                max_width=1200
-                            )
-                            if downloaded_path:
-                                downloaded_images.append(downloaded_path)
-                                print(f"[IMAGE] ✅ Downloaded: {keyword} -> {downloaded_path}")
-                            else:
-                                print(f"[IMAGE] ❌ Failed to download: {keyword}")
+                        safe_filename = keyword.replace(' ', '_').replace('/', '_').replace('\\', '_')[:50]
+                        img_filename = f"{safe_filename}.jpg"
+                        img_path = str(IMAGE_DIR / img_filename)
+                        downloaded_path = _download_backend_image(keyword, img_path)
+                        if downloaded_path:
+                            downloaded_images.append(downloaded_path)
                         else:
-                            print(f"[IMAGE] ❌ No results for: {keyword}")
+                            print(f"[IMAGE] ❌ No usable results for: {keyword}")
                 
                 print(f"[IMAGE] Total downloaded: {len(downloaded_images)}/{len(images_needed)} images")
             except Exception as e:
@@ -842,7 +1403,8 @@ def save_document():
                 content=content,
                 style_config=style_config,
                 images=downloaded_images if downloaded_images else None,
-                filename=f"{title}_temp.docx"
+                filename=f"{title}_temp.docx",
+                template_path=template_path
             )
             
             # DOCX를 PDF로 변환
@@ -859,7 +1421,8 @@ def save_document():
                 content=content,
                 style_config=style_config,
                 images=downloaded_images if downloaded_images else None,
-                filename=f"{title}_temp.docx"
+                filename=f"{title}_temp.docx",
+                template_path=template_path
             )
             # 확장자를 .hwp로 변경
             import shutil
@@ -874,7 +1437,8 @@ def save_document():
                 content=content,
                 style_config=style_config,
                 images=downloaded_images if downloaded_images else None,
-                filename=f"{title}.docx"
+                filename=f"{title}.docx",
+                template_path=template_path
             )
         elif format_type == 'md':
             file_path = agent.hwp_handler.create_markdown_document(
@@ -1029,45 +1593,108 @@ def search_images():
     try:
         data = request.json
         query = data.get('query', '')
-        count = data.get('count', 3)
+        count = int(data.get('count', 3) or 3)
 
         if not query:
-            return jsonify({'error': '검색 키워드를 입력해주세요.'}), 400
+            return jsonify({'success': False, 'error': '검색 키워드를 입력해주세요.'}), 400
 
-        MAX_RETRY = True  # 최대 3회 재검색
+        MAX_RETRY = 3  # 최대 3회 재검색
         attempt = 0
         images = []
 
-        while True:
+        while attempt < MAX_RETRY:
             images = image_searcher.search_images_google(query, count=count)
-            print(f"[{attempt+1}회차 결과] {len(images)}개 이미지 검색됨")
+            print(f"[IMAGE SEARCH] {attempt+1}회차 결과: {len(images)}개 이미지 검색됨")
 
             # URL 정제
             for img in images:
                 img["url"] = _clean_google_url(img.get("url", ""))
                 img["thumb_url"] = _clean_google_url(img.get("thumb_url", ""))
 
-            # 비정상 링크 포함 시 재검색
+            # 비정상 링크 포함 시 재검색 (최대 MAX_RETRY회)
             if _contains_invalid_url(images):
-                print(f"[WARN] 비정상 링크 발견 (lookaside/fbcdn 등) → 재검색 시도 {attempt+1}/{MAX_RETRY}")
+                print(f"[WARN] 비정상 링크 포함 → 재검색 시도 {attempt+1}/{MAX_RETRY}")
                 attempt += 1
                 time.sleep(1.2)  # Google API rate limit 방지
                 continue
-            else:
-                break
+            break
 
-        # 최종적으로 비정상 이미지 제거
-        images = _filter_invalid_images(images)
+        # 최종적으로 비정상 이미지 제거 (Google 외 도메인 필터링용) + 캐시/인코딩
+        enriched_images = []
+        for idx, img in enumerate(_filter_invalid_images(images)):
+            url = img.get("url", "")
+            thumb = img.get("thumb_url", "")
+            preview = _prepare_image_preview(query, url, idx)
+            enriched_images.append({
+                **img,
+                "url": url,
+                "thumb_url": thumb,
+                "local_path": preview.get("local_path", ""),
+                "data": preview.get("data", "")
+            })
+
+        # Google 이미지 페이지에서 유효한 이미지를 찾지 못한 경우
+        if not enriched_images:
+            print("[IMAGE SEARCH] Google 이미지 페이지에서 유효한 이미지를 찾지 못했습니다.")
+            return jsonify({
+                'success': False,
+                'error': 'Google 이미지에서 해당 키워드의 이미지를 찾지 못했습니다.'
+            }), 200
 
         return jsonify({
             'success': True,
             'query': query,
-            'count': len(images),
-            'images': images
+            'count': len(enriched_images),
+            'images': enriched_images
         })
 
     except Exception as e:
         print(f"[ERROR] search_images: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/search-images/test', methods=['GET'])
+def search_images_test():
+    """수동 테스트용 이미지 검색 (query 파라미터)"""
+    try:
+        query = request.args.get('query') or request.args.get('q') or ''
+        count = int(request.args.get('count') or 3)
+        count = max(1, min(count, 10))
+
+        if not query:
+            return jsonify({
+                'success': False,
+                'error': 'query 파라미터를 입력하세요.',
+                'usage': '/api/search-images/test?query=검색어&count=3'
+            }), 400
+
+        images = image_searcher.search_images_google(query, count=count)
+
+        for img in images:
+            img["url"] = _clean_google_url(img.get("url", ""))
+            img["thumb_url"] = _clean_google_url(img.get("thumb_url", ""))
+
+        enriched_images = []
+        for idx, img in enumerate(_filter_invalid_images(images)):
+            url = img.get("url", "")
+            preview = _prepare_image_preview(query, url, idx)
+            enriched_images.append({
+                **img,
+                "url": url,
+                "thumb_url": img.get("thumb_url", ""),
+                "local_path": preview.get("local_path", ""),
+                "data": preview.get("data", "")
+            })
+
+        return jsonify({
+            'success': True,
+            'query': query,
+            'count': len(enriched_images),
+            'images': enriched_images
+        })
+    except Exception as e:
+        print(f"[ERROR] search_images_test: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -1131,9 +1758,13 @@ def get_user_id():
 
 @app.route('/api/documents', methods=['GET'])
 def get_user_documents():
-    """사용자의 문서 목록 조회 (IP 기반)"""
+    """사용자의 문서 목록 조회 (IP 기반 또는 리로스쿨 ID 기반)"""
     try:
         user_id = get_user_id_from_request()
+        # 리로스쿨 로그인 상태라면 리로 ID 사용
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+            
         documents = db.get_user_documents(user_id)
         return jsonify({
             'success': True,
@@ -1144,9 +1775,12 @@ def get_user_documents():
 
 @app.route('/api/documents/<int:doc_id>', methods=['GET'])
 def get_document(doc_id):
-    """특정 문서 조회 (IP 기반)"""
+    """특정 문서 조회 (IP 기반 또는 리로스쿨 ID 기반)"""
     try:
         user_id = get_user_id_from_request()
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+
         document = db.get_document(doc_id, user_id)
         if document:
             return jsonify({
@@ -1160,9 +1794,12 @@ def get_document(doc_id):
 
 @app.route('/api/documents', methods=['POST'])
 def save_document_to_history():
-    """문서를 히스토리에 저장 (IP 기반)"""
+    """문서를 히스토리에 저장 (IP 기반 또는 리로스쿨 ID 기반)"""
     try:
         user_id = get_user_id_from_request()
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+
         data = request.json
         title = data.get('title', '문서')
         content = data.get('content', '')
@@ -1181,9 +1818,12 @@ def save_document_to_history():
 
 @app.route('/api/documents/<int:doc_id>', methods=['DELETE'])
 def delete_document(doc_id):
-    """문서 삭제 (IP 기반)"""
+    """문서 삭제 (IP 기반 또는 리로스쿨 ID 기반)"""
     try:
         user_id = get_user_id_from_request()
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+
         deleted = db.delete_document(doc_id, user_id)
         
         if deleted:

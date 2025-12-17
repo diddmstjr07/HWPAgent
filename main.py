@@ -54,6 +54,13 @@ def main():
     )
     
     parser.add_argument(
+        '--input-file', '-in',
+        type=str,
+        action='append',
+        help='참조할 입력 파일 경로 (HWP, HWPX 등). 여러 번 사용 가능.'
+    )
+    
+    parser.add_argument(
         '--output-dir', '-o',
         type=str,
         default='output',
@@ -80,11 +87,12 @@ def main():
         request=args.request,
         output_format=args.format,
         context=args.context,
+        input_files=args.input_file,
         output_dir=args.output_dir
     )
 
 
-def run_single_mode(request: str, output_format: str, context: str = None, output_dir: str = "output"):
+def run_single_mode(request: str, output_format: str, context: str = None, input_files: list = None, output_dir: str = "output"):
     """단일 요청 처리 모드"""
     print("=" * 60)
     print("HWP Agent - AI 기반 문서 자동 생성 시스템")
@@ -96,17 +104,20 @@ def run_single_mode(request: str, output_format: str, context: str = None, outpu
         agent = HWPAgent(output_dir=output_dir)
         
         # 컨텍스트 준비
-        context_dict = {'additional_info': context} if context else None
+        context_dict = {'additional_info': context} if context else {}
         
         # 요청 처리
         print(f"📋 요청 내용: {request}")
+        if input_files:
+            print(f"📂 참조 파일: {', '.join(input_files)}")
         print(f"📝 출력 형식: {output_format.upper()}")
         print()
         
         result = agent.process_request(
             user_request=request,
             output_format=output_format,
-            context=context_dict
+            context=context_dict,
+            input_files=input_files
         )
         
         # 결과 출력

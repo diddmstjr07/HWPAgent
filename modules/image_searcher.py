@@ -19,6 +19,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 import random
+from urllib.parse import urlparse, parse_qs, unquote
 
 # .env 파일 로드
 load_dotenv()
@@ -59,6 +60,33 @@ class ImageSearcher:
         except Exception as e:
             print(f"[ERROR] 이미지 검색 실패: {str(e)}")
             return self._get_dummy_images(query, count)
+
+    def _normalize_url(self, url: str) -> str:
+        """Google redirect/imgres URL을 실제 이미지 URL로 정리"""
+        if not url:
+            return url
+        try:
+            if url.startswith("https://www.google.com/"):
+                parsed = urlparse(url)
+                qs = parse_qs(parsed.query)
+                if "imgurl" in qs and qs["imgurl"]:
+                    return unquote(qs["imgurl"][0])
+                if "q" in qs and qs["q"]:
+                    return unquote(qs["q"][0])
+            return url
+        except Exception:
+            return url
+
+    def search_images(
+        self,
+        query: str,
+        count: int = 3,
+        rights: str = "cc_publicdomain,cc_attribute,cc_sharealike,cc_noncommercial"
+    ) -> List[Dict]:
+        """
+        Backwards-compatible alias for search_images_google (일부 모듈에서 사용)
+        """
+        return self.search_images_google(query=query, count=count, rights=rights)
     
     # -------------------------------
     # BeautifulSoup 기반 검색 (빠름)
@@ -97,6 +125,7 @@ class ImageSearcher:
             matches1 = re.findall(pattern1, html_text)
             
             for match in matches1:
+                match = self._normalize_url(match)
                 # 이미지 파일인지 확인 (확장자 필수)
                 lower_match = match.lower()
                 if any(lower_match.endswith(ext) or f"{ext}?" in lower_match for ext in ['.jpg', '.jpeg', '.png', '.webp']):
@@ -113,6 +142,7 @@ class ImageSearcher:
                 matches2 = re.findall(pattern2, html_text)
                 
                 for match in matches2:
+                    match = self._normalize_url(match)
                     # 불필요한 도메인 필터링
                     if all(blocked not in match for blocked in ['gstatic', 'googleusercontent', 'pstatic.net', 'fbcdn', 'lookaside']):
                         # URL 정리 (파라미터 제거)
@@ -128,6 +158,7 @@ class ImageSearcher:
             
             # 결과 포맷팅
             for i, img_url in enumerate(list(image_urls)[:count]):
+                img_url = self._normalize_url(img_url)
                 results.append({
                     "id": f"bs_{abs(hash(img_url))}_{i}",
                     "url": img_url,
@@ -194,7 +225,7 @@ class ImageSearcher:
                     # 큰 이미지 찾기
                     large_images = driver.find_elements(By.CSS_SELECTOR, 'img.n3VNCb')
                     for img in large_images:
-                        src = img.get_attribute('src')
+                        src = self._normalize_url(img.get_attribute('src'))
                         if src and src.startswith('http') and 'gstatic' not in src:
                             results.append({
                                 "id": f"sel_{abs(hash(src))}_{i}",
@@ -293,7 +324,8 @@ class ImageSearcher:
         url: str,
         save_path: Optional[str] = None,
         max_width: int = 1200,
-        retry: int = 3
+        retry: int = 3,
+        allow_fallback: bool = True
     ) -> Optional[str]:
         """이미지 다운로드 및 리사이징 (403 에러 자동 처리 포함)"""
         user_agents = [
@@ -320,6 +352,10 @@ class ImageSearcher:
                     continue
                 response.raise_for_status()
 
+                content_type = response.headers.get('Content-Type', '')
+                if 'image' not in content_type.lower():
+                    raise ValueError(f"Non-image content-type: {content_type}")
+
                 img = Image.open(io.BytesIO(response.content))
 
                 # 리사이징
@@ -344,11 +380,22 @@ class ImageSearcher:
             except requests.exceptions.RequestException as e:
                 print(f"[ERROR] Image download attempt {attempt+1}/{retry} failed: {e}")
                 time.sleep(1.0 * (attempt + 1))
+            except (OSError, ValueError) as e:
+                print(f"[ERROR] Invalid image data at attempt {attempt+1}/{retry}: {e}")
+                time.sleep(1.0 * (attempt + 1))
 
         # 모든 재시도 실패 시 폴백 이미지 반환
+        if not allow_fallback:
+            return None
         print(f"[FAIL] 이미지 다운로드 실패 (403 or network). Unsplash fallback 시도.")
         fallback = self._get_dummy_images("fallback", 1)
-        return self.download_image(fallback[0]["url"], save_path) if fallback else None
+        return self.download_image(
+            fallback[0]["url"],
+            save_path,
+            max_width=max_width,
+            retry=retry,
+            allow_fallback=False
+        ) if fallback else None
     # -------------------------------
     # 문서용 이미지 일괄 다운로드
     # -------------------------------
@@ -378,5 +425,6 @@ class ImageSearcher:
 if __name__ == "__main__":
     searcher = ImageSearcher()
     results = searcher.search_images_google("End to End Deep learning model", count=3)
+    print(results)
     for img in results:
-        print(f"[{img['title']}] {img['url']}")
+        print(f"[{img['description']}] {img['url']}")

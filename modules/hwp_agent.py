@@ -56,13 +56,15 @@ class HWPAgent:
     def _download_image(self, url: str, idx: int) -> Optional[str]:
         """이미지를 다운로드하고 로컬 경로 반환"""
         try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                file_path = self.output_dir / f"paragraph_{idx}.png"
-                with open(file_path, "wb") as f:
-                    f.write(response.content)
-                print(f"📸 문단 {idx} 이미지 저장 완료: {file_path}")
-                return str(file_path)
+            file_path = self.output_dir / f"paragraph_{idx}.png"
+            saved = self.searcher.download_image(
+                url,
+                save_path=str(file_path),
+                max_width=1200
+            )
+            if saved:
+                print(f"📸 문단 {idx} 이미지 저장 완료: {saved}")
+                return saved
         except Exception as e:
             print(f"⚠️ 이미지 다운로드 실패: {e}")
         return None
@@ -73,12 +75,38 @@ class HWPAgent:
         user_request: str,
         output_format: str = "hwpx",
         context: Optional[Dict[str, Any]] = None,
-        document_template: Optional[str] = None
+        document_template: Optional[str] = None,
+        input_files: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         본문 문단별 연관 이미지 삽입 + 문서 생성
         """
         try:
+            # 컨텍스트 초기화
+            if context is None:
+                context = {}
+            
+            # 입력 파일 처리 및 컨텍스트 추가
+            if input_files:
+                print("📂 입력 파일 분석 중...")
+                file_contents = []
+                for file_path in input_files:
+                    try:
+                        print(f"   - 파일 읽는 중: {file_path}")
+                        content = self.hwp_handler.read_hwp(file_path)
+                        if content:
+                            file_contents.append(f"--- 파일명: {Path(file_path).name} ---\n{content}\n---------------------------")
+                        else:
+                            print(f"   ⚠️ 파일 내용이 비어있거나 읽을 수 없습니다: {file_path}")
+                    except Exception as e:
+                        print(f"   ❌ 파일 읽기 실패 ({file_path}): {e}")
+                
+                if file_contents:
+                    combined_content = "\n\n".join(file_contents)
+                    # 컨텍스트에 추가 (기존 키가 있으면 병합하거나 새 키 사용)
+                    context['reference_documents'] = combined_content
+                    print(f"✅ {len(file_contents)}개 파일 내용 컨텍스트에 추가됨.")
+
             print("📝 Gemini API로 콘텐츠 생성 중...")
             result = self.content_generator.generate_document_content(
                 user_request,

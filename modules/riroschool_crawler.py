@@ -57,15 +57,15 @@ class RiroSchoolCrawler:
         return None
     
     def login_and_get_events(
-        self, 
-        school_name: str, 
-        username: str, 
+        self,
+        school_name: str,
+        username: str,
         password: str,
         grade: str = "1",
         year: str = "2025"
     ) -> Dict:
         """
-        리로스쿨 로그인 후 포트폴리오 이벤트 가져오기
+        리로스쿨 로그인 후 포트폴리오/수행평가 일정 수집
         
         Args:
             school_name: 학교명 (예: "okgwa" - URL에서 사용)
@@ -75,7 +75,7 @@ class RiroSchoolCrawler:
             year: 년도 (기본값: "2025")
         
         Returns:
-            성공 시: {"success": True, "events": {...}}
+            성공 시: {"success": True, "events": [ ... ], "events_by_date": {...}}
             실패 시: {"success": False, "error": "..."}
         """
         cookies_snapshot: List[Dict] = []
@@ -128,7 +128,7 @@ class RiroSchoolCrawler:
                     "error": "로그인 실패: 아이디 또는 비밀번호를 확인해주세요."
                 }
             
-            events = {}
+            events_by_date: Dict[str, List[Dict]] = {}
             target_grade = f"{grade}학년"
             
             for i in range(min(len(titles), len(dates))):
@@ -140,20 +140,25 @@ class RiroSchoolCrawler:
                 if target_grade in title:
                     date_str = self._parse_date(date)
                     if date_str:
-                        events[date_str] = {
+                        entry = {
                             "title": title,
                             "url": href,
-                            "raw_date": date
+                            "raw_date": date,
+                            "type": "assessment"
                         }
+                        events_by_date.setdefault(date_str, []).append(entry)
             
-            print(f"[RIRO] Found {len(events)} events")
+            event_count = sum(len(v) for v in events_by_date.values())
+            print(f"[RIRO] Found {event_count} events")
             cookies_snapshot = self._export_cookies()
             self.set_session_cookies(cookies_snapshot)
-            preloaded_guides = self.prefetch_event_guides(events)
+            preloaded_guides = self.prefetch_event_guides(events_by_date)
+            events_flat = self._flatten_events(events_by_date)
             
             return {
                 "success": True,
-                "events": events,
+                "events": events_flat,
+                "events_by_date": events_by_date,
                 "school": school_name,
                 "grade": grade,
                 "year": year,
@@ -275,24 +280,29 @@ class RiroSchoolCrawler:
         except Exception as exc:
             return {"success": False, "error": str(exc)}
 
-    def prefetch_event_guides(self, events: Dict[str, Dict]) -> Dict[str, Dict]:
+    def prefetch_event_guides(self, events: Dict[str, List[Dict]]) -> Dict[str, Dict]:
+        """이벤트 목록에 과제 가이드라인을 미리 주입"""
         guides: Dict[str, Dict] = {}
         if not events:
             return guides
-        for date_key, info in events.items():
-            if not info:
-                continue
-            url = info.get("url")
-            if not url:
-                continue
-            detail = self.fetch_assignment_brief(url)
-            if detail.get("success") and detail.get("guide"):
-                guides[date_key] = {
-                    "guide": detail["guide"],
-                    "source": detail.get("assignment_url", url)
-                }
-                info["guide"] = detail["guide"]
-                info["guide_source"] = detail.get("assignment_url", url)
+        for date_key, items in events.items():
+            for info in items or []:
+                url = (info or {}).get("url")
+                if not url:
+                    continue
+                detail = self.fetch_assignment_brief(url)
+                if detail.get("success") and detail.get("guide"):
+                    guide_payload = {
+                        "guide": detail["guide"],
+                        "source": detail.get("assignment_url", url),
+                        "date": date_key,
+                        "title": info.get("title")
+                    }
+                    # URL 기반 키와 날짜 기반 키 둘 다 저장 (호환성)
+                    guides[url] = guide_payload
+                    guides.setdefault(date_key, guide_payload)
+                    info["guide"] = detail["guide"]
+                    info["guide_source"] = detail.get("assignment_url", url)
         return guides
     
     def get_event_detail(self, event_url: str) -> Dict:
@@ -326,3 +336,18 @@ class RiroSchoolCrawler:
                 "success": False,
                 "error": str(e)
             }
+
+    def _flatten_events(self, events_by_date: Dict[str, List[Dict]]) -> List[Dict]:
+        """날짜별 이벤트 딕셔너리를 단일 리스트로 변환"""
+        flat: List[Dict] = []
+        for date_key, items in (events_by_date or {}).items():
+            for item in items or []:
+                entry = dict(item or {})
+                entry.setdefault("date", date_key)
+                flat.append(entry)
+        # 날짜순 정렬
+        try:
+            flat.sort(key=lambda x: x.get("date") or "")
+        except Exception:
+            pass
+        return flat
