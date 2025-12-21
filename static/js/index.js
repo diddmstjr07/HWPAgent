@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnDocMode: document.querySelector('.toggle-btn'), // 헤더의 문서모드 토글
         sidebar: document.getElementById('sidebar'),
         sidebarOverlay: document.getElementById('sidebarOverlay'),
+        workspaceList: document.getElementById('workspaceList'),
         btnMenu: document.getElementById('btnMenu'),
         btnDesktopSidebarToggle: document.getElementById('btnDesktopSidebarToggle'),
         
@@ -63,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
         userEmailLabel: document.getElementById('userEmailLabel'),
         userAvatar: document.getElementById('userAvatar'),
         
+        // New Chat Button
+        btnNewChat: document.getElementById('btnNewChat'),
+        
         // Etc
         toast: document.getElementById('toast'),
     };
@@ -72,14 +76,22 @@ document.addEventListener('DOMContentLoaded', () => {
         isGenerating: false,
         docMode: false, // false: 채팅모드, true: 문서모드
         chatHistory: [], // { role: 'user' | 'ai', text: '...' }
-        streamingBuffer: '', // 현재 받아오고 있는 텍스트
-        document: { title: '', content: '' },
+        streamingBuffer: '', // 현재 받아오고 있는 텍스트 (raw text before display)
+        document: { title: '', content: '' }, // raw text for doc mode
         imagesNeeded: [],
         template: null,
         riroEvents: [],
         riroLoggedIn: false,
         user: null,
-        authChecked: false
+        authChecked: false,
+        // New for typewriter effect in chat mode
+        displayedChatContent: '',
+        chatTypingTimeoutId: null,
+        // New for typewriter effect in document mode
+        displayedDocContent: '',
+        docTypingTimeoutId: null,
+        // Chat History
+        currentSessionId: null
     };
 
     // ============================================================
@@ -126,6 +138,34 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { /* ignore */ }
     };
 
+    // [New] 채팅 메시지 DOM 생성 헬퍼
+    const createMessageRow = (role, text, isStreaming = false) => {
+        const isUser = role === 'user';
+        const div = document.createElement('div');
+        div.className = 'message-row';
+        if (isStreaming) div.classList.add('streaming-row');
+        
+        const avatarHtml = isUser 
+            ? '<div class="role-avatar user"><i class="bi bi-person"></i></div>' 
+            : '<div class="role-avatar ai"><i class="bi bi-stars"></i></div>';
+            
+        const contentHtml = isStreaming && !text 
+            ? `<div class="message-content streaming">
+                 <div class="message-name">AI Agent</div>
+                 <div class="loading-bubble">
+                   <div class="loading-line"></div>
+                   <div class="loading-line short"></div>
+                 </div>
+               </div>`
+            : `<div class="message-content">
+                 <div class="message-name">${isUser ? 'You' : 'AI Agent'}</div>
+                 <div class="markdown-body">${parseMarkdown(text)}</div>
+               </div>`;
+
+        div.innerHTML = avatarHtml + contentHtml;
+        return div;
+    };
+
     const updateUI = () => {
         try {
             // [View Toggle] 콘텐츠가 있으면 홈 화면 숨기고 결과 화면 표시
@@ -138,70 +178,103 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (els.chatStream) els.chatStream.style.display = 'none';
                 if (els.docPaper) els.docPaper.style.display = 'block';
 
-                let contentWithImgParams = state.docContent;
-                if (state.generatedImageKeyword) {
-                   // 이미지 처리 로직
+                // Typewriter effect for doc mode
+                if (state.document.content.length > state.displayedDocContent.length) {
+                    if (!state.docTypingTimeoutId) {
+                        state.docTypingTimeoutId = setTimeout(() => {
+                            const charsToAdd = Math.min(10, state.document.content.length - state.displayedDocContent.length); // Adjust typing speed
+                            state.displayedDocContent += state.document.content.substring(state.displayedDocContent.length, state.displayedDocContent.length + charsToAdd);
+                            els.docContent.innerHTML = parseMarkdown(state.displayedDocContent);
+                            renderMath(els.docContent);
+                            state.docTypingTimeoutId = null; // Reset to allow next frame to trigger
+                            if (state.isGenerating || state.displayedDocContent.length < state.document.content.length) {
+                                requestAnimationFrame(updateUI); // Continue updating if more content or still generating
+                            }
+                        }, 50); // Typing speed
+                    }
+                } else if (!state.isGenerating && state.displayedDocContent.length === state.document.content.length && state.document.content) {
+                    // Stream finished, ensure final parse for doc mode
+                    els.docContent.innerHTML = parseMarkdown(state.document.content);
+                    renderMath(els.docContent);
+                } else if (!state.document.content) {
+                    els.docContent.innerHTML = ''; // Clear if no content
                 }
-
-                els.docContent.innerHTML = parseMarkdown(contentWithImgParams);
-                renderMath(els.docContent);
             } else {
-                // [채팅 모드]
+                // [채팅 모드] - 증분 업데이트 적용 (Flickering 방지)
                 if (els.docPaper) els.docPaper.style.display = 'none';
                 if (els.chatStream) els.chatStream.style.display = 'flex';
-                
-                let html = '';
-                
-                // 기존 히스토리 렌더링
-                state.chatHistory.forEach(msg => {
-                    if (!msg) return;
-                    const isUser = msg.role === 'user';
-                    const textContent = isUser ? msg.text : parseMarkdown(msg.text);
-                    html += `
-                    <div class="message-row">
-                        <div class="role-avatar ${isUser ? 'user' : 'ai'}">
-                            ${isUser ? '<i class="bi bi-person"></i>' : '<i class="bi bi-stars"></i>'}
-                        </div>
-                        <div class="message-content">
-                            <div class="message-name">${isUser ? 'You' : 'AI Agent'}</div>
-                            ${textContent}
-                        </div>
-                    </div>`;
-                });
 
-                // 현재 스트리밍 중인 메시지 렌더링
-                if (state.streamingBuffer) {
-                    html += `
-                    <div class="message-row">
-                        <div class="role-avatar ai"><i class="bi bi-stars"></i></div>
-                        <div class="message-content">
-                            <div class="message-name">AI Agent</div>
-                            ${parseMarkdown(state.streamingBuffer)}
-                        </div>
-                    </div>`;
-                } else if (state.isGenerating) {
-                    // 로딩 중 표시
-                    html += `
-                    <div class="message-row">
-                        <div class="role-avatar ai"><i class="bi bi-stars"></i></div>
-                        <div class="message-content streaming">
-                            <div class="message-name">AI Agent</div>
-                            <div class="loading-bubble">
-                                <div class="loading-line"></div>
-                                <div class="loading-line short"></div>
-                            </div>
-                        </div>
-                    </div>`;
-                }
+                const container = els.chatStream;
+                const historyCount = state.chatHistory.length;
                 
-                if (els.chatStream) {
-                    els.chatStream.innerHTML = html;
-                    renderMath(els.chatStream);
-                }
+                // 1. 기존 메시지 동기화 (이미 그려진 것은 건너뜀)
+                const renderedRows = container.querySelectorAll('.message-row:not(.streaming-row)');
                 
-                // 자동 스크롤
-                if (state.streamingBuffer || state.isGenerating) {
-                    scrollToBottom();
+                for (let i = renderedRows.length; i < historyCount; i++) {
+                    const msg = state.chatHistory[i];
+                    const row = createMessageRow(msg.role, msg.text);
+                    const streamingRow = container.querySelector('.streaming-row');
+                    if (streamingRow) {
+                        container.insertBefore(row, streamingRow);
+                    } else {
+                        container.appendChild(row);
+                    }
+                    renderMath(row);
+                }
+
+                // 2. 스트리밍 메시지 처리 (Typewriter effect)
+                let streamingRow = container.querySelector('.streaming-row');
+                
+                if (state.isGenerating || state.streamingBuffer) {
+                    if (!streamingRow) {
+                        streamingRow = createMessageRow('ai', '', true); // 로딩 상태로 생성
+                        container.appendChild(streamingRow);
+                        scrollToBottom();
+                    }
+                    
+                    // Typewriter effect for chat mode
+                    if (state.streamingBuffer.length > state.displayedChatContent.length) {
+                        if (!state.chatTypingTimeoutId) {
+                            state.chatTypingTimeoutId = setTimeout(() => {
+                                const charsToAdd = Math.min(5, state.streamingBuffer.length - state.displayedChatContent.length); // Adjust typing speed
+                                state.displayedChatContent += state.streamingBuffer.substring(state.displayedChatContent.length, state.displayedChatContent.length + charsToAdd);
+                                
+                                const contentDiv = streamingRow.querySelector('.message-content');
+                                if (contentDiv.classList.contains('streaming')) {
+                                    contentDiv.classList.remove('streaming');
+                                    contentDiv.innerHTML = `<div class="message-name">AI Agent</div><div class="markdown-body"></div>`;
+                                }
+                                const body = contentDiv.querySelector('.markdown-body');
+                                if (body) {
+                                    body.innerHTML = parseMarkdown(state.displayedChatContent);
+                                    renderMath(body);
+                                }
+                                scrollToBottom();
+                                state.chatTypingTimeoutId = null; // Reset to allow next frame to trigger
+                                if (state.isGenerating || state.displayedChatContent.length < state.streamingBuffer.length) {
+                                    requestAnimationFrame(updateUI); // Continue updating if more content or still generating
+                                }
+                            }, 50); // Typing speed
+                        }
+                    } else if (!state.isGenerating && state.displayedChatContent.length === state.streamingBuffer.length && state.streamingBuffer) {
+                        // Stream finished, ensure final parse for chat mode
+                        const contentDiv = streamingRow.querySelector('.message-content');
+                        if (contentDiv.classList.contains('streaming')) {
+                            contentDiv.classList.remove('streaming');
+                            contentDiv.innerHTML = `<div class="message-name">AI Agent</div><div class="markdown-body"></div>`;
+                        }
+                        const body = contentDiv.querySelector('.markdown-body');
+                        if (body) {
+                            body.innerHTML = parseMarkdown(state.streamingBuffer);
+                            renderMath(body);
+                        }
+                        scrollToBottom();
+                    }
+                } else {
+                    // 스트리밍 종료
+                    if (streamingRow) {
+                        streamingRow.remove();
+                    }
                 }
             }
         } catch (e) {
@@ -229,10 +302,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. 초기화 및 UI 준비
         state.isGenerating = true;
         state.streamingBuffer = ''; // 버퍼 초기화
+        state.document = { title: '', content: '' }; // 문서 내용 초기화
+        
+        // Reset typewriter state
+        state.displayedChatContent = '';
+        if (state.chatTypingTimeoutId) clearTimeout(state.chatTypingTimeoutId);
+        state.chatTypingTimeoutId = null;
+        state.displayedDocContent = '';
+        if (state.docTypingTimeoutId) clearTimeout(state.docTypingTimeoutId);
+        state.docTypingTimeoutId = null;
         
         // 사용자의 입력은 항상 채팅 기록에 남김 (문서 모드여도 로그 역할)
         state.chatHistory.push({ role: 'user', text: prompt });
         
+        // [New] Create/Update session immediately to show in sidebar
+        await saveChatSession();
+
         els.userRequest.value = ''; // 입력창 비우기
         els.userRequest.style.height = 'auto'; // 높이 리셋
         setLoadingState(true); // 버튼 로딩
@@ -240,6 +325,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 채팅 모드였다면 스크롤 하단으로
         if (!state.docMode) scrollToBottom();
+
+        // [New] Create/Update session immediately to show in sidebar
+        await saveChatSession();
 
         try {
             // ★ 자동 모드 엔드포인트 사용
@@ -365,10 +453,20 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             state.isGenerating = false;
             setLoadingState(false);
+            
+            // Clear any lingering typing timeouts
+            if (state.chatTypingTimeoutId) clearTimeout(state.chatTypingTimeoutId);
+            state.chatTypingTimeoutId = null;
+            if (state.docTypingTimeoutId) clearTimeout(state.docTypingTimeoutId);
+            state.docTypingTimeoutId = null;
+
             updateUI();
             
             // 문서 모드라면 이미지 로드 시도
             if (state.docMode) resolveImages();
+            
+            // Save chat history
+            await saveChatSession();
         }
     };
 
@@ -599,13 +697,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (els.userNameLabel) els.userNameLabel.textContent = name;
         if (els.userEmailLabel) els.userEmailLabel.textContent = email;
-        if (els.userAvatar) els.userAvatar.textContent = initial;
+        if (els.userAvatar) els.userAvatar.textContent = ''; // Removed initial text from avatar
 
         if (els.btnAuthToggle) {
             els.btnAuthToggle.innerHTML = state.user
                 ? '<i class="bi bi-box-arrow-right"></i>'
                 : '<i class="bi bi-box-arrow-in-right"></i>';
             els.btnAuthToggle.title = state.user ? '로그아웃' : '로그인';
+        }
+
+        // Toggle Login Button visibility
+        if (els.btnOpenAuth) {
+            els.btnOpenAuth.style.display = state.user ? 'none' : 'flex';
         }
     };
 
@@ -652,6 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             state.authChecked = true;
             renderUserProfile();
+            loadChatSessions();
         }
     };
 
@@ -1012,6 +1116,186 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ============================================================
+    // 3.6. Chat History Management
+    // ============================================================
+
+    const restoreSessionFromLocalStorage = async () => {
+        const lastLoadedSessionId = localStorage.getItem('lastLoadedSessionId');
+        const lastLoadedDocMode = localStorage.getItem('lastLoadedDocMode') === 'true'; // Convert string to boolean
+        
+        if (lastLoadedSessionId) {
+            console.log('Restoring session from localStorage:', lastLoadedSessionId);
+            await loadChatSession(lastLoadedSessionId);
+            state.docMode = lastLoadedDocMode; // Restore docMode
+            els.btnDocMode?.classList.toggle('on', state.docMode);
+        } else {
+            // If no session to restore, ensure home view is shown if no other content
+            updateUI();
+        }
+    };
+
+    const loadChatSessions = async () => {
+        // if (!state.user) return; // Allow guests
+        try {
+            const res = await fetch('/api/chat/sessions');
+            const data = await res.json();
+            
+            if (data.success && els.workspaceList) {
+                els.workspaceList.innerHTML = ''; // Clear list
+                
+                // Add "New Chat" button/item logic if needed, but sidebar has a dedicated button
+                
+                data.sessions.forEach(session => {
+                    const div = document.createElement('div');
+                    div.className = 'nav-item';
+                    if (session.id === state.currentSessionId) div.classList.add('active'); 
+                    
+                    const title = session.title || '새로운 대화';
+                    const displayTitle = title.length > 15 ? title.substring(0, 15) + '...' : title;
+                    
+                    div.innerHTML = `
+                        <div class="session-item-content" style="display:flex; align-items:center; gap:12px; flex:1; overflow:hidden;">
+                            <i class="bi bi-chat-left-text"></i>
+                            <span style="overflow:hidden; text-overflow:ellipsis;">${displayTitle}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            ${session.id === state.currentSessionId ? '<i class="bi bi-check" style="color:var(--accent-primary); font-size:1.1rem;"></i>' : ''}
+                            <div class="btn-delete-session" style="padding:4px; border-radius:4px; color:#94A3B8; transition:all 0.2s; display:flex; align-items:center; justify-content:center;">
+                                <i class="bi bi-trash" style="font-size:0.9rem;"></i>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Main click (Load Session)
+                    const contentArea = div.querySelector('.session-item-content');
+                    contentArea.addEventListener('click', () => loadChatSession(session.id));
+                    
+                    // Delete click
+                    const deleteBtn = div.querySelector('.btn-delete-session');
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if(confirm('정말 이 대화를 삭제하시겠습니까?')) {
+                            handleDeleteSession(session.id);
+                        }
+                    });
+                    
+                    // Delete hover effect
+                    deleteBtn.addEventListener('mouseenter', () => { deleteBtn.style.color = '#EF4444'; deleteBtn.style.background = 'rgba(239, 68, 68, 0.1)'; });
+                    deleteBtn.addEventListener('mouseleave', () => { deleteBtn.style.color = '#94A3B8'; deleteBtn.style.background = 'transparent'; });
+
+                    els.workspaceList.appendChild(div);
+                });
+            }
+        } catch (e) {
+            console.error('Failed to load chat sessions', e);
+        }
+    };
+
+    const handleDeleteSession = async (sessionId) => {
+        try {
+            const res = await fetch(`/api/chat/sessions/${sessionId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showToast('대화가 삭제되었습니다.', 'success');
+                if (state.currentSessionId === sessionId) {
+                    // Reset if current session was deleted
+                    state.chatHistory = [];
+                    state.currentSessionId = null;
+                    state.docMode = false;
+                    updateUI();
+                }
+                loadChatSessions();
+            } else {
+                throw new Error(data.error || '삭제 실패');
+            }
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    };
+
+    const loadChatSession = async (sessionId) => {
+        try {
+            // Reset current view
+            state.chatHistory = [];
+            state.docMode = false;
+            updateUI();
+            
+            const res = await fetch(`/api/chat/sessions/${sessionId}`);
+            const data = await res.json();
+            
+            if (data.success && data.session) {
+                state.currentSessionId = data.session.id;
+                state.chatHistory = data.session.messages || [];
+                // Save this session as the last loaded one
+                localStorage.setItem('lastLoadedSessionId', sessionId);
+                localStorage.setItem('lastLoadedDocMode', state.docMode);
+                
+                updateUI();
+                scrollToBottom();
+                
+                // Refresh list to show active state
+                loadChatSessions();
+                
+                // Mobile: Close sidebar
+                toggleSidebar(false);
+            }
+        } catch (e) {
+            showToast('대화 기록을 불러오지 못했습니다.', 'error');
+            localStorage.removeItem('lastLoadedSessionId'); // Clear invalid session
+            localStorage.removeItem('lastLoadedDocMode');
+        }
+    };
+
+
+    const saveChatSession = async () => {
+        if (state.chatHistory.length === 0) return;
+        
+        try {
+            if (state.currentSessionId) {
+                // Update existing
+                await fetch(`/api/chat/sessions/${state.currentSessionId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: state.chatHistory
+                    })
+                });
+                localStorage.setItem('lastLoadedSessionId', state.currentSessionId);
+                localStorage.setItem('lastLoadedDocMode', state.docMode);
+                // Reload list to update sorting/active state
+                loadChatSessions();
+            } else {
+                // Create new
+                // Use first user message as title
+                const firstMsg = state.chatHistory.find(m => m.role === 'user');
+                const title = firstMsg ? firstMsg.text.substring(0, 30) : '새로운 대화';
+                
+                const res = await fetch('/api/chat/sessions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: title,
+                        messages: state.chatHistory
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    console.log('New session created:', data.session.id);
+                    state.currentSessionId = data.session.id;
+                    localStorage.setItem('lastLoadedSessionId', state.currentSessionId);
+                    localStorage.setItem('lastLoadedDocMode', state.docMode);
+                    await loadChatSessions(); // Ensure list is refreshed
+                }
+            }
+        } catch (e) {
+            console.error('Failed to save chat session', e);
+        }
+    };
+
+    // ============================================================
     // 4. 이벤트 리스너 바인딩
     // ============================================================
 
@@ -1049,6 +1333,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseAuth = document.getElementById('closeAuth');
     if (btnCloseAuth) btnCloseAuth.addEventListener('click', closeAuthModal);
 
+    // New Chat Button
+    if (els.btnNewChat) {
+        els.btnNewChat.addEventListener('click', () => {
+            state.chatHistory = [];
+            state.currentSessionId = null;
+            state.document = { title: '', content: '' };
+            state.docMode = false;
+            state.streamingBuffer = '';
+            state.displayedChatContent = '';
+            
+            localStorage.removeItem('lastLoadedSessionId');
+            localStorage.removeItem('lastLoadedDocMode');
+            
+            updateUI();
+            loadChatSessions(); // Clear active state
+            toggleSidebar(false); // Close sidebar on mobile
+        });
+    }
+
     // Download Buttons
     const btnDownloadSide = document.getElementById('btnDownloadSide');
     const btnDownloadMobile = document.getElementById('btnDownloadMobile');
@@ -1059,6 +1362,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (els.btnDocMode) {
         els.btnDocMode.addEventListener('click', () => {
             state.docMode = !state.docMode;
+            localStorage.setItem('lastLoadedDocMode', state.docMode); // Persist docMode
             els.btnDocMode.classList.toggle('on', state.docMode); // CSS 클래스 토글
             updateUI();
         });
@@ -1178,7 +1482,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 초기 실행
     console.log('DOC Agent Initialized. Debug Mode:', DEBUG_MODE);
     renderUserProfile();
-    fetchAuthMe();
+    fetchAuthMe().then(() => {
+        restoreSessionFromLocalStorage();
+    });
     loadRiroFromStorage();
-    updateUI(); // 초기 상태 렌더링
+    // updateUI(); // Initial UI update is now handled by restoreSessionFromLocalStorage or its fallback
 });
