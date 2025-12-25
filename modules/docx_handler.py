@@ -12,6 +12,8 @@ from typing import Optional, Dict, Any, List
 import os
 from datetime import datetime
 import re
+import io
+from htmldocx import HtmlToDocx
 
 LATEX_SYMBOL_MAP = {
     r'\times': '×',
@@ -149,6 +151,28 @@ class DOCXHandler:
         # 저장
         doc.save(output_path)
         
+        return str(output_path)
+
+    def create_document_from_html(
+        self,
+        html_content: str,
+        title: str,
+        style_config: Optional[Dict[str, Any]] = None,
+        filename: Optional[str] = None
+    ) -> str:
+        """
+        HTML 콘텐츠를 기반으로 워드 문서 생성
+        """
+        if filename is None:
+            filename = f"{title}.docx"
+        output_path = self.output_dir / filename
+
+        # Convert HTML to docx.Document object using htmldocx
+        document = Document()
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html_content, document)
+        
+        document.save(output_path)
         return str(output_path)
 
     def _create_base_document(self, template_path: Optional[str]) -> Document:
