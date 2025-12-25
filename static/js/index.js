@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
         DOC: '/api/generate-stream',
         AUTO: '/api/interact',
         IMAGE: '/api/search-images',
-        TEMPLATE: '/api/template/upload'
+        TEMPLATE: '/api/template/upload',
+        EDIT_HTML: '/api/edit-html' // NEW: for HTML editing
     };
 
     // DOM 요소 캐싱 (에러 방지를 위해 Optional Chaining 사용)
@@ -74,12 +75,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // 상태 관리 (State)
     const state = {
         isGenerating: false,
-        docMode: false, // false: 채팅모드, true: 문서모드
+        docMode: false, // false: 채팅모드, true: 문서모드 - Now implies if docContent has an active template
         chatHistory: [], // { role: 'user' | 'ai', text: '...' }
         streamingBuffer: '', // 현재 받아오고 있는 텍스트 (raw text before display)
         document: { title: '', content: '' }, // raw text for doc mode
+        templateHtml: '', // NEW: Store the current HTML content of the document
+        templateName: '', // NEW: Name of the loaded template
+        templateFilePath: '', // NEW: path of the loaded template file
         imagesNeeded: [],
-        template: null,
+        template: null, // OLD: For raw text template, use templateHtml now
         riroEvents: [],
         riroLoggedIn: false,
         user: null,
@@ -87,16 +91,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // New for typewriter effect in chat mode
         displayedChatContent: '',
         chatTypingTimeoutId: null,
-        // New for typewriter effect in document mode
-        displayedDocContent: '',
+        // New for typewriter effect in document mode (now for chat output only)
+        displayedDocContent: '', 
         docTypingTimeoutId: null,
         // Chat History
         currentSessionId: null
     };
 
-    // ============================================================
+    // ============================================================ 
     // 1. 핵심 로직: 화면 렌더링 (View)
-    // ============================================================
+    // ============================================================ 
 
     // 마크다운 변환기 (에러 방지 래퍼)
     const parseMarkdown = (text) => {
@@ -169,117 +173,115 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateUI = () => {
         try {
             // [View Toggle] 콘텐츠가 있으면 홈 화면 숨기고 결과 화면 표시
-            const hasContent = state.chatHistory.length > 0 || state.isGenerating || state.docContent;
+            // docMode now depends on whether a template HTML is loaded
+            state.docMode = !!state.templateHtml;
+
+            const hasContent = state.chatHistory.length > 0 || state.isGenerating || state.docMode;
             if (els.homeView) els.homeView.style.display = hasContent ? 'none' : 'block';
             if (els.resultView) els.resultView.style.display = hasContent ? 'flex' : 'none';
 
-            if (state.docMode) {
-                // [문서 모드]
-                if (els.chatStream) els.chatStream.style.display = 'none';
-                if (els.docPaper) els.docPaper.style.display = 'block';
+            // Document Title Update
+            if (els.docTitle) els.docTitle.textContent = state.templateName || '새 문서';
 
-                // Typewriter effect for doc mode
-                if (state.document.content.length > state.displayedDocContent.length) {
-                    if (!state.docTypingTimeoutId) {
-                        state.docTypingTimeoutId = setTimeout(() => {
-                            const charsToAdd = Math.min(10, state.document.content.length - state.displayedDocContent.length); // Adjust typing speed
-                            state.displayedDocContent += state.document.content.substring(state.displayedDocContent.length, state.displayedDocContent.length + charsToAdd);
-                            els.docContent.innerHTML = parseMarkdown(state.displayedDocContent);
-                            renderMath(els.docContent);
-                            state.docTypingTimeoutId = null; // Reset to allow next frame to trigger
-                            if (state.isGenerating || state.displayedDocContent.length < state.document.content.length) {
+
+            if (state.docMode) {
+                // [문서 모드] - #docContent를 실제 HTML 편집기로 사용
+                if (els.chatStream) els.chatStream.style.display = 'flex'; // Chat visible
+                if (els.docPaper) {
+                    els.docPaper.style.display = 'block';
+                    els.docPaper.classList.add('active');
+                }
+                
+                // Set the innerHTML of docContent directly if templateHtml exists
+                if (els.docContent && state.templateHtml && els.docContent.innerHTML !== state.templateHtml) {
+                    els.docContent.innerHTML = state.templateHtml;
+                    renderMath(els.docContent);
+                } else if (els.docContent && !state.templateHtml && !state.isGenerating) {
+                     // Clear content if no template and not generating
+                     els.docContent.innerHTML = '';
+                }
+
+            } else { // No template HTML loaded, default chat behavior
+                if (els.docPaper) els.docPaper.style.display = 'none';
+                if (els.chatStream) els.chatStream.style.display = 'flex';
+            }
+            
+            // Handle chat stream updates (always visible in the original UI)
+            const container = els.chatStream;
+            const historyCount = state.chatHistory.length;
+            
+            // 1. 기존 메시지 동기화 (이미 그려진 것은 건너뜀)
+            const renderedRows = container.querySelectorAll('.message-row:not(.streaming-row)');
+            
+            for (let i = renderedRows.length; i < historyCount; i++) {
+                const msg = state.chatHistory[i];
+                const row = createMessageRow(msg.role, msg.text);
+                const streamingRow = container.querySelector('.streaming-row');
+                if (streamingRow) {
+                    container.insertBefore(row, streamingRow);
+                } else {
+                    container.appendChild(row);
+                }
+                renderMath(row);
+            }
+
+            // 2. 스트리밍 메시지 처리 (Typewriter effect)
+            let streamingRow = container.querySelector('.streaming-row');
+            
+            if (state.isGenerating || state.streamingBuffer) {
+                if (!streamingRow) {
+                    streamingRow = createMessageRow('ai', '', true); // 로딩 상태로 생성
+                    container.appendChild(streamingRow);
+                    scrollToBottom();
+                }
+                
+                // Typewriter effect for chat mode
+                if (state.streamingBuffer.length > state.displayedChatContent.length) {
+                    if (!state.chatTypingTimeoutId) {
+                        state.chatTypingTimeoutId = setTimeout(() => {
+                            const charsToAdd = Math.min(5, state.streamingBuffer.length - state.displayedChatContent.length); // Adjust typing speed
+                            state.displayedChatContent += state.streamingBuffer.substring(state.displayedChatContent.length, state.displayedChatContent.length + charsToAdd);
+                            
+                            const contentDiv = streamingRow.querySelector('.message-content');
+                            if (contentDiv.classList.contains('streaming')) {
+                                contentDiv.classList.remove('streaming');
+                                contentDiv.innerHTML = `<div class="message-name">AI Agent</div><div class="markdown-body"></div>`;
+                            }
+                            const body = contentDiv.querySelector('.markdown-body');
+                            if (body) {
+                                body.innerHTML = parseMarkdown(state.displayedChatContent);
+                                renderMath(body);
+                            }
+                            scrollToBottom();
+                            state.chatTypingTimeoutId = null; // Reset to allow next frame to trigger
+                            if (state.isGenerating || state.displayedChatContent.length < state.streamingBuffer.length) {
                                 requestAnimationFrame(updateUI); // Continue updating if more content or still generating
                             }
                         }, 50); // Typing speed
                     }
-                } else if (!state.isGenerating && state.displayedDocContent.length === state.document.content.length && state.document.content) {
-                    // Stream finished, ensure final parse for doc mode
-                    els.docContent.innerHTML = parseMarkdown(state.document.content);
-                    renderMath(els.docContent);
-                } else if (!state.document.content) {
-                    els.docContent.innerHTML = ''; // Clear if no content
+                } else if (!state.isGenerating && state.displayedChatContent.length === state.streamingBuffer.length && state.streamingBuffer) {
+                    // Stream finished, ensure final parse for chat mode
+                    const contentDiv = streamingRow.querySelector('.message-content');
+                    if (contentDiv.classList.contains('streaming')) {
+                        contentDiv.classList.remove('streaming');
+                        contentDiv.innerHTML = `<div class="message-name">AI Agent</div><div class="markdown-body"></div>`;
+                    }
+                    const body = contentDiv.querySelector('.markdown-body');
+                    if (body) {
+                        body.innerHTML = parseMarkdown(state.streamingBuffer);
+                        renderMath(body);
+                    }
+                    scrollToBottom();
                 }
             } else {
-                // [채팅 모드] - 증분 업데이트 적용 (Flickering 방지)
-                if (els.docPaper) els.docPaper.style.display = 'none';
-                if (els.chatStream) els.chatStream.style.display = 'flex';
-
-                const container = els.chatStream;
-                const historyCount = state.chatHistory.length;
-                
-                // 1. 기존 메시지 동기화 (이미 그려진 것은 건너뜀)
-                const renderedRows = container.querySelectorAll('.message-row:not(.streaming-row)');
-                
-                for (let i = renderedRows.length; i < historyCount; i++) {
-                    const msg = state.chatHistory[i];
-                    const row = createMessageRow(msg.role, msg.text);
-                    const streamingRow = container.querySelector('.streaming-row');
-                    if (streamingRow) {
-                        container.insertBefore(row, streamingRow);
-                    } else {
-                        container.appendChild(row);
-                    }
-                    renderMath(row);
-                }
-
-                // 2. 스트리밍 메시지 처리 (Typewriter effect)
-                let streamingRow = container.querySelector('.streaming-row');
-                
-                if (state.isGenerating || state.streamingBuffer) {
-                    if (!streamingRow) {
-                        streamingRow = createMessageRow('ai', '', true); // 로딩 상태로 생성
-                        container.appendChild(streamingRow);
-                        scrollToBottom();
-                    }
-                    
-                    // Typewriter effect for chat mode
-                    if (state.streamingBuffer.length > state.displayedChatContent.length) {
-                        if (!state.chatTypingTimeoutId) {
-                            state.chatTypingTimeoutId = setTimeout(() => {
-                                const charsToAdd = Math.min(5, state.streamingBuffer.length - state.displayedChatContent.length); // Adjust typing speed
-                                state.displayedChatContent += state.streamingBuffer.substring(state.displayedChatContent.length, state.displayedChatContent.length + charsToAdd);
-                                
-                                const contentDiv = streamingRow.querySelector('.message-content');
-                                if (contentDiv.classList.contains('streaming')) {
-                                    contentDiv.classList.remove('streaming');
-                                    contentDiv.innerHTML = `<div class="message-name">AI Agent</div><div class="markdown-body"></div>`;
-                                }
-                                const body = contentDiv.querySelector('.markdown-body');
-                                if (body) {
-                                    body.innerHTML = parseMarkdown(state.displayedChatContent);
-                                    renderMath(body);
-                                }
-                                scrollToBottom();
-                                state.chatTypingTimeoutId = null; // Reset to allow next frame to trigger
-                                if (state.isGenerating || state.displayedChatContent.length < state.streamingBuffer.length) {
-                                    requestAnimationFrame(updateUI); // Continue updating if more content or still generating
-                                }
-                            }, 50); // Typing speed
-                        }
-                    } else if (!state.isGenerating && state.displayedChatContent.length === state.streamingBuffer.length && state.streamingBuffer) {
-                        // Stream finished, ensure final parse for chat mode
-                        const contentDiv = streamingRow.querySelector('.message-content');
-                        if (contentDiv.classList.contains('streaming')) {
-                            contentDiv.classList.remove('streaming');
-                            contentDiv.innerHTML = `<div class="message-name">AI Agent</div><div class="markdown-body"></div>`;
-                        }
-                        const body = contentDiv.querySelector('.markdown-body');
-                        if (body) {
-                            body.innerHTML = parseMarkdown(state.streamingBuffer);
-                            renderMath(body);
-                        }
-                        scrollToBottom();
-                    }
-                } else {
-                    // 스트리밍 종료
-                    if (streamingRow) {
-                        streamingRow.remove();
-                    }
+                // 스트리밍 종료
+                if (streamingRow) {
+                    streamingRow.remove();
                 }
             }
         } catch (e) {
             console.error('[UpdateUI Error]', e);
-            if (els.chatStream && !state.docMode) {
+            if (els.chatStream) {
                  els.chatStream.innerHTML += `<div style="color:red; padding:10px;">UI Rendering Error: ${e.message}</div>`;
             }
         }
@@ -302,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. 초기화 및 UI 준비
         state.isGenerating = true;
         state.streamingBuffer = ''; // 버퍼 초기화
-        state.document = { title: '', content: '' }; // 문서 내용 초기화
+        state.document = { title: '', content: '' }; // 문서 내용 초기화 (only for old doc generation, not for template html) 
         
         // Reset typewriter state
         state.displayedChatContent = '';
@@ -321,31 +323,45 @@ document.addEventListener('DOMContentLoaded', () => {
         els.userRequest.value = ''; // 입력창 비우기
         els.userRequest.style.height = 'auto'; // 높이 리셋
         setLoadingState(true); // 버튼 로딩
-        updateUI(); // 로딩 UI 표시 (이 시점에서는 아직 모드 변경/문서 초기화 안 함)
+        updateUI(); // 로딩 UI 표시 (이 시점에서는 아직 모드 변경/문서 초기화 안 함) 
         
-        // 채팅 모드였다면 스크롤 하단으로
-        if (!state.docMode) scrollToBottom();
-
-        // [New] Create/Update session immediately to show in sidebar
-        await saveChatSession();
+        scrollToBottom(); // Always scroll down after user input
 
         try {
-            // ★ 자동 모드 엔드포인트 사용
-            const endpoint = API_ENDPOINTS.AUTO;
+            let endpoint = API_ENDPOINTS.AUTO; // Default to auto intent classification
             
+            // Determine if it's an HTML editing request
+            let isHtmlEditRequest = false;
+            // A simple heuristic for now: if a template is loaded, assume intent to edit it.
+            // A more robust solution would involve an LLM-based intent classification.
+            if (state.templateHtml) {
+                 isHtmlEditRequest = true; // Assume edit if template is active
+                 endpoint = API_ENDPOINTS.EDIT_HTML;
+            }
+
             if (DEBUG_MODE) console.log(`[Request] ${endpoint} -> ${prompt}`);
 
-            // 현재 프롬프트(마지막 요소)를 제외한 이전 히스토리만 전송
-            const previousHistory = state.chatHistory.slice(0, -1);
+            // For auto or chat, previous history is needed. For HTML edit, only current instruction + HTML.
+            let requestBody;
+            if (isHtmlEditRequest) {
+                requestBody = JSON.stringify({
+                    html: els.docContent.innerHTML, // Send current editable HTML
+                    instruction: prompt
+                });
+            } else {
+                // Original auto/chat mode logic
+                const previousHistory = state.chatHistory.slice(0, -1);
+                requestBody = JSON.stringify({
+                    request: prompt,
+                    template: state.templateHtml || '', // Pass templateHtml if available
+                    history: previousHistory
+                });
+            }
 
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    request: prompt,
-                    template: state.template ? state.template.text : '',
-                    history: previousHistory
-                })
+                body: requestBody
             });
 
             if (!response.ok) throw new Error(`Server Error: ${response.status}`);
@@ -355,6 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let buffer = '';
+
+            let hasDocumentModeChanged = false; // Flag to track if mode changed during stream
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -382,48 +400,78 @@ document.addEventListener('DOMContentLoaded', () => {
                         continue; // Skip malformed lines
                     }
 
-                    // [Server Protocol Compatibility]
-                    // Server sends { chunk: "..." } OR { type: "token", content: "..." }
-                    // Server also sends { type: "mode", mode: "document"|"chat" }
-                    
-                    if (data.type === 'mode') {
-                        // 서버의 의도 파악 결과에 따라 모드 전환
-                        if (data.mode === 'document') {
-                            state.docMode = true;
-                            console.log('[Auto Mode] Switched to Document Mode');
-                        } else if (data.mode === 'chat') {
-                            state.docMode = false;
-                            console.log('[Auto Mode] Switched to Chat Mode');
+                    // Handle /api/edit-html responses
+                    if (endpoint === API_ENDPOINTS.EDIT_HTML) {
+                        if (data.chunk) {
+                            state.templateHtml += data.chunk; // Accumulate the HTML chunks
                         }
-                        updateUI(); // 모드 변경 반영
+                        // Update the editor immediately with accumulated HTML.
+                        // This allows a visual update as the AI "types" the new HTML.
+                        if (els.docContent) {
+                            els.docContent.innerHTML = state.templateHtml;
+                        }
+                        requestAnimationFrame(updateUI); // Trigger UI update for the chat stream
                     }
-                    else if (data.chunk || (data.type === 'token' && data.content)) {
-                        const content = data.chunk || data.content;
-                        
-                        // 모드에 따라 데이터 저장 위치 분기
-                        if (state.docMode) {
-                            state.document.content += content;
-                        } else {
-                            state.streamingBuffer += content;
+                    // Handle /api/interact responses (original logic)
+                    else {
+                        if (data.type === 'mode') {
+                            // 서버의 의도 파악 결과에 따라 모드 전환
+                            if (data.mode === 'document') {
+                                // If docMode is set by intent, it means we are generating NEW content, not editing existing.
+                                state.docMode = true; 
+                                hasDocumentModeChanged = true;
+                                console.log('[Auto Mode] Switched to Document Mode');
+                            } else if (data.mode === 'chat') {
+                                state.docMode = false;
+                                hasDocumentModeChanged = true;
+                                console.log('[Auto Mode] Switched to Chat Mode');
+                            }
+                            updateUI(); // 모드 변경 반영
                         }
-                        
-                        // 스트리밍 중에는 부분 업데이트만 수행
-                        requestAnimationFrame(updateUI);
-                    } 
-                    else if (data.type === 'image_keyword') {
-                        state.generatedImageKeyword = data.keyword;
-                        console.log('Image Generation Triggered:', data.keyword);
-                        // 이미지 생성 로직 호출 등...
-                    } else if (data.type === 'error') {
-                        console.error('Stream Error:', data.message);
-                        state.streamingBuffer += `\n\n[Error: ${data.message}]`;
-                        requestAnimationFrame(updateUI);
+                        else if (data.chunk || (data.type === 'token' && data.content)) {
+                            const content = data.chunk || data.content;
+                            
+                            // 모드에 따라 데이터 저장 위치 분기
+                            if (state.docMode && !state.templateHtml) { // If docMode and no existing template (generating new doc)
+                                state.document.content += content;
+                            } else { // Chat mode or editing a template via chat messages
+                                state.streamingBuffer += content;
+                            }
+                            
+                            requestAnimationFrame(updateUI); // Only chat part needs typewriter, docContent will be full replacement
+                        } 
+                        else if (data.type === 'image_keyword') {
+                            state.generatedImageKeyword = data.keyword;
+                            console.log('Image Generation Triggered:', data.keyword);
+                        } else if (data.type === 'error') {
+                            console.error('Stream Error:', data.message);
+                            state.streamingBuffer += `\n\n[Error: ${data.message}]`;
+                            requestAnimationFrame(updateUI);
+                        }
                     }
                 }
             }
 
             // 3. 완료 처리
-            if (!state.docMode && state.streamingBuffer) {
+            if (endpoint === API_ENDPOINTS.EDIT_HTML) {
+                if (els.docContent) {
+                    els.docContent.innerHTML = state.templateHtml; // Final update to editor
+                    renderMath(els.docContent);
+                }
+                state.chatHistory.push({ role: 'ai', text: `문서가 업데이트되었습니다.` }); // Add completion message to chat
+            } else if (state.docMode && !state.templateHtml) { // Original doc generation mode
+                if (state.document.content) {
+                    const parsed = _parseGeneratedContent(state.document.content); // Helper function from original logic
+                    state.document.title = parsed.title;
+                    state.document.content = parsed.body;
+                    state.imagesNeeded = parsed.images_needed;
+                    
+                    els.docTitle.textContent = state.document.title;
+                    els.docContent.innerHTML = parseMarkdown(state.document.content);
+                    renderMath(els.docContent);
+                    state.chatHistory.push({ role: 'ai', text: `새로운 문서가 생성되었습니다.` });
+                }
+            } else if (state.streamingBuffer) { // Original chat mode
                 state.chatHistory.push({ role: 'ai', text: state.streamingBuffer });
                 state.streamingBuffer = '';
             }
@@ -431,44 +479,81 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error(error);
             
-            // Check for Quota Exceeded error
             const isQuotaError = error.message.includes('Quota Exceeded') || error.message.includes('한도 초과');
             
-            // Show toast only if it's NOT a quota error (per user request)
             if (!isQuotaError) {
                 showToast('생성 중 오류 발생: ' + error.message, 'error');
             }
 
-            // Styled error message (Red text)
             const errorHtml = `<div style="color: #EF4444; font-weight: 600; font-size: 0.9rem; padding: 8px 10px; background: rgba(254, 226, 226, 0.5); border: 1px solid #FECACA; border-radius: 8px; margin-top: 8px;">
                 <i class="bi bi-exclamation-triangle-fill" style="margin-right: 6px;"></i>
                 ${error.message}
             </div>`;
 
-            if (state.docMode) {
+            // If we were in HTML edit mode, try to append error to chat
+            if (isHtmlEditRequest) {
+                state.chatHistory.push({ role: 'ai', text: `HTML 편집 중 오류 발생: ${error.message}` });
+            } else if (state.docMode && !state.templateHtml) { // Original doc generation
                 state.document.content += `\n\n${errorHtml}`;
-            } else {
+            } else { // Original chat mode
                 state.chatHistory.push({ role: 'ai', text: errorHtml });
             }
         } finally {
             state.isGenerating = false;
             setLoadingState(false);
             
-            // Clear any lingering typing timeouts
             if (state.chatTypingTimeoutId) clearTimeout(state.chatTypingTimeoutId);
             state.chatTypingTimeoutId = null;
             if (state.docTypingTimeoutId) clearTimeout(state.docTypingTimeoutId);
             state.docTypingTimeoutId = null;
 
-            updateUI();
+            updateUI(); // Final UI update
             
-            // 문서 모드라면 이미지 로드 시도
-            if (state.docMode) resolveImages();
+            // If we generated a new document, resolve images.
+            // For HTML editing, images would already be in the HTML.
+            if (state.docMode && !state.templateHtml) resolveImages();
             
-            // Save chat history
             await saveChatSession();
         }
     };
+
+    // Placeholder for _parseGeneratedContent from previous docgen logic
+    function _parseGeneratedContent(content) {
+        const gen_img_pattern = /.*\[gen_img\].*?(.*?).*\[\/gen_img\].*/g;
+        const image_keywords = [];
+        let match;
+        while ((match = gen_img_pattern.exec(content)) !== null) {
+            image_keywords.push(match[1]);
+        }
+        
+        let title = '';
+        let body = content;
+
+        const lines = content.split('\n');
+        for (const line of lines) {
+            const stripped = line.trim();
+            const title_match = stripped.match(/^(?:.*제목\s*:\s*)(.*)/);
+            if (title_match) {
+                title = title_match[1].replace(/(\*\*|__)/g, '');
+                body = content.substring(content.indexOf(line) + line.length).trim();
+                break;
+            }
+        }
+
+        if (!title && lines.length > 0) {
+            title = lines[0].replace(/#+\s*/g, '').trim().substring(0, 50);
+        }
+        if (!body) {
+            body = content;
+        }
+
+        return {
+            title: title || '새 문서',
+            body: body,
+            images_needed: image_keywords,
+            tables_needed: [] // Not implemented for simple markdown
+        };
+    }
 
     // ============================================================
     // 2.5. Download Logic
@@ -611,22 +696,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.success) {
-                // 상태 업데이트
-                state.template = {
-                    name: data.template_name,
-                    text: data.template_text,
-                    id: data.template_id
-                };
+                // NEW: Use template_html directly
+                state.templateHtml = data.template_html;
+                state.templateName = data.template_name;
+                state.templateFilePath = data.template_file;
                 
+                // Update docContent to show the HTML
+                if (els.docContent) {
+                    els.docContent.innerHTML = state.templateHtml;
+                    renderMath(els.docContent);
+                }
+                if (els.docTitle) {
+                    els.docTitle.textContent = data.template_name;
+                }
+
                 // UI 업데이트
                 updateFileBadge(true, data.template_name);
-                // showToast(`'${data.template_name}' 업로드 완료!`, 'success'); // 사용자 요청에 따라 제거
                 
                 // 분석 완료 메시지 없이 바로 숨김 (요청 사항 반영)
                 updateAnalysisBadge(false); 
                 
                 // 메뉴 닫기
                 if (els.attachMenu) els.attachMenu.classList.remove('open');
+
+                // Add message to chat stream
+                state.chatHistory.push({ role: 'ai', text: `"${data.template_name}" 템플릿을 불러왔습니다. 이제 문서에 대한 변경을 요청할 수 있습니다.` });
+                updateUI();
             } else {
                 throw new Error(data.error || '업로드 실패');
             }
@@ -641,7 +736,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const clearFileSelection = () => {
-        state.template = null;
+        // Clear template-related state
+        state.templateHtml = '';
+        state.templateName = '';
+        state.templateFilePath = '';
+        state.template = null; // Also clear old template state
+
+        if (els.docContent) els.docContent.innerHTML = '';
+        if (els.docTitle) els.docTitle.textContent = '문서 제목';
+
         updateFileBadge(false);
         const fileInput = document.getElementById('fileInput');
         if (fileInput) fileInput.value = ''; // Reset input
