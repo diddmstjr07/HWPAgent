@@ -197,7 +197,10 @@
         /* Doc Viewer & Paper */
         .doc-viewer { width: 100%; max-width: 850px; padding: 2rem; display: none; flex-direction: column; }
         
-        .message-row { display: flex; gap: 20px; margin-bottom: 40px; animation: fade-in-up 0.4s ease; width: 100%; }
+        .message-row { 
+            display: flex; gap: 20px; margin-bottom: 40px; animation: fade-in-up 0.4s ease; width: 100%;
+            max-width: 850px; margin-left: auto; margin-right: auto;
+        }
         .role-avatar {
             width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
             display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 600;
@@ -419,7 +422,6 @@
         body.canvas-open { overflow: hidden; }
         body.canvas-open .scroll-container {
             padding-right: calc(var(--canvas-panel-width) + 32px);
-            /* align-items: flex-start; */
         }
         body.canvas-open .input-region {
             right: calc(var(--canvas-panel-width) + 32px);
