@@ -30,22 +30,23 @@
             background-color: var(--bg-deep);
             color: var(--text-main);
             font-family: 'Inter', 'Noto Sans KR', sans-serif;
-            height: 100vh;
+            min-height: 100dvh; /* Allow scrolling if content is tall */
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto; /* Enable vertical scroll */
             position: relative;
         }
 
         /* Ambient Background Effect */
         body::before {
-            content: ''; position: absolute; top: -10%; right: -5%; width: 600px; height: 600px;
+            content: ''; position: fixed; top: -10%; right: -5%; width: 600px; height: 600px;
             background: radial-gradient(circle, rgba(203, 213, 225, 0.2) 0%, transparent 70%);
             pointer-events: none; z-index: 0;
         }
         body::after {
-            content: ''; position: absolute; bottom: -10%; left: -5%; width: 500px; height: 500px;
+            content: ''; position: fixed; bottom: -10%; left: -5%; width: 500px; height: 500px;
             background: radial-gradient(circle, rgba(226, 232, 240, 0.25) 0%, transparent 70%);
             pointer-events: none; z-index: 0;
         }
@@ -56,6 +57,7 @@
             width: 100%;
             max-width: 420px;
             padding: 20px;
+            margin: auto; /* Center vertically if flex container allows */
         }
 
         .brand-logo {
@@ -244,8 +246,15 @@
         }
 
         @media (max-width: 480px) {
-            .login-container { padding: 16px; }
-            .login-card { padding: 32px 24px; }
+            body { align-items: flex-start; padding-top: 60px; } /* Start from top on mobile to avoid cut-off */
+            .login-container { padding: 16px; max-width: 100%; }
+            .login-card { padding: 32px 20px; border-radius: 20px; }
+            .brand-logo { width: 56px; height: 56px; font-size: 1.5rem; margin-bottom: 20px; }
+            .login-title { font-size: 1.4rem; }
+            .login-desc { font-size: 0.9rem; margin-bottom: 24px; }
+            .input-field { padding: 12px 14px; }
+            .btn-primary { padding: 14px; }
+            .home-link { top: 16px; left: 16px; padding: 6px 10px; font-size: 0.85rem; }
         }
     </style>
 </head>
