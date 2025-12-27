@@ -19,7 +19,8 @@ from modules.pdf_handler import PDFHandler
 from modules.format_adjuster import FormatAdjuster
 from modules.image_searcher import ImageSearcher
 from modules.riroschool_crawler import RiroSchoolCrawler
-from modules.template_parser import extract_template_text, SUPPORTED_TEMPLATE_EXTENSIONS
+from modules.template_parser import extract_template_text, extract_template_html, SUPPORTED_TEMPLATE_EXTENSIONS
+from modules.preset_templates import DOCUMENT_PRESETS
 from urllib.parse import urlparse, parse_qs
 import fitz  # PyMuPDF
 import time
@@ -47,6 +48,12 @@ def load_user(user_id):
 
 BLOCKED_IPS = {"61.52.38.120"}
 
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 
 def _get_client_ip() -> str:
     forwarded = request.headers.get("X-Forwarded-For", "")
@@ -66,9 +73,13 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 TEMPLATE_DIR = OUTPUT_DIR / "templates"
 FONT_DIR = OUTPUT_DIR / "fonts"
 IMAGE_DIR = OUTPUT_DIR / "images"
+TEMPLATE_HTML_DIR = OUTPUT_DIR / "templates_html"
+TEMPLATE_LIBRARY_DIR = Path("template_library")
 TEMPLATE_DIR.mkdir(exist_ok=True)
 FONT_DIR.mkdir(exist_ok=True)
 IMAGE_DIR.mkdir(exist_ok=True)
+TEMPLATE_HTML_DIR.mkdir(exist_ok=True)
+TEMPLATE_LIBRARY_DIR.mkdir(exist_ok=True)
 IMAGE_CACHE_DIR = IMAGE_DIR / "cache"
 IMAGE_CACHE_DIR.mkdir(exist_ok=True)
 
@@ -575,6 +586,67 @@ def whoami():
         return jsonify({'authenticated': True, 'user': current_user.to_dict()})
     return jsonify({'authenticated': False})
 
+
+# ============================================
+# 소셜 로그인 API (OAuth 2.0 / Mock)
+# ============================================
+
+@app.route('/api/auth/social/<provider>')
+def social_login(provider):
+    """소셜 로그인 시작 (리다이렉트)"""
+    provider = provider.lower()
+    
+    # 환경변수에서 Client ID 조회
+    client_id = os.getenv(f"{provider.upper()}_CLIENT_ID")
+    redirect_uri = url_for('social_callback', provider=provider, _external=True)
+    
+    # 키가 없으면 데모 로그인 처리 (프로토타입용)
+    if not client_id:
+        print(f"[AUTH] {provider.upper()}_CLIENT_ID not set. Using DEMO/MOCK login.")
+        # 가짜 유저로 즉시 로그인 처리
+        mock_id = f"{provider}_{int(time.time())}"
+        user = db.create_or_update_user(
+            mock_id,
+            f"demo_{provider}@example.com",
+            f"{provider.capitalize()} User",
+            None, # picture
+            last_login=datetime.now().isoformat()
+        )
+        login_user(user)
+        # 홈으로 리다이렉트
+        return redirect(url_for('index'))
+
+    # 실제 OAuth 리다이렉트 URL 생성
+    if provider == 'google':
+        auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
+        scope = "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+        return redirect(f"{auth_url}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope={scope}")
+    
+    elif provider == 'kakao':
+        auth_url = "https://kauth.kakao.com/oauth/authorize"
+        return redirect(f"{auth_url}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code")
+    
+    elif provider == 'naver':
+        auth_url = "https://nid.naver.com/oauth2.0/authorize"
+        state = os.urandom(8).hex()
+        return redirect(f"{auth_url}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&state={state}")
+    
+    return "Unsupported provider", 400
+
+
+@app.route('/api/auth/social/<provider>/callback')
+def social_callback(provider):
+    """소셜 로그인 콜백 (실제 구현 시 토큰 교환 로직 필요)"""
+    code = request.args.get('code')
+    if not code:
+        return "Login failed: No code received", 400
+    
+    # 실제 서비스에서는 여기서 code -> access_token -> user_info 요청 필요
+    # 현재는 키가 있을 때 리다이렉트만 시키고, 실제 로직은 생략 (credentials 필요)
+    
+    return f"Login with {provider} callback received. Code: {code[:10]}... (Server logic required)"
+
+
 # 전역 에이전트
 agent = HWPAgent(output_dir="output")
 docx_handler = DOCXHandler(output_dir="output")
@@ -932,7 +1004,7 @@ def upload_template():
         if suffix not in SUPPORTED_TEMPLATE_EXTENSIONS:
             return jsonify({
                 'success': False,
-                'error': '지원하지 않는 파일 형식입니다. (.docx, .hwp, .pdf, .txt, .md)'
+                'error': '지원하지 않는 파일 형식입니다. (.docx, .hwp, .hwpx, .pdf, .txt, .md)'
             }), 400
 
         safe_stem = secure_filename(Path(original_name).stem) or 'template'
@@ -944,6 +1016,7 @@ def upload_template():
 
         try:
             template_text = extract_template_text(save_path)
+            template_html = extract_template_html(save_path, template_id=save_path.stem)
         except ValueError as exc:
             if save_path.exists():
                 save_path.unlink()
@@ -954,11 +1027,107 @@ def upload_template():
             'template_name': filename,
             'template_id': save_path.stem,
             'template_text': template_text,
+            'template_html': template_html,
             'template_file': str(save_path)
         })
     except Exception as exc:
         print(f"[TEMPLATE] Upload failed: {exc}")
         return jsonify({'success': False, 'error': '템플릿 업로드 중 오류가 발생했습니다.'}), 500
+
+
+@app.route('/api/template/asset/<template_id>/<path:asset_path>')
+def serve_template_asset(template_id: str, asset_path: str):
+    """HWP HTML 변환 시 생성된 템플릿 자산 제공"""
+    base_dir = TEMPLATE_HTML_DIR / template_id
+    try:
+        base_resolved = base_dir.resolve()
+        asset_resolved = (base_resolved / asset_path).resolve()
+        asset_resolved.relative_to(base_resolved)
+    except Exception:
+        return abort(404)
+
+    if not asset_resolved.exists():
+        return abort(404)
+
+    return send_from_directory(str(base_resolved), asset_path)
+
+
+@app.route('/api/templates', methods=['GET'])
+def list_templates():
+    """내장 및 로컬 템플릿 목록 제공"""
+    templates = []
+
+    for key in sorted(DOCUMENT_PRESETS.keys()):
+        templates.append({
+            'id': key,
+            'name': key.replace('_', ' '),
+            'type': 'preset'
+        })
+
+    if TEMPLATE_LIBRARY_DIR.exists():
+        for path in sorted(TEMPLATE_LIBRARY_DIR.rglob('*')):
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in SUPPORTED_TEMPLATE_EXTENSIONS:
+                continue
+            rel_path = path.relative_to(TEMPLATE_LIBRARY_DIR).as_posix()
+            templates.append({
+                'id': rel_path,
+                'name': path.stem,
+                'type': 'file',
+                'extension': path.suffix.lower()
+            })
+
+    return jsonify({'success': True, 'templates': templates})
+
+
+@app.route('/api/template/select', methods=['POST'])
+def select_template():
+    """템플릿 선택 후 HTML/텍스트 반환"""
+    data = request.json or {}
+    template_id = (data.get('template_id') or '').strip()
+    template_type = (data.get('template_type') or '').strip()
+
+    if not template_id or template_type not in {'preset', 'file'}:
+        return jsonify({'success': False, 'error': '템플릿 정보를 확인해주세요.'}), 400
+
+    if template_type == 'preset':
+        if template_id not in DOCUMENT_PRESETS:
+            return jsonify({'success': False, 'error': '템플릿을 찾을 수 없습니다.'}), 404
+        template_text = DOCUMENT_PRESETS[template_id]
+        return jsonify({
+            'success': True,
+            'template_name': template_id.replace('_', ' '),
+            'template_text': template_text,
+            'template_markdown': template_text,
+            'template_type': 'preset'
+        })
+
+    candidate = (TEMPLATE_LIBRARY_DIR / template_id).resolve()
+    try:
+        candidate.relative_to(TEMPLATE_LIBRARY_DIR.resolve())
+    except Exception:
+        return jsonify({'success': False, 'error': '잘못된 템플릿 경로입니다.'}), 400
+
+    if not candidate.exists():
+        return jsonify({'success': False, 'error': '템플릿 파일을 찾을 수 없습니다.'}), 404
+
+    safe_id = secure_filename(template_id.replace('/', '_')) or candidate.stem
+    try:
+        template_text = extract_template_text(candidate)
+        template_html = extract_template_html(candidate, template_id=safe_id)
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+
+    return jsonify({
+        'success': True,
+        'template_name': candidate.name,
+        'template_text': template_text,
+        'template_html': template_html,
+        'template_id': safe_id,
+        'template_file': str(candidate),
+        'template_type': 'file'
+    })
 
 
 @app.route('/api/font/upload', methods=['POST'])
@@ -1273,6 +1442,76 @@ def chat_stream():
         print(f"[ERROR] chat_stream failed: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/edit-html', methods=['POST'])
+def edit_html():
+    """HTML 템플릿 편집 (스트리밍)"""
+    try:
+        data = request.json or {}
+        html = (data.get('html') or '').strip()
+        instruction = (data.get('instruction') or '').strip()
+
+        if not html or not instruction:
+            return jsonify({'error': 'HTML과 수정 요청을 입력해주세요.'}), 400
+
+        def generate():
+            try:
+                stream = agent.content_generator.edit_html_stream(html, instruction)
+                for chunk in stream:
+                    if chunk:
+                        yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+            except Exception as e:
+                print(f"[HTML EDIT ERROR] {str(e)}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] edit_html failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/edit-fragment', methods=['POST'])
+def edit_fragment():
+    """HTML fragment 편집 (스트리밍)"""
+    try:
+        data = request.json or {}
+        fragment = (data.get('fragment') or '').strip()
+        instruction = (data.get('instruction') or '').strip()
+
+        if not fragment or not instruction:
+            return jsonify({'error': 'Fragment와 수정 요청을 입력해주세요.'}), 400
+
+        def generate():
+            try:
+                stream = agent.content_generator.edit_html_fragment_stream(fragment, instruction)
+                for chunk in stream:
+                    if chunk:
+                        yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+            except Exception as e:
+                print(f"[FRAGMENT EDIT ERROR] {str(e)}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] edit_fragment failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/save', methods=['POST'])
 def save_document():
     """문서 저장 (이미지 자동 검색 및 삽입 포함)"""
@@ -1280,11 +1519,13 @@ def save_document():
         data = request.json
         title = data.get('title', '문서')
         content = data.get('content', '')
+        content_type = (data.get('content_type') or 'text').lower()
         format_type = data.get('format', 'docx')
         style_config = normalize_style_config(data.get('style'))
         template_file = (data.get('template_file') or '').strip()
         images_needed = data.get('images_needed', [])  # AI가 제안한 이미지 키워드들
         image_urls = data.get('image_urls', [])  # 프론트엔드에서 검색한 이미지 URL
+        is_html_content = content_type == 'html'
         
         # 디버깅: 받은 콘텐츠 길이 로그
         print(f"[DEBUG] Save request - Title: {title}")
@@ -1313,7 +1554,9 @@ def save_document():
         # 이미지 자동 다운로드 ([gen_img] 태그 기반)
         downloaded_images = []
         treat_images_as_text = style_config.get('treat_images_as_text', False)
-        if treat_images_as_text:
+        if is_html_content:
+            print("[IMAGE] HTML content - skipping image downloads.")
+        elif treat_images_as_text:
             print("[IMAGE] Textual placeholders enabled - skipping downloads.")
         elif images_needed and len(images_needed) > 0:
             print(f"[IMAGE] Found {len(images_needed)} image tags")
@@ -1395,7 +1638,39 @@ def save_document():
                 # 이미지 다운로드 실패해도 문서는 생성
         
         # 파일 저장 (이미지 포함)
-        if format_type == 'pdf':
+        if is_html_content:
+            temp_filename = f"{title}_temp.docx"
+            if format_type == 'pdf':
+                temp_docx = docx_handler.create_document_from_html(
+                    html_content=content,
+                    title=title,
+                    style_config=style_config,
+                    filename=temp_filename
+                )
+                file_path = pdf_handler.convert_docx_to_pdf(
+                    temp_docx,
+                    output_filename=f"{title}.pdf",
+                    style_config=style_config
+                )
+            elif format_type == 'hwp':
+                temp_docx = docx_handler.create_document_from_html(
+                    html_content=content,
+                    title=title,
+                    style_config=style_config,
+                    filename=temp_filename
+                )
+                hwp_path = Path('output') / f"{title}.hwp"
+                shutil.copy2(temp_docx, hwp_path)
+                Path(temp_docx).unlink(missing_ok=True)
+                file_path = str(hwp_path)
+            else:
+                file_path = docx_handler.create_document_from_html(
+                    html_content=content,
+                    title=title,
+                    style_config=style_config,
+                    filename=f"{title}.docx"
+                )
+        elif format_type == 'pdf':
             # PDF 생성: DOCX 먼저 만들고 PDF로 변환
             print(f"[PDF] Creating DOCX first...")
             temp_docx = docx_handler.create_document(
@@ -1753,6 +2028,103 @@ def get_user_id():
     })
 
 # ============================================
+# 채팅 세션 API (IP 기반)
+# ============================================
+
+@app.route('/api/chat/sessions', methods=['GET'])
+def list_chat_sessions():
+    try:
+        user_id = get_user_id_from_request()
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+
+        sessions = db.get_chat_sessions(user_id)
+        return jsonify({
+            'success': True,
+            'sessions': [session.to_dict(include_messages=False) for session in sessions]
+        })
+    except Exception as exc:
+        print(f"[CHAT] List error: {exc}")
+        return jsonify({'success': False, 'error': '대화 목록을 불러오지 못했습니다.'}), 500
+
+
+@app.route('/api/chat/sessions', methods=['POST'])
+def create_chat_session():
+    try:
+        data = request.get_json(silent=True) or {}
+        title = (data.get('title') or '새로운 대화').strip() or '새로운 대화'
+        messages = data.get('messages') or []
+        if not isinstance(messages, list):
+            return jsonify({'success': False, 'error': 'messages 형식이 올바르지 않습니다.'}), 400
+
+        user_id = get_user_id_from_request()
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+
+        session = db.create_chat_session(user_id, title, messages)
+        return jsonify({'success': True, 'session': session.to_dict()}), 201
+    except Exception as exc:
+        print(f"[CHAT] Create error: {exc}")
+        return jsonify({'success': False, 'error': '대화 저장에 실패했습니다.'}), 500
+
+
+@app.route('/api/chat/sessions/<session_id>', methods=['GET'])
+def get_chat_session(session_id):
+    try:
+        user_id = get_user_id_from_request()
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+
+        session = db.get_chat_session(session_id, user_id)
+        if not session:
+            return jsonify({'success': False, 'error': '대화를 찾을 수 없습니다.'}), 404
+
+        return jsonify({'success': True, 'session': session.to_dict()})
+    except Exception as exc:
+        print(f"[CHAT] Get error: {exc}")
+        return jsonify({'success': False, 'error': '대화를 불러오지 못했습니다.'}), 500
+
+
+@app.route('/api/chat/sessions/<session_id>', methods=['PUT'])
+def update_chat_session(session_id):
+    try:
+        data = request.get_json(silent=True) or {}
+        title = data.get('title')
+        messages = data.get('messages')
+
+        if messages is not None and not isinstance(messages, list):
+            return jsonify({'success': False, 'error': 'messages 형식이 올바르지 않습니다.'}), 400
+
+        user_id = get_user_id_from_request()
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+
+        session = db.update_chat_session(session_id, user_id, title=title, messages=messages)
+        if not session:
+            return jsonify({'success': False, 'error': '대화를 찾을 수 없습니다.'}), 404
+
+        return jsonify({'success': True, 'session': session.to_dict()})
+    except Exception as exc:
+        print(f"[CHAT] Update error: {exc}")
+        return jsonify({'success': False, 'error': '대화 저장에 실패했습니다.'}), 500
+
+
+@app.route('/api/chat/sessions/<session_id>', methods=['DELETE'])
+def delete_chat_session(session_id):
+    try:
+        user_id = get_user_id_from_request()
+        if user_id in riro_sessions:
+            user_id = riro_sessions[user_id]['riro_id']
+
+        deleted = db.delete_chat_session(session_id, user_id)
+        if deleted:
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': '대화를 찾을 수 없거나 삭제 권한이 없습니다.'}), 404
+    except Exception as exc:
+        print(f"[CHAT] Delete error: {exc}")
+        return jsonify({'success': False, 'error': '대화를 삭제하지 못했습니다.'}), 500
+
+# ============================================
 # 문서 히스토리 API (IP 기반)
 # ============================================
 
@@ -1845,4 +2217,6 @@ if __name__ == '__main__':
 ║                                                            ║
 ╰════════════════════════════════════════════════════════════╯
     """)
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    debug_mode = _env_flag("HWP_AGENT_DEBUG", True)
+    use_reloader = _env_flag("HWP_AGENT_RELOAD", False)
+    app.run(debug=debug_mode, host='0.0.0.0', port=8080, use_reloader=use_reloader)

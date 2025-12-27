@@ -11,7 +11,10 @@ document.addEventListener('DOMContentLoaded', () => {
         AUTO: '/api/interact',
         IMAGE: '/api/search-images',
         TEMPLATE: '/api/template/upload',
-        EDIT_HTML: '/api/edit-html' // NEW: for HTML editing
+        EDIT_HTML: '/api/edit-html', // NEW: for HTML editing
+        EDIT_FRAGMENT: '/api/edit-fragment',
+        TEMPLATES: '/api/templates',
+        TEMPLATE_SELECT: '/api/template/select'
     };
 
     // DOM 요소 캐싱 (에러 방지를 위해 Optional Chaining 사용)
@@ -21,9 +24,11 @@ document.addEventListener('DOMContentLoaded', () => {
         resultView: document.getElementById('resultView'),
         chatStream: document.getElementById('chatStream'),
         docPaper: document.getElementById('paperArea'),
+        docFrame: document.getElementById('docFrame'),
         docContent: document.getElementById('docContent'),
         docTitle: document.getElementById('docTitle'),
         scrollContainer: document.getElementById('scrollContainer'),
+        sectionFillPanel: document.getElementById('sectionFillPanel'),
 
         // Inputs & Buttons
         userRequest: document.getElementById('userRequest'),
@@ -32,6 +37,24 @@ document.addEventListener('DOMContentLoaded', () => {
         spinnerSend: document.getElementById('spinnerSend'),
         btnAttach: document.getElementById('btnAttach'),
         attachMenu: document.getElementById('attachMenu'),
+        editorToolbar: document.getElementById('editorToolbar'),
+        templateNameBadge: document.getElementById('templateNameBadge'),
+        editModeBadge: document.getElementById('editModeBadge'),
+        fillModeBadge: document.getElementById('fillModeBadge'),
+        selectionPreview: document.getElementById('selectionPreview'),
+        clearSelectionBtn: document.getElementById('clearSelectionBtn'),
+        editTargetPanel: document.getElementById('editTargetPanel'),
+        editTargetSelect: document.getElementById('editTargetSelect'),
+        editTargetInput: document.getElementById('editTargetInput'),
+        editTargetApply: document.getElementById('editTargetApply'),
+        inlineEditBubble: document.getElementById('inlineEditBubble'),
+        inlineEditInput: document.getElementById('inlineEditInput'),
+        inlineEditSubmit: document.getElementById('inlineEditSubmit'),
+        inlineEditClose: document.getElementById('inlineEditClose'),
+        editCover: document.getElementById('editCover'),
+        canvasOverlay: document.getElementById('canvasOverlay'),
+        canvasBody: document.getElementById('canvasBody'),
+        btnCanvasClose: document.getElementById('btnCanvasClose'),
         
         // Toggles & Sidebar
         btnDocMode: document.querySelector('.toggle-btn'), // 헤더의 문서모드 토글
@@ -45,6 +68,11 @@ document.addEventListener('DOMContentLoaded', () => {
         modalAuth: document.getElementById('modalAuth'),
         modalLogin: document.getElementById('modalLogin'),
         modalCalendar: document.getElementById('modalCalendar'),
+        modalTemplate: document.getElementById('modalTemplate'),
+        templateList: document.getElementById('templateList'),
+        templateSearch: document.getElementById('templateSearch'),
+        templateEmpty: document.getElementById('templateEmpty'),
+        btnCloseTemplate: document.getElementById('closeTemplateModal'),
         btnOpenAuth: document.getElementById('btnOpenAuth'),
         btnAuthToggle: document.getElementById('btnAuthToggle'),
         
@@ -82,8 +110,30 @@ document.addEventListener('DOMContentLoaded', () => {
         templateHtml: '', // NEW: Store the current HTML content of the document
         templateName: '', // NEW: Name of the loaded template
         templateFilePath: '', // NEW: path of the loaded template file
+        templateId: '', // NEW: asset base id for template HTML
         imagesNeeded: [],
         template: null, // OLD: For raw text template, use templateHtml now
+        templateCatalog: [],
+        templateCatalogLoaded: false,
+        templateSource: null,
+        templateMode: null,
+        templateSections: [],
+        templateSectionSignature: '',
+        selectedSnippet: '',
+        selectedBlocks: [],
+        selectedSectionTitle: '',
+        selectedBlock: null,
+        selectedRange: null,
+        editCoverActive: false,
+        editCoverLocked: false,
+        canvasOpen: false,
+        canvasDismissed: false,
+        canvasRestoreParent: null,
+        canvasRestoreNext: null,
+        frameHtml: '',
+        frameDocumentRef: null,
+        frameResizeObserver: null,
+        selectionChangeTimer: null,
         riroEvents: [],
         riroLoggedIn: false,
         user: null,
@@ -128,6 +178,55 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/\n/g, '<br>');
     };
 
+    const safeJsonParse = (text) => {
+        if (!text) return null;
+        try {
+            return JSON.parse(text);
+        } catch {
+            return null;
+        }
+    };
+
+    const parseJsonResponse = async (response) => {
+        const text = await response.text();
+        const data = safeJsonParse(text);
+        if (data) return data;
+        if (!text) return { success: false, error: `HTTP ${response.status}` };
+        return { success: false, error: text };
+    };
+
+    const postFormDataViaXHR = (url, formData) =>
+        new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            xhr.responseType = 'text';
+            xhr.onload = () => {
+                const data = safeJsonParse(xhr.responseText || '');
+                resolve({
+                    ok: xhr.status >= 200 && xhr.status < 300,
+                    status: xhr.status,
+                    data: data || { success: false, error: xhr.responseText || `HTTP ${xhr.status}` }
+                });
+            };
+            xhr.onerror = () => reject(new TypeError('Failed to fetch'));
+            xhr.send(formData);
+        });
+
+    // Safari/모바일에서 fetch FormData 업로드가 실패하는 경우 XHR로 폴백
+    const postFormData = async (url, formData) => {
+        try {
+            const response = await fetch(url, { method: 'POST', body: formData });
+            const data = await parseJsonResponse(response);
+            return { ok: response.ok, status: response.status, data };
+        } catch (err) {
+            const message = String(err && err.message ? err.message : '');
+            if (/Failed to fetch|NetworkError|Load failed/i.test(message)) {
+                return await postFormDataViaXHR(url, formData);
+            }
+            throw err;
+        }
+    };
+
     // 수식 렌더링 (KaTeX)
     const renderMath = (rootElement) => {
         if (!rootElement || !window.renderMathInElement) return;
@@ -142,8 +241,149 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { /* ignore */ }
     };
 
+    const getFrameDocument = () => {
+        if (!els.docFrame) return null;
+        return els.docFrame.contentDocument;
+    };
+
+    const getFrameWindow = () => {
+        if (!els.docFrame) return null;
+        return els.docFrame.contentWindow;
+    };
+
+    const getDocRoot = () => {
+        const doc = getFrameDocument();
+        return doc ? doc.body : null;
+    };
+
+    const getFrameSelection = () => {
+        const win = getFrameWindow();
+        return win ? win.getSelection() : null;
+    };
+
+    const getTemplateBaseHref = () => {
+        if (!state.templateId) return '/';
+        const safeId = encodeURIComponent(state.templateId);
+        return `/api/template/asset/${safeId}/`;
+    };
+
+    const serializeFrameHtml = () => {
+        const doc = getFrameDocument();
+        if (!doc) return state.templateHtml;
+        const styles = Array.from(doc.head.querySelectorAll('style'))
+            .filter((style) => style.id !== 'hwp-editor-overlay')
+            .map((style) => style.outerHTML)
+            .join('\n');
+        return `${styles}${doc.body.innerHTML}`;
+    };
+
+    const syncTemplateHtmlFromFrame = () => {
+        const html = serializeFrameHtml();
+        state.templateHtml = html;
+        state.frameHtml = html;
+    };
+
+    const syncFrameHeight = () => {
+        if (!els.docFrame) return;
+        const doc = getFrameDocument();
+        if (!doc) return;
+        let height = Math.max(
+            doc.documentElement.scrollHeight,
+            doc.body ? doc.body.scrollHeight : 0
+        );
+        if (state.canvasOpen && els.canvasBody) {
+            const canvasHeight = els.canvasBody.clientHeight;
+            if (canvasHeight) height = Math.max(height, canvasHeight);
+        }
+        els.docFrame.style.height = `${height}px`;
+    };
+
+    const attachFrameListeners = () => {
+        const doc = getFrameDocument();
+        if (!doc || state.frameDocumentRef === doc) return;
+        state.frameDocumentRef = doc;
+
+        doc.addEventListener('mouseup', handleDocSelection);
+        doc.addEventListener('keyup', handleDocSelection);
+        doc.addEventListener('scroll', clearSelectedSnippet, { passive: true });
+        doc.addEventListener('mousedown', () => clearSelectedSnippet());
+        doc.addEventListener('selectionchange', () => {
+            if (state.selectionChangeTimer) {
+                clearTimeout(state.selectionChangeTimer);
+            }
+            state.selectionChangeTimer = setTimeout(() => {
+                state.selectionChangeTimer = null;
+                handleDocSelection();
+            }, 80);
+        });
+
+        if (state.frameResizeObserver) {
+            state.frameResizeObserver.disconnect();
+            state.frameResizeObserver = null;
+        }
+        if (window.ResizeObserver && doc.body) {
+            state.frameResizeObserver = new ResizeObserver(() => syncFrameHeight());
+            state.frameResizeObserver.observe(doc.body);
+        }
+
+        Array.from(doc.images || []).forEach((img) => {
+            img.addEventListener('load', syncFrameHeight);
+            img.addEventListener('error', syncFrameHeight);
+        });
+        syncFrameHeight();
+    };
+
+    const createCanvasMessageRow = (msg) => {
+        const div = document.createElement('div');
+        div.className = 'message-row canvas-row';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'role-avatar ai';
+        avatar.innerHTML = '<i class="bi bi-window"></i>';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const name = document.createElement('div');
+        name.className = 'message-name';
+        name.textContent = 'Canvas';
+
+        const card = document.createElement('div');
+        card.className = 'canvas-message-card';
+        card.dataset.action = 'open-canvas';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+
+        const kicker = document.createElement('div');
+        kicker.className = 'canvas-card-kicker';
+        kicker.textContent = 'Canvas Snapshot';
+
+        const title = document.createElement('div');
+        title.className = 'canvas-card-title';
+        title.textContent = msg.title || '문서';
+
+        const summary = document.createElement('div');
+        summary.className = 'canvas-card-summary';
+        summary.textContent = msg.summary || '내용 미리보기 없음';
+
+        const cta = document.createElement('div');
+        cta.className = 'canvas-card-cta';
+        cta.textContent = '클릭하여 Canvas 열기';
+
+        card.append(kicker, title, summary, cta);
+        content.append(name, card);
+        div.append(avatar, content);
+        return div;
+    };
+
     // [New] 채팅 메시지 DOM 생성 헬퍼
-    const createMessageRow = (role, text, isStreaming = false) => {
+    const createMessageRow = (roleOrMsg, text, isStreaming = false) => {
+        const msg = typeof roleOrMsg === 'object' ? roleOrMsg : { role: roleOrMsg, text };
+        if (msg.type === 'canvas') {
+            return createCanvasMessageRow(msg);
+        }
+        const role = msg.role;
+        const bodyText = msg.text || '';
         const isUser = role === 'user';
         const div = document.createElement('div');
         div.className = 'message-row';
@@ -153,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? '<div class="role-avatar user"><i class="bi bi-person"></i></div>' 
             : '<div class="role-avatar ai"><i class="bi bi-stars"></i></div>';
             
-        const contentHtml = isStreaming && !text 
+        const contentHtml = isStreaming && !bodyText 
             ? `<div class="message-content streaming">
                  <div class="message-name">AI Agent</div>
                  <div class="loading-bubble">
@@ -163,47 +403,111 @@ document.addEventListener('DOMContentLoaded', () => {
                </div>`
             : `<div class="message-content">
                  <div class="message-name">${isUser ? 'You' : 'AI Agent'}</div>
-                 <div class="markdown-body">${parseMarkdown(text)}</div>
+                 <div class="markdown-body">${parseMarkdown(bodyText)}</div>
                </div>`;
 
         div.innerHTML = avatarHtml + contentHtml;
         return div;
     };
 
+    const openCanvasOverlay = (force = false) => {
+        if (!els.canvasOverlay || !els.canvasBody || !els.docPaper) return;
+        if (state.canvasOpen) return;
+        if (state.canvasDismissed && !force) return;
+
+        if (!state.canvasRestoreParent) {
+            state.canvasRestoreParent = els.docPaper.parentNode;
+            state.canvasRestoreNext = els.docPaper.nextSibling;
+        }
+
+        els.canvasBody.appendChild(els.docPaper);
+        els.docPaper.style.display = 'block';
+        els.canvasOverlay.classList.remove('hidden');
+        els.canvasOverlay.classList.add('active');
+        document.body.classList.add('canvas-open');
+        state.canvasOpen = true;
+        state.canvasDismissed = false;
+        requestAnimationFrame(() => syncFrameHeight());
+    };
+
+    const closeCanvasOverlay = (dismiss = false) => {
+        if (!els.canvasOverlay || !els.docPaper) return;
+        if (state.canvasOpen) {
+            if (state.canvasRestoreParent) {
+                state.canvasRestoreParent.insertBefore(els.docPaper, state.canvasRestoreNext);
+            }
+            els.canvasOverlay.classList.remove('active');
+            els.canvasOverlay.classList.add('hidden');
+            document.body.classList.remove('canvas-open');
+            state.canvasOpen = false;
+        }
+
+        if (dismiss) {
+            state.canvasDismissed = true;
+            if (els.docPaper) els.docPaper.style.display = 'none';
+            if (els.docFrame) els.docFrame.classList.add('hidden');
+            if (els.docContent) els.docContent.classList.add('hidden');
+        }
+        state.editCoverLocked = false;
+        hideEditCover();
+        clearSelectedSnippet();
+    };
+
     const updateUI = () => {
         try {
             // [View Toggle] 콘텐츠가 있으면 홈 화면 숨기고 결과 화면 표시
-            // docMode now depends on whether a template HTML is loaded
-            state.docMode = !!state.templateHtml;
+            const templateActive = !!state.templateName || !!state.templateFilePath || !!state.templateHtml;
+            if (templateActive) state.docMode = true;
+            if (els.scrollContainer) els.scrollContainer.classList.toggle('template-mode', templateActive);
+            if (els.resultView) els.resultView.classList.toggle('template-mode', templateActive);
+            if (els.docPaper) els.docPaper.classList.toggle('template-mode', templateActive);
+            updateTemplateControls();
 
             const hasContent = state.chatHistory.length > 0 || state.isGenerating || state.docMode;
             if (els.homeView) els.homeView.style.display = hasContent ? 'none' : 'block';
             if (els.resultView) els.resultView.style.display = hasContent ? 'flex' : 'none';
 
             // Document Title Update
-            if (els.docTitle) els.docTitle.textContent = state.templateName || '새 문서';
+            if (els.docTitle) {
+                els.docTitle.textContent = state.templateName || state.document.title || '새 문서';
+            }
 
+            if (templateActive) {
+                openCanvasOverlay();
+            } else {
+                state.canvasDismissed = false;
+                closeCanvasOverlay(false);
+            }
 
+            const hideDoc = templateActive && state.canvasDismissed && !state.canvasOpen;
             if (state.docMode) {
-                // [문서 모드] - #docContent를 실제 HTML 편집기로 사용
                 if (els.chatStream) els.chatStream.style.display = 'flex'; // Chat visible
                 if (els.docPaper) {
-                    els.docPaper.style.display = 'block';
+                    els.docPaper.style.display = hideDoc ? 'none' : 'block';
                     els.docPaper.classList.add('active');
                 }
                 
-                // Set the innerHTML of docContent directly if templateHtml exists
-                if (els.docContent && state.templateHtml && els.docContent.innerHTML !== state.templateHtml) {
-                    els.docContent.innerHTML = state.templateHtml;
-                    renderMath(els.docContent);
-                } else if (els.docContent && !state.templateHtml && !state.isGenerating) {
-                     // Clear content if no template and not generating
-                     els.docContent.innerHTML = '';
+                if (templateActive) {
+                    if (els.docFrame) els.docFrame.classList.toggle('hidden', hideDoc);
+                    if (els.docContent) els.docContent.classList.add('hidden');
+                    if (state.templateHtml && state.templateHtml !== state.frameHtml) {
+                        renderTemplateFrame(state.templateHtml);
+                    }
+                } else {
+                    if (els.docFrame) els.docFrame.classList.add('hidden');
+                    if (els.docContent) {
+                        els.docContent.classList.remove('hidden');
+                        if (!state.isGenerating && !state.document.content) {
+                            // Clear content if no template and not generating
+                            els.docContent.innerHTML = '';
+                        }
+                    }
                 }
 
             } else { // No template HTML loaded, default chat behavior
                 if (els.docPaper) els.docPaper.style.display = 'none';
                 if (els.chatStream) els.chatStream.style.display = 'flex';
+                if (els.docFrame) els.docFrame.classList.add('hidden');
             }
             
             // Handle chat stream updates (always visible in the original UI)
@@ -215,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             for (let i = renderedRows.length; i < historyCount; i++) {
                 const msg = state.chatHistory[i];
-                const row = createMessageRow(msg.role, msg.text);
+                const row = createMessageRow(msg);
                 const streamingRow = container.querySelector('.streaming-row');
                 if (streamingRow) {
                     container.insertBefore(row, streamingRow);
@@ -300,6 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleGenerate = async () => {
         const prompt = els.userRequest.value.trim();
         if (!prompt || state.isGenerating) return;
+        hideInlineEditBubble();
 
         // 1. 초기화 및 UI 준비
         state.isGenerating = true;
@@ -324,39 +629,55 @@ document.addEventListener('DOMContentLoaded', () => {
         els.userRequest.style.height = 'auto'; // 높이 리셋
         setLoadingState(true); // 버튼 로딩
         updateUI(); // 로딩 UI 표시 (이 시점에서는 아직 모드 변경/문서 초기화 안 함) 
-        
-        scrollToBottom(); // Always scroll down after user input
+
+        const templateActive = !!state.templateName || !!state.templateFilePath || !!state.templateHtml;
+        const hasEditSelection = !!state.selectedSnippet
+            || !!state.selectedSectionTitle
+            || !!state.selectedBlock
+            || (state.selectedBlocks && state.selectedBlocks.length > 0);
+        if (!(templateActive && hasEditSelection)) {
+            scrollToBottom(); // Always scroll down after user input
+        }
+        if (templateActive) {
+            try {
+                if (!state.templateMode) {
+                    state.templateMode = 'edit';
+                }
+                if (state.templateMode === 'fill') {
+                    await runTemplateFillSequence(prompt);
+                } else {
+                    await runTemplateEdit(prompt);
+                }
+            } catch (error) {
+                console.error(error);
+                showToast(`생성 중 오류 발생: ${error.message}`, 'error');
+                state.chatHistory.push({ role: 'ai', text: `템플릿 처리 중 오류 발생: ${error.message}` });
+            } finally {
+                state.isGenerating = false;
+                setLoadingState(false);
+
+                if (state.chatTypingTimeoutId) clearTimeout(state.chatTypingTimeoutId);
+                state.chatTypingTimeoutId = null;
+                if (state.docTypingTimeoutId) clearTimeout(state.docTypingTimeoutId);
+                state.docTypingTimeoutId = null;
+
+                updateUI();
+                await saveChatSession();
+            }
+            return;
+        }
 
         try {
             let endpoint = API_ENDPOINTS.AUTO; // Default to auto intent classification
             
-            // Determine if it's an HTML editing request
-            let isHtmlEditRequest = false;
-            // A simple heuristic for now: if a template is loaded, assume intent to edit it.
-            // A more robust solution would involve an LLM-based intent classification.
-            if (state.templateHtml) {
-                 isHtmlEditRequest = true; // Assume edit if template is active
-                 endpoint = API_ENDPOINTS.EDIT_HTML;
-            }
-
             if (DEBUG_MODE) console.log(`[Request] ${endpoint} -> ${prompt}`);
 
-            // For auto or chat, previous history is needed. For HTML edit, only current instruction + HTML.
-            let requestBody;
-            if (isHtmlEditRequest) {
-                requestBody = JSON.stringify({
-                    html: els.docContent.innerHTML, // Send current editable HTML
-                    instruction: prompt
-                });
-            } else {
-                // Original auto/chat mode logic
-                const previousHistory = state.chatHistory.slice(0, -1);
-                requestBody = JSON.stringify({
-                    request: prompt,
-                    template: state.templateHtml || '', // Pass templateHtml if available
-                    history: previousHistory
-                });
-            }
+            const previousHistory = state.chatHistory.slice(0, -1);
+            const requestBody = JSON.stringify({
+                request: prompt,
+                template: state.templateHtml || '',
+                history: previousHistory
+            });
 
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -401,65 +722,45 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     // Handle /api/edit-html responses
-                    if (endpoint === API_ENDPOINTS.EDIT_HTML) {
-                        if (data.chunk) {
-                            state.templateHtml += data.chunk; // Accumulate the HTML chunks
+                    if (data.type === 'mode') {
+                        // 서버의 의도 파악 결과에 따라 모드 전환
+                        if (data.mode === 'document') {
+                            // If docMode is set by intent, it means we are generating NEW content, not editing existing.
+                            state.docMode = true; 
+                            hasDocumentModeChanged = true;
+                            console.log('[Auto Mode] Switched to Document Mode');
+                        } else if (data.mode === 'chat') {
+                            state.docMode = false;
+                            hasDocumentModeChanged = true;
+                            console.log('[Auto Mode] Switched to Chat Mode');
                         }
-                        // Update the editor immediately with accumulated HTML.
-                        // This allows a visual update as the AI "types" the new HTML.
-                        if (els.docContent) {
-                            els.docContent.innerHTML = state.templateHtml;
-                        }
-                        requestAnimationFrame(updateUI); // Trigger UI update for the chat stream
+                        updateUI(); // 모드 변경 반영
                     }
-                    // Handle /api/interact responses (original logic)
-                    else {
-                        if (data.type === 'mode') {
-                            // 서버의 의도 파악 결과에 따라 모드 전환
-                            if (data.mode === 'document') {
-                                // If docMode is set by intent, it means we are generating NEW content, not editing existing.
-                                state.docMode = true; 
-                                hasDocumentModeChanged = true;
-                                console.log('[Auto Mode] Switched to Document Mode');
-                            } else if (data.mode === 'chat') {
-                                state.docMode = false;
-                                hasDocumentModeChanged = true;
-                                console.log('[Auto Mode] Switched to Chat Mode');
-                            }
-                            updateUI(); // 모드 변경 반영
+                    else if (data.chunk || (data.type === 'token' && data.content)) {
+                        const content = data.chunk || data.content;
+                        
+                        // 모드에 따라 데이터 저장 위치 분기
+                        if (state.docMode && !state.templateHtml) { // If docMode and no existing template (generating new doc)
+                            state.document.content += content;
+                        } else { // Chat mode or editing a template via chat messages
+                            state.streamingBuffer += content;
                         }
-                        else if (data.chunk || (data.type === 'token' && data.content)) {
-                            const content = data.chunk || data.content;
-                            
-                            // 모드에 따라 데이터 저장 위치 분기
-                            if (state.docMode && !state.templateHtml) { // If docMode and no existing template (generating new doc)
-                                state.document.content += content;
-                            } else { // Chat mode or editing a template via chat messages
-                                state.streamingBuffer += content;
-                            }
-                            
-                            requestAnimationFrame(updateUI); // Only chat part needs typewriter, docContent will be full replacement
-                        } 
-                        else if (data.type === 'image_keyword') {
-                            state.generatedImageKeyword = data.keyword;
-                            console.log('Image Generation Triggered:', data.keyword);
-                        } else if (data.type === 'error') {
-                            console.error('Stream Error:', data.message);
-                            state.streamingBuffer += `\n\n[Error: ${data.message}]`;
-                            requestAnimationFrame(updateUI);
-                        }
+                        
+                        requestAnimationFrame(updateUI); // Only chat part needs typewriter, docContent will be full replacement
+                    } 
+                    else if (data.type === 'image_keyword') {
+                        state.generatedImageKeyword = data.keyword;
+                        console.log('Image Generation Triggered:', data.keyword);
+                    } else if (data.type === 'error') {
+                        console.error('Stream Error:', data.message);
+                        state.streamingBuffer += `\n\n[Error: ${data.message}]`;
+                        requestAnimationFrame(updateUI);
                     }
                 }
             }
 
             // 3. 완료 처리
-            if (endpoint === API_ENDPOINTS.EDIT_HTML) {
-                if (els.docContent) {
-                    els.docContent.innerHTML = state.templateHtml; // Final update to editor
-                    renderMath(els.docContent);
-                }
-                state.chatHistory.push({ role: 'ai', text: `문서가 업데이트되었습니다.` }); // Add completion message to chat
-            } else if (state.docMode && !state.templateHtml) { // Original doc generation mode
+            if (state.docMode && !state.templateHtml) { // Original doc generation mode
                 if (state.document.content) {
                     const parsed = _parseGeneratedContent(state.document.content); // Helper function from original logic
                     state.document.title = parsed.title;
@@ -490,10 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${error.message}
             </div>`;
 
-            // If we were in HTML edit mode, try to append error to chat
-            if (isHtmlEditRequest) {
-                state.chatHistory.push({ role: 'ai', text: `HTML 편집 중 오류 발생: ${error.message}` });
-            } else if (state.docMode && !state.templateHtml) { // Original doc generation
+            if (state.docMode && !state.templateHtml) { // Original doc generation
                 state.document.content += `\n\n${errorHtml}`;
             } else { // Original chat mode
                 state.chatHistory.push({ role: 'ai', text: errorHtml });
@@ -561,8 +859,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleDownload = async () => {
         // 1. 문서 내용 확인
-        const content = state.document.content;
-        const title = state.document.title || '새 문서';
+        const isTemplateDoc = !!state.templateName || !!state.templateHtml;
+        if (isTemplateDoc && getFrameDocument()) {
+            syncTemplateHtmlFromFrame();
+        }
+        const content = isTemplateDoc ? state.templateHtml : state.document.content;
+        const title = isTemplateDoc ? (state.templateName || '문서') : (state.document.title || '새 문서');
         
         if (!content) {
             showToast('저장할 문서 내용이 없습니다.', 'error');
@@ -579,17 +881,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // 2. 저장 요청
+            const payload = {
+                title: title,
+                content: content,
+                format: 'hwp',
+                content_type: isTemplateDoc ? 'html' : 'text'
+            };
+
+            if (!isTemplateDoc) {
+                payload.images_needed = state.imagesNeeded || [];
+                payload.image_urls = collectRenderedImages();
+            }
+
             const response = await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    title: title, 
-                    content: content,
-                    format: 'hwp', // 기본값 HWP
-                    images_needed: state.imagesNeeded || [],
-                    // 이미지 URL 수집 (현재 렌더링된 이미지들)
-                    image_urls: collectRenderedImages()
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await response.json();
@@ -689,29 +996,27 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('template', file);
 
         try {
-            const response = await fetch(API_ENDPOINTS.TEMPLATE, {
-                method: 'POST',
-                body: formData
-            });
-            const data = await response.json();
+            const { data } = await postFormData(API_ENDPOINTS.TEMPLATE, formData);
+            const payload = data || {};
 
-            if (data.success) {
+            if (payload.success) {
                 // NEW: Use template_html directly
-                state.templateHtml = data.template_html;
-                state.templateName = data.template_name;
-                state.templateFilePath = data.template_file;
+                state.templateHtml = payload.template_html || (payload.template_text ? parseMarkdown(payload.template_text) : '');
+                state.templateName = payload.template_name;
+                state.templateFilePath = payload.template_file;
+                state.templateId = payload.template_id || '';
+                state.templateSource = 'upload';
+                state.canvasDismissed = false;
+                state.docMode = true;
+                applyTemplateAnalysis(state.templateHtml);
                 
-                // Update docContent to show the HTML
-                if (els.docContent) {
-                    els.docContent.innerHTML = state.templateHtml;
-                    renderMath(els.docContent);
-                }
+                renderTemplateFrame(state.templateHtml);
                 if (els.docTitle) {
-                    els.docTitle.textContent = data.template_name;
+                    els.docTitle.textContent = payload.template_name;
                 }
 
                 // UI 업데이트
-                updateFileBadge(true, data.template_name);
+                updateFileBadge(true, payload.template_name);
                 
                 // 분석 완료 메시지 없이 바로 숨김 (요청 사항 반영)
                 updateAnalysisBadge(false); 
@@ -720,10 +1025,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (els.attachMenu) els.attachMenu.classList.remove('open');
 
                 // Add message to chat stream
-                state.chatHistory.push({ role: 'ai', text: `"${data.template_name}" 템플릿을 불러왔습니다. 이제 문서에 대한 변경을 요청할 수 있습니다.` });
+                state.chatHistory.push({ role: 'ai', text: `"${payload.template_name}" 템플릿을 불러왔습니다. 이제 문서에 대한 변경을 요청할 수 있습니다.` });
                 updateUI();
             } else {
-                throw new Error(data.error || '업로드 실패');
+                throw new Error(payload.error || '업로드 실패');
             }
         } catch (e) {
             console.error(e);
@@ -740,14 +1045,51 @@ document.addEventListener('DOMContentLoaded', () => {
         state.templateHtml = '';
         state.templateName = '';
         state.templateFilePath = '';
+        state.templateId = '';
         state.template = null; // Also clear old template state
+        state.templateSource = null;
+        state.templateMode = null;
+        state.templateSections = [];
+        state.templateSectionSignature = '';
+        state.selectedSnippet = '';
+        state.selectedSectionTitle = '';
+        if (state.selectedBlocks && state.selectedBlocks.length > 0) {
+            state.selectedBlocks.forEach((block) => block.classList.remove('selected-block'));
+        }
+        state.selectedBlocks = [];
+        if (state.selectedBlock) {
+            state.selectedBlock.classList.remove('selected-block');
+        }
+        state.selectedBlock = null;
+        state.selectedRange = null;
+        hideEditCover();
+        state.docMode = false;
+        state.frameHtml = '';
+        state.frameDocumentRef = null;
+        if (state.frameResizeObserver) {
+            state.frameResizeObserver.disconnect();
+            state.frameResizeObserver = null;
+        }
+        state.canvasDismissed = false;
+        closeCanvasOverlay(false);
 
         if (els.docContent) els.docContent.innerHTML = '';
+        if (els.docFrame) {
+            els.docFrame.srcdoc = '';
+            els.docFrame.classList.add('hidden');
+        }
         if (els.docTitle) els.docTitle.textContent = '문서 제목';
+        if (els.editTargetInput) els.editTargetInput.value = '';
+        if (els.editTargetSelect) els.editTargetSelect.value = '';
+        hideInlineEditBubble();
+        updateSelectionPreview();
+        if (els.sectionFillPanel) els.sectionFillPanel.classList.add('hidden');
 
         updateFileBadge(false);
+        updateTemplateControls();
         const fileInput = document.getElementById('fileInput');
         if (fileInput) fileInput.value = ''; // Reset input
+        updateUI();
     };
 
     const updateFileBadge = (show, name='') => {
@@ -762,6 +1104,1326 @@ document.addEventListener('DOMContentLoaded', () => {
             badge.classList.add('hidden');
             nameEl.textContent = '';
         }
+    };
+
+    // ============================================================
+    // 2.7. Template Catalog Logic
+    // ============================================================
+
+    const renderTemplateCatalog = (items) => {
+        if (!els.templateList) return;
+        els.templateList.innerHTML = '';
+
+        if (!items || items.length === 0) {
+            if (els.templateEmpty) els.templateEmpty.classList.remove('hidden');
+            return;
+        }
+        if (els.templateEmpty) els.templateEmpty.classList.add('hidden');
+
+        items.forEach((item) => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'template-card';
+            card.innerHTML = `
+                <div class="template-card-header">
+                    <div class="template-card-title">${item.name}</div>
+                    <span class="template-badge ${item.type}">${item.type === 'preset' ? 'preset' : (item.extension || 'file')}</span>
+                </div>
+                <div class="template-card-desc">${item.type === 'preset' ? '기본 양식' : '로컬 파일 양식'}</div>
+            `;
+            card.addEventListener('click', () => selectTemplateFromCatalog(item));
+            els.templateList.appendChild(card);
+        });
+    };
+
+    const loadTemplateCatalog = async (force = false) => {
+        if (state.templateCatalogLoaded && !force) return;
+        try {
+            const response = await fetch(API_ENDPOINTS.TEMPLATES);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || '템플릿 목록 로드 실패');
+            state.templateCatalog = data.templates || [];
+            state.templateCatalogLoaded = true;
+            renderTemplateCatalog(state.templateCatalog);
+        } catch (e) {
+            console.error(e);
+            renderTemplateCatalog([]);
+        }
+    };
+
+    const filterTemplateCatalog = (query) => {
+        const keyword = (query || '').trim().toLowerCase();
+        if (!keyword) {
+            renderTemplateCatalog(state.templateCatalog);
+            return;
+        }
+        const filtered = state.templateCatalog.filter((item) => {
+            return (item.name || '').toLowerCase().includes(keyword);
+        });
+        renderTemplateCatalog(filtered);
+    };
+
+    const openTemplateModal = async () => {
+        if (!els.modalTemplate) return;
+        els.modalTemplate.classList.add('show');
+        els.modalTemplate.style.display = 'flex';
+        await loadTemplateCatalog();
+        if (els.templateSearch) els.templateSearch.focus();
+    };
+
+    const closeTemplateModal = () => {
+        if (!els.modalTemplate) return;
+        els.modalTemplate.classList.remove('show');
+        setTimeout(() => {
+            if (els.modalTemplate) els.modalTemplate.style.display = 'none';
+        }, 200);
+    };
+
+    const selectTemplateFromCatalog = async (item) => {
+        if (!item) return;
+
+        updateAnalysisBadge(true, 'loading', '템플릿 불러오는 중...');
+
+        try {
+            const response = await fetch(API_ENDPOINTS.TEMPLATE_SELECT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    template_id: item.id,
+                    template_type: item.type
+                })
+            });
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || '템플릿 로드 실패');
+
+            const html = data.template_html
+                || (data.template_markdown ? parseMarkdown(data.template_markdown) : '')
+                || (data.template_text ? parseMarkdown(data.template_text) : '');
+
+            state.templateHtml = html;
+            state.templateName = data.template_name || item.name;
+            state.templateFilePath = data.template_file || '';
+            state.templateId = data.template_id || '';
+            state.templateSource = data.template_type || item.type;
+            state.canvasDismissed = false;
+            state.docMode = true;
+            applyTemplateAnalysis(state.templateHtml);
+
+            renderTemplateFrame(state.templateHtml);
+            if (els.docTitle) els.docTitle.textContent = state.templateName || '문서';
+
+            updateFileBadge(true, state.templateName);
+            updateAnalysisBadge(false);
+            closeTemplateModal();
+
+            state.chatHistory.push({ role: 'ai', text: `"${state.templateName}" 템플릿을 불러왔습니다. 이제 문서 내용을 채워달라고 요청하세요.` });
+            updateUI();
+        } catch (e) {
+            console.error(e);
+            showToast(`템플릿 로드 실패: ${e.message}`, 'error');
+            updateAnalysisBadge(true, 'error', `분석 실패: ${e.message}`);
+            setTimeout(() => updateAnalysisBadge(false), 3000);
+        }
+    };
+
+    // ============================================================
+    // 2.8. Template Mode Logic (Fill vs Edit)
+    // ============================================================
+
+    const extractSectionsFromHtml = (html) => {
+        if (!html) return [];
+        let doc;
+        try {
+            doc = new DOMParser().parseFromString(html, 'text/html');
+        } catch (e) {
+            return [];
+        }
+
+        const unique = new Set();
+        const results = [];
+        const pushUnique = (text) => {
+            const trimmed = (text || '').trim();
+            if (!trimmed || unique.has(trimmed)) return;
+            unique.add(trimmed);
+            results.push(trimmed);
+        };
+
+        const headings = Array.from(doc.querySelectorAll('h1, h2, h3')).map((el) => el.textContent.trim());
+        headings.forEach(pushUnique);
+
+        if (results.length < 3) {
+            const pattern = /^(?:\d+\.\s*|\d+\)\s*|[가-힣]\.\s*|제\s*\d+\s*장|[IVX]+\.\s*)/;
+            const paragraphs = Array.from(doc.querySelectorAll('p')).map((el) => el.textContent.trim());
+            paragraphs.forEach((text) => {
+                if (pattern.test(text) && text.length <= 40) {
+                    pushUnique(text);
+                }
+            });
+        }
+
+        return results.slice(0, 12);
+    };
+
+    const analyzeTemplateHtml = (html) => {
+        const text = (html || '')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const placeholderPattern = /(작성|입력|기입|선택|예시|OO|○|□|■|△|▲|▽|▼|__+|\.{3,}|·{2,}|ㆍ{2,}|\[\s*\]|\(\s*\))/g;
+        const placeholders = text.match(placeholderPattern) || [];
+        const placeholderChars = placeholders.reduce((sum, token) => sum + token.length, 0);
+        const placeholderRatio = placeholderChars / Math.max(1, text.length);
+        const sections = extractSectionsFromHtml(html);
+
+        const isSparse = text.length < 450;
+        const hasPlaceholderSignal = placeholders.length >= 2 || placeholderRatio > 0.04;
+        const isLikelyTemplate = hasPlaceholderSignal || (isSparse && placeholders.length > 0);
+        const isLikelyFilled = text.length > 1200 && placeholderRatio < 0.015;
+        const mode = isLikelyFilled ? 'edit' : (isLikelyTemplate ? 'fill' : 'edit');
+
+        return { mode, sections };
+    };
+
+    const updateTemplateControls = () => {
+        const templateActive = !!state.templateName || !!state.templateFilePath || !!state.templateHtml;
+
+        if (els.editorToolbar) {
+            els.editorToolbar.classList.toggle('hidden', !templateActive);
+        }
+        if (els.editTargetPanel) {
+            els.editTargetPanel.classList.toggle('hidden', !(templateActive && state.templateMode === 'edit'));
+        }
+        if (!templateActive || state.templateMode !== 'edit') {
+            hideInlineEditBubble();
+        }
+        if (els.templateNameBadge) {
+            els.templateNameBadge.textContent = state.templateName || '템플릿';
+        }
+        if (els.editModeBadge) {
+            els.editModeBadge.classList.toggle('hidden', !(templateActive && state.templateMode === 'edit'));
+        }
+        if (els.fillModeBadge) {
+            els.fillModeBadge.classList.toggle('hidden', !(templateActive && state.templateMode === 'fill'));
+        }
+        if (els.clearSelectionBtn) {
+            const hasSelection = !!state.selectedSnippet || !!state.selectedSectionTitle;
+            els.clearSelectionBtn.classList.toggle('hidden', !hasSelection);
+            els.clearSelectionBtn.disabled = !hasSelection;
+        }
+        updateSelectionPreview();
+
+        if (els.sectionFillPanel && (!templateActive || state.templateMode !== 'fill')) {
+            els.sectionFillPanel.classList.add('hidden');
+        }
+    };
+
+    const renderEditTargetOptions = () => {
+        if (!els.editTargetSelect) return;
+        const currentValue = els.editTargetSelect.value;
+        const sections = Array.isArray(state.templateSections) ? state.templateSections : [];
+
+        els.editTargetSelect.innerHTML = '';
+        const appendOption = (value, label) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            els.editTargetSelect.appendChild(option);
+        };
+
+        appendOption('', '선택한 텍스트');
+        appendOption('__full__', '전체 문서');
+        sections.forEach((section) => {
+            const trimmed = (section || '').trim();
+            if (trimmed) appendOption(trimmed, trimmed);
+        });
+
+        const preferredValue = state.selectedSectionTitle
+            ? (state.selectedSectionTitle === '전체 문서' ? '__full__' : state.selectedSectionTitle)
+            : currentValue;
+        const hasPreferred = Array.from(els.editTargetSelect.options).some((option) => option.value === preferredValue);
+        els.editTargetSelect.value = hasPreferred ? preferredValue : '';
+    };
+
+    const applyTemplateAnalysis = (html, overrideMode = null) => {
+        if (!html) {
+            state.templateMode = null;
+            state.templateSections = [];
+            state.templateSectionSignature = '';
+            updateTemplateControls();
+            return;
+        }
+
+        const analysis = analyzeTemplateHtml(html);
+        state.templateMode = overrideMode || analysis.mode;
+        state.templateSections = analysis.sections;
+        state.selectedSnippet = '';
+        state.selectedSectionTitle = '';
+        if (state.selectedBlocks && state.selectedBlocks.length > 0) {
+            state.selectedBlocks.forEach((block) => block.classList.remove('selected-block'));
+        }
+        state.selectedBlocks = [];
+        state.selectedRange = null;
+        if (state.selectedBlock) {
+            state.selectedBlock.classList.remove('selected-block');
+        }
+        state.selectedBlock = null;
+        hideEditCover();
+        updateSelectionPreview();
+        if (els.sectionFillPanel) els.sectionFillPanel.classList.add('hidden');
+        renderEditTargetOptions();
+        updateTemplateControls();
+    };
+
+    let sectionFillMap = new Map();
+
+    const renderSectionFillPanel = (sections) => {
+        if (!els.sectionFillPanel) return;
+        els.sectionFillPanel.innerHTML = '';
+        sectionFillMap = new Map();
+
+        sections.forEach((section) => {
+            const item = document.createElement('div');
+            item.className = 'section-fill-item';
+            item.dataset.section = section;
+            item.innerHTML = `
+                <div>${section}</div>
+                <div class="section-fill-status">대기</div>
+            `;
+            els.sectionFillPanel.appendChild(item);
+            sectionFillMap.set(section, item);
+        });
+
+        els.sectionFillPanel.classList.remove('hidden');
+    };
+
+    const updateSectionFillStatus = (section, status) => {
+        const item = sectionFillMap.get(section);
+        if (!item) return;
+        const statusEl = item.querySelector('.section-fill-status');
+        if (!statusEl) return;
+
+        item.classList.remove('active');
+        statusEl.classList.remove('active', 'done', 'error');
+
+        if (status === 'active') {
+            item.classList.add('active');
+            statusEl.textContent = '작성 중';
+            statusEl.classList.add('active');
+        } else if (status === 'done') {
+            statusEl.textContent = '완료';
+            statusEl.classList.add('done');
+        } else if (status === 'error') {
+            statusEl.textContent = '오류';
+            statusEl.classList.add('error');
+        } else {
+            statusEl.textContent = '대기';
+        }
+    };
+
+    const streamHtmlEdit = async ({ html, instruction, onChunk }) => {
+        const response = await fetch(API_ENDPOINTS.EDIT_HTML, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ html, instruction })
+        });
+
+        if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+        if (!response.body) throw new Error('ReadableStream not supported');
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let htmlBuffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                const cleanLine = line.trim();
+                if (!cleanLine.startsWith('data:')) continue;
+                const jsonStr = cleanLine.substring(5).trim();
+                if (!jsonStr) continue;
+
+                let data;
+                try {
+                    data = JSON.parse(jsonStr);
+                } catch (e) {
+                    continue;
+                }
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                if (data.chunk) {
+                    htmlBuffer += data.chunk;
+                    if (onChunk) onChunk(htmlBuffer);
+                }
+            }
+        }
+
+        return htmlBuffer;
+    };
+
+    const streamHtmlFragmentEdit = async ({ fragment, instruction, onChunk }) => {
+        const response = await fetch(API_ENDPOINTS.EDIT_FRAGMENT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fragment, instruction })
+        });
+
+        if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+        if (!response.body) throw new Error('ReadableStream not supported');
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let htmlBuffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                const cleanLine = line.trim();
+                if (!cleanLine.startsWith('data:')) continue;
+                const jsonStr = cleanLine.substring(5).trim();
+                if (!jsonStr) continue;
+
+                let data;
+                try {
+                    data = JSON.parse(jsonStr);
+                } catch (e) {
+                    continue;
+                }
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                if (data.chunk) {
+                    htmlBuffer += data.chunk;
+                    if (onChunk) onChunk(htmlBuffer);
+                }
+            }
+        }
+
+        return htmlBuffer;
+    };
+
+    const splitHtmlStyles = (html) => {
+        const styleMatches = html.match(/<style[\s\S]*?<\/style>/gi) || [];
+        const styleBlock = styleMatches.join('\n');
+        const body = html.replace(/<style[\s\S]*?<\/style>/gi, '').trim();
+        return { styleBlock, body };
+    };
+
+    const buildFrameOverlayStyles = () => {
+        return `
+<style id="hwp-editor-overlay">
+  .edit-erase-span {
+    display: inline-block;
+    position: relative;
+    background: rgba(226, 232, 240, 0.6);
+    border-radius: 6px;
+    padding: 0 2px;
+    animation: erase-out 0.45s ease forwards;
+  }
+  .edit-erase-block {
+    position: relative;
+    animation: erase-out 0.45s ease forwards;
+  }
+  .selected-block {
+    outline: 2px solid rgba(14, 165, 233, 0.35);
+    background: rgba(14, 165, 233, 0.06);
+    border-radius: 6px;
+  }
+  @keyframes erase-out {
+    0% { opacity: 1; filter: blur(0); transform: translateY(0); }
+    100% { opacity: 0; filter: blur(4px); transform: translateY(-4px); }
+  }
+  .doc-fill-flash {
+    animation: fill-flash 0.6s ease;
+  }
+  @keyframes fill-flash {
+    0% { background: rgba(14, 165, 233, 0.08); }
+    100% { background: transparent; }
+  }
+</style>`;
+    };
+
+    const buildFrameHtml = (html, baseHref = '/') => {
+        if (!html) return '';
+        const overlayStyle = buildFrameOverlayStyles();
+        const normalizedBase = baseHref ? (baseHref.endsWith('/') ? baseHref : `${baseHref}/`) : '/';
+        const baseTag = `<base href="${normalizedBase}">`;
+        const hasHtmlTag = /<html[\s>]/i.test(html);
+        if (hasHtmlTag) {
+            let result = html;
+            if (!/<head[\s>]/i.test(result)) {
+                result = result.replace(/<html[^>]*>/i, (match) => `${match}<head>${baseTag}${overlayStyle}</head>`);
+            }
+            if (!/<base\s/i.test(result)) {
+                result = result.replace(/<head[^>]*>/i, (match) => `${match}${baseTag}`);
+            }
+            if (!/hwp-editor-overlay/.test(result)) {
+                result = result.replace(/<head[^>]*>/i, (match) => `${match}${overlayStyle}`);
+            }
+            return result;
+        }
+
+        const { styleBlock, body } = splitHtmlStyles(html);
+        return `<!DOCTYPE html><html><head><meta charset="utf-8">${baseTag}${styleBlock || ''}${overlayStyle}</head><body>${body || ''}</body></html>`;
+    };
+
+    const renderTemplateFrame = (html) => {
+        if (!els.docFrame) return;
+        const frameHtml = buildFrameHtml(html, getTemplateBaseHref());
+        state.frameHtml = html;
+        els.docFrame.srcdoc = frameHtml;
+        hideInlineEditBubble();
+    };
+
+    const buildEditInstruction = (prompt, snippet, sectionTitle) => {
+        const parts = [];
+        const isFullDoc = sectionTitle === '전체 문서';
+        if (sectionTitle && !isFullDoc) {
+            parts.push(`수정 대상 섹션: ${sectionTitle}`);
+        }
+        if (snippet) parts.push(`선택한 원문: """${snippet}"""`);
+        parts.push(`요청: ${prompt}`);
+        if (snippet || (sectionTitle && !isFullDoc)) {
+            parts.push('해당 부분만 수정하고 나머지는 유지하세요.');
+        }
+        return parts.join('\n');
+    };
+
+    function normalizeSnippet(snippet) {
+        return (snippet || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeSectionKey(text) {
+        return (text || '')
+            .replace(/\s+/g, '')
+            .replace(/[^0-9a-zA-Z가-힣]/g, '')
+            .toLowerCase();
+    }
+
+    const STREAM_UPDATE_INTERVAL = 120;
+
+    function getCanvasSummary(html) {
+        const text = (html || '')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!text) return '';
+        const limit = 140;
+        return text.length > limit ? `${text.slice(0, limit)}…` : text;
+    }
+
+    function updateBlockFromFragment(block, html) {
+        if (!block || !block.isConnected) return;
+        const doc = block.ownerDocument || document;
+        const temp = doc.createElement('div');
+        temp.innerHTML = html;
+        const firstEl = temp.firstElementChild;
+        if (firstEl && firstEl.tagName === block.tagName) {
+            block.innerHTML = firstEl.innerHTML;
+        } else {
+            block.innerHTML = html;
+        }
+    }
+
+    function updateFrameBodyFromStream(html) {
+        const doc = getFrameDocument();
+        if (!doc || !doc.body) return;
+        const { body } = splitHtmlStyles(html);
+        doc.body.innerHTML = body || html || '';
+        syncFrameHeight();
+    }
+
+    function getInlineBubbleRect() {
+        if (!els.inlineEditBubble || els.inlineEditBubble.classList.contains('hidden')) return null;
+        const rect = els.inlineEditBubble.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        return rect;
+    }
+
+    function getSelectionViewportRect() {
+        if (!els.docFrame) return null;
+        const frameRect = els.docFrame.getBoundingClientRect();
+        const rects = [];
+
+        const pushRect = (rect) => {
+            if (!rect || (!rect.width && !rect.height)) return;
+            rects.push(rect);
+        };
+
+        if (state.selectedBlocks && state.selectedBlocks.length > 0) {
+            state.selectedBlocks.forEach((block) => pushRect(block.getBoundingClientRect()));
+        } else if (state.selectedBlock) {
+            pushRect(state.selectedBlock.getBoundingClientRect());
+        } else if (state.selectedRange) {
+            let rangeRect = state.selectedRange.getBoundingClientRect();
+            if (!rangeRect.width && !rangeRect.height) {
+                const clientRects = state.selectedRange.getClientRects();
+                if (clientRects.length > 0) rangeRect = clientRects[0];
+            }
+            pushRect(rangeRect);
+        }
+
+        if (rects.length === 0) return null;
+
+        let minLeft = Infinity;
+        let minTop = Infinity;
+        let maxRight = -Infinity;
+        let maxBottom = -Infinity;
+        rects.forEach((rect) => {
+            minLeft = Math.min(minLeft, rect.left);
+            minTop = Math.min(minTop, rect.top);
+            maxRight = Math.max(maxRight, rect.right);
+            maxBottom = Math.max(maxBottom, rect.bottom);
+        });
+
+        const padding = 6;
+        const left = frameRect.left + minLeft - padding;
+        const top = frameRect.top + minTop - padding;
+        const right = frameRect.left + maxRight + padding;
+        const bottom = frameRect.top + maxBottom + padding;
+
+        return {
+            left,
+            top,
+            width: Math.max(24, right - left),
+            height: Math.max(24, bottom - top)
+        };
+    }
+
+    function hideEditCover() {
+        if (!els.editCover) return;
+        els.editCover.classList.add('hidden');
+        els.editCover.classList.remove('active', 'done');
+        els.editCover.style.left = '';
+        els.editCover.style.top = '';
+        els.editCover.style.width = '';
+        els.editCover.style.height = '';
+        els.editCover.style.opacity = '';
+        els.editCover.style.transform = '';
+        els.editCover.style.transition = '';
+        state.editCoverActive = false;
+        state.editCoverLocked = false;
+    }
+
+    function startEditCoverAnimation(originRect = null) {
+        if (!els.editCover) return;
+        const targetRect = getSelectionViewportRect();
+        if (!targetRect) return;
+
+        const fallbackWidth = Math.min(targetRect.width, 160);
+        const startRect = originRect || {
+            left: targetRect.left,
+            top: targetRect.top - 28,
+            width: Math.max(80, fallbackWidth),
+            height: 10
+        };
+
+        const cover = els.editCover;
+        cover.classList.remove('hidden', 'done');
+        cover.classList.remove('active');
+        cover.style.transition = 'none';
+        cover.style.left = `${startRect.left}px`;
+        cover.style.top = `${startRect.top}px`;
+        cover.style.width = `${startRect.width}px`;
+        cover.style.height = `${startRect.height}px`;
+        cover.style.opacity = '0.6';
+        cover.style.transform = 'translateY(-8px) scale(0.98)';
+        cover.getBoundingClientRect();
+        cover.style.transition = '';
+
+        state.editCoverActive = true;
+        state.editCoverLocked = true;
+
+        requestAnimationFrame(() => {
+            cover.classList.add('active');
+            cover.style.left = `${targetRect.left}px`;
+            cover.style.top = `${targetRect.top}px`;
+            cover.style.width = `${targetRect.width}px`;
+            cover.style.height = `${targetRect.height}px`;
+            cover.style.opacity = '1';
+            cover.style.transform = 'translateY(0) scale(1)';
+        });
+    }
+
+    function finishEditCoverAnimation() {
+        if (!els.editCover || !state.editCoverActive) return;
+        els.editCover.classList.add('done');
+        els.editCover.classList.remove('active');
+        state.editCoverLocked = false;
+        setTimeout(() => {
+            if (!state.editCoverLocked) hideEditCover();
+        }, 260);
+    }
+
+    function updateSelectionPreview() {
+        if (!els.selectionPreview) return;
+        const snippet = state.selectedSnippet;
+        const sectionTitle = state.selectedSectionTitle;
+        if (!snippet && !sectionTitle) {
+            els.selectionPreview.classList.add('hidden');
+            els.selectionPreview.textContent = '';
+            return;
+        }
+        const snippetPreview = snippet ? (snippet.length > 180 ? `${snippet.slice(0, 180)}...` : snippet) : '';
+        let label = '';
+        if (sectionTitle) {
+            label = sectionTitle === '전체 문서' ? '전체 문서' : `섹션: ${sectionTitle}`;
+        }
+        if (snippetPreview) {
+            label = label ? `${label} · ${snippetPreview}` : snippetPreview;
+        }
+        els.selectionPreview.textContent = `선택됨: ${label}`;
+        els.selectionPreview.classList.remove('hidden');
+    }
+
+    function setSelectedSnippet(snippet) {
+        const normalized = normalizeSnippet(snippet);
+        state.selectedSnippet = normalized;
+
+        updateSelectionPreview();
+        updateTemplateControls();
+    }
+
+    function clearSelectedSnippet() {
+        state.selectedSnippet = '';
+        state.selectedSectionTitle = '';
+        if (state.selectedBlocks && state.selectedBlocks.length > 0) {
+            state.selectedBlocks.forEach((block) => block.classList.remove('selected-block'));
+        }
+        state.selectedBlocks = [];
+        if (state.selectedBlock) {
+            state.selectedBlock.classList.remove('selected-block');
+        }
+        state.selectedBlock = null;
+        state.selectedRange = null;
+        const selection = getFrameSelection();
+        if (selection) selection.removeAllRanges();
+        if (els.editTargetInput) els.editTargetInput.value = '';
+        if (els.editTargetSelect) els.editTargetSelect.value = '';
+        hideInlineEditBubble();
+        if (!state.editCoverLocked) hideEditCover();
+        updateSelectionPreview();
+        updateTemplateControls();
+    }
+
+
+    function hideInlineEditBubble() {
+        if (!els.inlineEditBubble) return;
+        els.inlineEditBubble.classList.add('hidden');
+        els.inlineEditBubble.style.visibility = '';
+        if (els.inlineEditInput) els.inlineEditInput.value = '';
+    }
+
+    function positionInlineEditBubble(rect) {
+        if (!els.inlineEditBubble || !els.docFrame || !rect) return;
+        const bubble = els.inlineEditBubble;
+        const frameRect = els.docFrame.getBoundingClientRect();
+        const anchorX = frameRect.left + rect.left + rect.width / 2;
+        const anchorY = frameRect.top + rect.top;
+
+        bubble.classList.remove('hidden');
+        bubble.style.visibility = 'hidden';
+        bubble.style.left = '0px';
+        bubble.style.top = '0px';
+
+        requestAnimationFrame(() => {
+            const bubbleRect = bubble.getBoundingClientRect();
+            const padding = 12;
+            const left = Math.min(
+                Math.max(padding, anchorX - bubbleRect.width / 2),
+                window.innerWidth - bubbleRect.width - padding
+            );
+            const top = Math.max(padding, anchorY - bubbleRect.height - 12);
+            bubble.style.left = `${left}px`;
+            bubble.style.top = `${top}px`;
+            bubble.style.visibility = 'visible';
+        });
+    }
+
+    function showInlineEditBubble(rect) {
+        positionInlineEditBubble(rect);
+        if (els.inlineEditInput) {
+            els.inlineEditInput.focus();
+        }
+    }
+
+    function setSelectedBlocks(blocks, sectionTitle) {
+        if (!blocks || blocks.length === 0) return;
+        if (state.selectedBlocks && state.selectedBlocks.length > 0) {
+            state.selectedBlocks.forEach((block) => block.classList.remove('selected-block'));
+        }
+        state.selectedBlocks = blocks;
+        state.selectedSectionTitle = sectionTitle || '';
+        state.selectedRange = null;
+        if (state.selectedBlock) {
+            state.selectedBlock.classList.remove('selected-block');
+        }
+        state.selectedBlock = null;
+        const selection = getFrameSelection();
+        if (selection) selection.removeAllRanges();
+        blocks.forEach((block) => block.classList.add('selected-block'));
+        hideInlineEditBubble();
+        updateSelectionPreview();
+        updateTemplateControls();
+    }
+
+    function startEraseAnimation() {
+        const docRoot = getDocRoot();
+        if (!docRoot) return null;
+        const block = state.selectedBlock;
+        const range = state.selectedRange;
+
+        if (range && block && block.isConnected) {
+            const startBlock = getBlockElement(range.startContainer);
+            const endBlock = getBlockElement(range.endContainer);
+            if (startBlock && startBlock === endBlock) {
+                try {
+                    const wrapped = range.cloneRange();
+                    const doc = range.startContainer.ownerDocument || document;
+                    const span = doc.createElement('span');
+                    span.className = 'edit-erase-span';
+                    wrapped.surroundContents(span);
+                } catch (e) {
+                    block.classList.add('edit-erase-block');
+                }
+            } else {
+                block.classList.add('edit-erase-block');
+            }
+            return block;
+        }
+
+        if (block && block.isConnected) {
+            block.classList.add('edit-erase-block');
+            return block;
+        }
+
+        return null;
+    }
+
+    function getBlockElement(node) {
+        if (!node) return null;
+        const element = node.nodeType === 1 ? node : node.parentElement;
+        if (!element) return null;
+        return element.closest('p, li, td, th, h1, h2, h3, div');
+    }
+
+    function replaceNodeWithHtml(targetNode, html) {
+        if (!targetNode || !targetNode.parentNode) return;
+        const doc = targetNode.ownerDocument || document;
+        const temp = doc.createElement('div');
+        temp.innerHTML = html;
+        const fragment = doc.createDocumentFragment();
+        while (temp.firstChild) {
+            fragment.appendChild(temp.firstChild);
+        }
+        targetNode.replaceWith(fragment);
+    }
+
+    function replaceBlocksWithHtml(blocks, html) {
+        if (!blocks || blocks.length === 0) return;
+        const firstBlock = blocks[0];
+        if (!firstBlock || !firstBlock.parentNode) return;
+
+        const doc = firstBlock.ownerDocument || document;
+        const temp = doc.createElement('div');
+        temp.innerHTML = html;
+        const firstEl = temp.firstElementChild;
+
+        if (!firstEl || firstEl.tagName !== firstBlock.tagName) {
+            firstBlock.innerHTML = html;
+            blocks.slice(1).forEach((block) => block.remove());
+            return;
+        }
+
+        const fragment = doc.createDocumentFragment();
+        while (temp.firstChild) {
+            fragment.appendChild(temp.firstChild);
+        }
+        firstBlock.parentNode.insertBefore(fragment, firstBlock);
+        blocks.forEach((block) => block.remove());
+    }
+
+    function extractFragmentFromBlock(block) {
+        if (!block) return '';
+        return block.outerHTML || '';
+    }
+
+    function getSelectedFragment() {
+        if (state.selectedBlocks && state.selectedBlocks.length > 0) {
+            return state.selectedBlocks.map((block) => block.outerHTML || '').join('\n');
+        }
+        if (state.selectedBlock && state.selectedBlock.isConnected) {
+            return extractFragmentFromBlock(state.selectedBlock);
+        }
+        return '';
+    }
+
+    function collectSiblingBlocks(startBlock, maxBlocks = 6) {
+        const blocks = [];
+        let current = startBlock;
+        while (current && blocks.length < maxBlocks) {
+            blocks.push(current);
+            const next = current.nextElementSibling;
+            if (!next || next.matches('h1, h2, h3')) break;
+            current = next;
+        }
+        return blocks;
+    }
+
+    function limitBlocksByLength(blocks, maxChars = 12000) {
+        let total = 0;
+        const limited = [];
+        for (const block of blocks) {
+            const html = block.outerHTML || '';
+            if (limited.length > 0 && total + html.length > maxChars) break;
+            limited.push(block);
+            total += html.length;
+        }
+        return limited;
+    }
+
+    function findSectionAnchor(sectionTitle) {
+        const docRoot = getDocRoot();
+        if (!docRoot) return null;
+        const normalizedTitle = normalizeSectionKey(sectionTitle);
+        if (!normalizedTitle) return null;
+
+        const headingCandidates = Array.from(docRoot.querySelectorAll('h1, h2, h3'));
+        for (const el of headingCandidates) {
+            const text = normalizeSectionKey(el.textContent);
+            if (text && (text === normalizedTitle || text.includes(normalizedTitle) || normalizedTitle.includes(text))) {
+                return el;
+            }
+        }
+
+        const candidates = Array.from(docRoot.querySelectorAll('p, li, td, th, div'));
+        for (const el of candidates) {
+            const raw = (el.textContent || '').trim();
+            if (raw.length > 140) continue;
+            const text = normalizeSectionKey(raw);
+            if (text && (text === normalizedTitle || text.includes(normalizedTitle) || normalizedTitle.includes(text))) {
+                return el;
+            }
+        }
+        return null;
+    }
+
+    function pickSectionBlock(anchor) {
+        const docRoot = getDocRoot();
+        if (!anchor) return null;
+        const cell = anchor.closest('td, th');
+        if (cell && docRoot && docRoot.contains(cell)) return cell;
+
+        const table = anchor.closest('table');
+        if (table && docRoot && docRoot.contains(table)) return table;
+
+        const block = anchor.closest('p, li, div, h1, h2, h3');
+        if (block && docRoot && block !== docRoot) return block;
+        return anchor;
+    }
+
+    function getSectionBlocks(sectionTitle) {
+        if (!getDocRoot()) return { blocks: [], fragment: '' };
+        const anchor = findSectionAnchor(sectionTitle);
+        if (!anchor) return { blocks: [], fragment: '' };
+
+        const baseBlock = pickSectionBlock(anchor);
+        if (!baseBlock) return { blocks: [], fragment: '' };
+
+        let blocks = [];
+        if (baseBlock.matches('table, td, th')) {
+            blocks = [baseBlock];
+        } else {
+            blocks = collectSiblingBlocks(baseBlock, 6);
+        }
+        blocks = limitBlocksByLength(blocks, 12000);
+        if (blocks.length === 0) return { blocks: [], fragment: '' };
+        const fragment = blocks.map((block) => block.outerHTML).join('\n');
+        return { blocks, fragment };
+    }
+
+    function buildSnippetFromBlocks(blocks) {
+        if (!blocks || blocks.length === 0) return '';
+        const text = blocks.map((block) => block.textContent || '').join(' ');
+        const normalized = normalizeSnippet(text);
+        return normalized.length > 800 ? normalized.slice(0, 800) : normalized;
+    }
+
+    function setFullDocTarget() {
+        clearSelectedSnippet();
+        state.selectedSectionTitle = '전체 문서';
+        updateSelectionPreview();
+        updateTemplateControls();
+        if (els.editTargetSelect) els.editTargetSelect.value = '__full__';
+        if (els.editTargetInput) els.editTargetInput.value = '';
+    }
+
+    function applyEditTargetSelection() {
+        const inputValue = els.editTargetInput ? els.editTargetInput.value.trim() : '';
+        const selectValue = els.editTargetSelect ? els.editTargetSelect.value : '';
+        const targetValue = inputValue || selectValue;
+        if (!targetValue) {
+            const hasManualSelection = !!state.selectedSnippet || !!state.selectedBlock;
+            if (state.selectedBlocks && state.selectedBlocks.length > 0) {
+                state.selectedBlocks.forEach((block) => block.classList.remove('selected-block'));
+            }
+            state.selectedBlocks = [];
+            state.selectedSectionTitle = '';
+            if (!hasManualSelection) {
+                state.selectedSnippet = '';
+                if (state.selectedBlock) {
+                    state.selectedBlock.classList.remove('selected-block');
+                }
+                state.selectedBlock = null;
+                hideInlineEditBubble();
+            }
+            updateSelectionPreview();
+            updateTemplateControls();
+            return;
+        }
+        state.templateMode = 'edit';
+        if (targetValue === '__full__') {
+            setFullDocTarget();
+            return;
+        }
+
+        const { blocks } = getSectionBlocks(targetValue);
+        if (!blocks || blocks.length === 0) {
+            showToast(`"${targetValue}" 섹션을 찾지 못했습니다.`, 'error');
+            return;
+        }
+
+        state.selectedSnippet = buildSnippetFromBlocks(blocks);
+        setSelectedBlocks(blocks, targetValue);
+        if (els.editTargetSelect) els.editTargetSelect.value = targetValue;
+        if (els.editTargetInput) els.editTargetInput.value = '';
+    }
+
+    function applyEraseAnimationToBlocks(blocks) {
+        if (!blocks || blocks.length === 0) return;
+        blocks.forEach((block) => {
+            if (block && block.classList) {
+                block.classList.add('edit-erase-block');
+            }
+        });
+    }
+
+    function clearEraseAnimation(blocks) {
+        if (!blocks || blocks.length === 0) return;
+        blocks.forEach((block) => {
+            if (block && block.classList) {
+                block.classList.remove('edit-erase-block');
+            }
+        });
+    }
+
+    function flashDocContent() {
+        const docRoot = getDocRoot();
+        if (!docRoot) return;
+        docRoot.classList.add('doc-fill-flash');
+        setTimeout(() => {
+            docRoot.classList.remove('doc-fill-flash');
+        }, 650);
+    }
+
+    const handleDocSelection = () => {
+        const docRoot = getDocRoot();
+        if (!docRoot || !state.templateHtml) return;
+        const selection = getFrameSelection();
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+
+        const range = selection.getRangeAt(0);
+        const container = range.commonAncestorContainer;
+        const containerEl = container.nodeType === 3 ? container.parentElement : container;
+        if (!containerEl || !docRoot.contains(containerEl)) return;
+
+        const selectedText = normalizeSnippet(selection.toString());
+        if (selectedText.length < 2) return;
+
+        const clipped = selectedText.length > 800 ? selectedText.slice(0, 800) : selectedText;
+        state.templateMode = 'edit';
+        state.selectedSectionTitle = '';
+        if (state.selectedBlocks && state.selectedBlocks.length > 0) {
+            state.selectedBlocks.forEach((block) => block.classList.remove('selected-block'));
+        }
+        state.selectedBlocks = [];
+        if (els.editTargetSelect) els.editTargetSelect.value = '';
+        if (els.editTargetInput) els.editTargetInput.value = '';
+        state.selectedRange = range.cloneRange();
+        if (state.selectedBlock) {
+            state.selectedBlock.classList.remove('selected-block');
+        }
+        const blockEl = getBlockElement(range.startContainer) || getBlockElement(range.commonAncestorContainer);
+        if (blockEl && blockEl !== docRoot) {
+            state.selectedBlock = blockEl;
+            state.selectedBlock.classList.add('selected-block');
+        }
+        setSelectedSnippet(clipped);
+        const rect = range.getBoundingClientRect();
+        const fallbackRect = range.getClientRects().length ? range.getClientRects()[0] : null;
+        showInlineEditBubble(rect && rect.width ? rect : fallbackRect);
+    };
+
+    const runTemplateEdit = async (prompt) => {
+        const snippet = state.selectedSnippet;
+        const instruction = buildEditInstruction(prompt, snippet, state.selectedSectionTitle);
+        const baseHtml = state.templateHtml;
+
+        const fragmentHtml = getSelectedFragment();
+
+        if (fragmentHtml) {
+            const hasSelectedBlocks = state.selectedBlocks && state.selectedBlocks.length > 0;
+            if (hasSelectedBlocks) {
+                applyEraseAnimationToBlocks(state.selectedBlocks);
+            } else {
+                startEraseAnimation();
+            }
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            if (hasSelectedBlocks) {
+                clearEraseAnimation(state.selectedBlocks);
+            } else if (state.selectedBlock) {
+                clearEraseAnimation([state.selectedBlock]);
+            }
+            let updatedFragment = '';
+            try {
+                let lastStreamAt = 0;
+                const previewBlock = hasSelectedBlocks ? state.selectedBlocks[0] : state.selectedBlock;
+                updatedFragment = await streamHtmlFragmentEdit({
+                    fragment: fragmentHtml,
+                    instruction,
+                    onChunk: (partial) => {
+                        if (!previewBlock) return;
+                        const now = Date.now();
+                        if (now - lastStreamAt < STREAM_UPDATE_INTERVAL) return;
+                        lastStreamAt = now;
+                        updateBlockFromFragment(previewBlock, partial);
+                        syncFrameHeight();
+                    }
+                });
+            } catch (error) {
+                if (hasSelectedBlocks) {
+                    replaceBlocksWithHtml(state.selectedBlocks, fragmentHtml);
+                } else if (state.selectedBlock) {
+                    replaceBlocksWithHtml([state.selectedBlock], fragmentHtml);
+                }
+                throw error;
+            }
+
+            if (!updatedFragment) {
+                if (hasSelectedBlocks) {
+                    replaceBlocksWithHtml(state.selectedBlocks, fragmentHtml);
+                } else if (state.selectedBlock) {
+                    replaceBlocksWithHtml([state.selectedBlock], fragmentHtml);
+                }
+                throw new Error('편집 결과를 받지 못했습니다.');
+            }
+
+            if (hasSelectedBlocks) {
+                replaceBlocksWithHtml(state.selectedBlocks, updatedFragment);
+            } else if (state.selectedBlock) {
+                replaceBlocksWithHtml([state.selectedBlock], updatedFragment);
+            }
+            flashDocContent();
+            syncTemplateHtmlFromFrame();
+            syncFrameHeight();
+        } else {
+            const { styleBlock, body } = splitHtmlStyles(baseHtml);
+            const updatedBody = await streamHtmlEdit({
+                html: body || baseHtml,
+                instruction,
+                onChunk: (() => {
+                    let lastStreamAt = 0;
+                    return (partial) => {
+                        const now = Date.now();
+                        if (now - lastStreamAt < STREAM_UPDATE_INTERVAL) return;
+                        lastStreamAt = now;
+                        updateFrameBodyFromStream(partial);
+                    };
+                })()
+            });
+
+            if (!updatedBody) {
+                state.templateHtml = baseHtml;
+                renderTemplateFrame(baseHtml);
+                throw new Error('편집 결과를 받지 못했습니다.');
+            }
+
+            let mergedHtml = updatedBody;
+            if (styleBlock && !updatedBody.includes('<style')) {
+                mergedHtml = `${styleBlock}\n${updatedBody}`;
+            }
+
+            state.templateHtml = mergedHtml;
+            renderTemplateFrame(mergedHtml);
+        }
+
+        state.chatHistory.push({ role: 'ai', text: '문서가 업데이트되었습니다.' });
+        clearSelectedSnippet();
+    };
+
+    const runInlineEdit = async () => {
+        if (!els.inlineEditInput) return;
+        const prompt = els.inlineEditInput.value.trim();
+        if (!prompt) {
+            showToast('수정 내용을 입력해주세요.', 'error');
+            return;
+        }
+        const hasSelection = !!state.selectedSnippet
+            || (state.selectedBlocks && state.selectedBlocks.length > 0)
+            || !!state.selectedSectionTitle;
+        if (!hasSelection) {
+            showToast('수정할 부분을 먼저 선택해주세요.', 'error');
+            return;
+        }
+
+        if (state.isGenerating) return;
+        const bubbleRect = getInlineBubbleRect();
+        startEditCoverAnimation(bubbleRect);
+        hideInlineEditBubble();
+        state.templateMode = 'edit';
+        state.isGenerating = true;
+        setLoadingState(true);
+        state.chatHistory.push({ role: 'user', text: prompt });
+        updateUI();
+        if (!getSelectionViewportRect()) {
+            scrollToBottom();
+        }
+
+        try {
+            await runTemplateEdit(prompt);
+        } catch (error) {
+            console.error(error);
+            showToast(`생성 중 오류 발생: ${error.message}`, 'error');
+            state.chatHistory.push({ role: 'ai', text: `템플릿 처리 중 오류 발생: ${error.message}` });
+        } finally {
+            finishEditCoverAnimation();
+            state.isGenerating = false;
+            setLoadingState(false);
+            updateUI();
+            await saveChatSession();
+        }
+    };
+
+    const runTemplateFillSequence = async (prompt) => {
+        const sections = state.templateSections.length > 0 ? state.templateSections : ['전체'];
+        renderSectionFillPanel(sections);
+
+        let currentHtml = state.templateHtml;
+        state.chatHistory.push({ role: 'ai', text: '양식 작성 시작. 파트별로 내용을 채우겠습니다.' });
+
+        const canResolveAny = sections.some((section) => getSectionBlocks(section).blocks.length > 0);
+
+        if (!canResolveAny || (sections.length === 1 && sections[0] === '전체')) {
+            const sectionLabel = sections[0] || '전체';
+            updateSectionFillStatus(sectionLabel, 'active');
+            const instruction = `사용자 요청: ${prompt}\n전체 양식을 빠짐없이 채워 넣고, 기존 구조는 유지하세요.`;
+            const { styleBlock, body } = splitHtmlStyles(currentHtml);
+            const updatedBody = await streamHtmlEdit({
+                html: body || currentHtml,
+                instruction,
+                onChunk: (() => {
+                    let lastStreamAt = 0;
+                    return (partial) => {
+                        const now = Date.now();
+                        if (now - lastStreamAt < STREAM_UPDATE_INTERVAL) return;
+                        lastStreamAt = now;
+                        updateFrameBodyFromStream(partial);
+                    };
+                })()
+            });
+            if (!updatedBody) {
+                updateSectionFillStatus(sectionLabel, 'error');
+                throw new Error('전체 작성 결과를 받지 못했습니다.');
+            }
+            let mergedHtml = updatedBody;
+            if (styleBlock && !updatedBody.includes('<style')) {
+                mergedHtml = `${styleBlock}\n${updatedBody}`;
+            }
+            currentHtml = mergedHtml;
+            state.templateHtml = mergedHtml;
+            renderTemplateFrame(mergedHtml);
+            sections.forEach((section) => updateSectionFillStatus(section, 'done'));
+        } else {
+            for (const section of sections) {
+                updateSectionFillStatus(section, 'active');
+                const instruction = `사용자 요청: ${prompt}\n다음 섹션(${section})에 해당하는 부분만 채워 넣고, 다른 부분은 유지하세요.`;
+
+                const { blocks, fragment } = getSectionBlocks(section);
+                if (!fragment) {
+                    updateSectionFillStatus(section, 'error');
+                    throw new Error(`"${section}" 섹션을 찾지 못했습니다.`);
+                }
+
+                applyEraseAnimationToBlocks(blocks);
+                await new Promise((resolve) => setTimeout(resolve, 250));
+                clearEraseAnimation(blocks);
+
+                let updatedFragment = '';
+                try {
+                    let lastStreamAt = 0;
+                    const previewBlock = blocks[0];
+                    updatedFragment = await streamHtmlFragmentEdit({
+                        fragment,
+                        instruction,
+                        onChunk: (partial) => {
+                            if (!previewBlock) return;
+                            const now = Date.now();
+                            if (now - lastStreamAt < STREAM_UPDATE_INTERVAL) return;
+                            lastStreamAt = now;
+                            updateBlockFromFragment(previewBlock, partial);
+                            syncFrameHeight();
+                        }
+                    });
+                } catch (error) {
+                    replaceBlocksWithHtml(blocks, fragment);
+                    updateSectionFillStatus(section, 'error');
+                    throw error;
+                }
+
+                if (!updatedFragment) {
+                    replaceBlocksWithHtml(blocks, fragment);
+                    updateSectionFillStatus(section, 'error');
+                    throw new Error(`"${section}" 섹션 작성 결과를 받지 못했습니다.`);
+                }
+
+                replaceBlocksWithHtml(blocks, updatedFragment);
+                flashDocContent();
+                syncTemplateHtmlFromFrame();
+                currentHtml = state.templateHtml;
+                syncFrameHeight();
+                updateSectionFillStatus(section, 'done');
+            }
+        }
+
+        state.templateMode = 'edit';
+        renderEditTargetOptions();
+        updateTemplateControls();
+
+        if (els.sectionFillPanel) {
+            setTimeout(() => els.sectionFillPanel.classList.add('hidden'), 1200);
+        }
+
+        state.chatHistory.push({ role: 'ai', text: '양식 작성이 완료되었습니다.' });
+        await handleDownload();
     };
 
     // ============================================================
@@ -1445,6 +3107,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.docMode = false;
             state.streamingBuffer = '';
             state.displayedChatContent = '';
+            clearFileSelection();
             
             localStorage.removeItem('lastLoadedSessionId');
             localStorage.removeItem('lastLoadedDocMode');
@@ -1482,6 +3145,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const btnSelectTemplate = document.getElementById('btnSelectTemplate');
+    if (btnSelectTemplate) {
+        btnSelectTemplate.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openTemplateModal();
+            els.attachMenu?.classList.remove('open');
+        });
+    }
+
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
@@ -1489,6 +3161,124 @@ document.addEventListener('DOMContentLoaded', () => {
             handleFileUpload(file);
         });
     }
+
+    if (els.docFrame) {
+        els.docFrame.addEventListener('load', () => {
+            attachFrameListeners();
+            syncFrameHeight();
+        });
+    }
+
+    if (els.canvasBody) {
+        els.canvasBody.addEventListener('scroll', () => clearSelectedSnippet(), { passive: true });
+    }
+
+    if (els.btnCanvasClose) {
+        els.btnCanvasClose.addEventListener('click', async () => {
+            closeCanvasOverlay(true);
+            const title = state.templateName || state.document.title || '문서';
+            const summary = getCanvasSummary(state.templateHtml) || '내용 미리보기 없음';
+            state.chatHistory.push({
+                role: 'canvas',
+                type: 'canvas',
+                title,
+                summary
+            });
+            updateUI();
+            scrollToBottom();
+            await saveChatSession();
+        });
+    }
+    if (els.chatStream) {
+        els.chatStream.addEventListener('click', (e) => {
+            const card = e.target.closest('[data-action="open-canvas"]');
+            if (!card) return;
+            openCanvasOverlay(true);
+            updateUI();
+        });
+        els.chatStream.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const card = e.target.closest('[data-action="open-canvas"]');
+            if (!card) return;
+            e.preventDefault();
+            openCanvasOverlay(true);
+            updateUI();
+        });
+    }
+
+    if (els.clearSelectionBtn) {
+        els.clearSelectionBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            clearSelectedSnippet();
+        });
+    }
+
+    if (els.editTargetApply) {
+        els.editTargetApply.addEventListener('click', (e) => {
+            e.preventDefault();
+            applyEditTargetSelection();
+        });
+    }
+    if (els.editTargetSelect) {
+        els.editTargetSelect.addEventListener('change', () => {
+            if (els.editTargetInput) els.editTargetInput.value = '';
+            applyEditTargetSelection();
+        });
+    }
+    if (els.editTargetInput) {
+        els.editTargetInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyEditTargetSelection();
+            }
+        });
+        els.editTargetInput.addEventListener('input', () => {
+            if (els.editTargetInput.value.trim() && els.editTargetSelect) {
+                els.editTargetSelect.value = '';
+            }
+        });
+    }
+
+    if (els.inlineEditSubmit) {
+        els.inlineEditSubmit.addEventListener('click', (e) => {
+            e.preventDefault();
+            runInlineEdit();
+        });
+    }
+    if (els.inlineEditInput) {
+        els.inlineEditInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                runInlineEdit();
+            } else if (e.key === 'Escape') {
+                clearSelectedSnippet();
+            }
+        });
+    }
+    if (els.inlineEditClose) {
+        els.inlineEditClose.addEventListener('click', (e) => {
+            e.preventDefault();
+            hideInlineEditBubble();
+        });
+    }
+
+    if (els.scrollContainer) {
+        els.scrollContainer.addEventListener('scroll', () => clearSelectedSnippet(), { passive: true });
+    }
+
+    document.addEventListener('mousedown', (e) => {
+        if (!els.inlineEditBubble || els.inlineEditBubble.classList.contains('hidden')) return;
+        if (!els.inlineEditBubble.contains(e.target)) {
+            clearSelectedSnippet();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            clearSelectedSnippet();
+        }
+    });
+
 
     const btnRemoveFile = document.getElementById('btnRemoveFile');
     if (btnRemoveFile) {
@@ -1505,6 +3295,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     document.addEventListener('click', () => els.attachMenu?.classList.remove('open'));
+
+    if (els.templateSearch) {
+        els.templateSearch.addEventListener('input', (e) => {
+            filterTemplateCatalog(e.target.value);
+        });
+    }
+    if (els.btnCloseTemplate) {
+        els.btnCloseTemplate.addEventListener('click', closeTemplateModal);
+    }
+    if (els.modalTemplate) {
+        els.modalTemplate.addEventListener('click', (e) => {
+            if (e.target === els.modalTemplate) closeTemplateModal();
+        });
+    }
 
     // 리로스쿨 토글 버튼 (첨부 메뉴 안)
     const btnToggleRiro = document.getElementById('btnToggleRiro');

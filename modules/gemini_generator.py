@@ -365,6 +365,46 @@ class GeminiContentGenerator:
             result = self._call_api(prompt)
             parsed_content = self._parse_generated_content(result)
             return parsed_content
+
+    def edit_html_stream(self, html: str, instruction: str):
+        """HTML 템플릿을 사용자의 지시에 맞게 편집 (스트리밍)"""
+        prompt = f"""당신은 한글 문서 양식 HTML을 자동으로 채우는 편집 AI입니다.
+
+다음 규칙을 반드시 지키세요:
+1. 출력은 **수정된 HTML only** 이어야 합니다. (설명/마크다운/코드펜스 금지)
+2. 기존 HTML 구조, 태그, 클래스, id를 최대한 유지하세요.
+3. 표와 레이아웃 구조를 삭제하지 말고, 빈 항목을 자연스럽게 채워주세요.
+4. 이미지/링크/스타일 참조 경로는 가능한 한 유지하세요.
+
+[현재 HTML]
+{html}
+
+[사용자 지시]
+{instruction}
+
+수정된 HTML만 출력하세요."""
+
+        return self._call_api(prompt, stream=True)
+
+    def edit_html_fragment_stream(self, fragment: str, instruction: str):
+        """HTML 조각을 사용자의 지시에 맞게 편집 (스트리밍)"""
+        prompt = f"""당신은 한글 문서 양식 HTML 조각을 편집하는 AI입니다.
+
+다음 규칙을 반드시 지키세요:
+1. 출력은 **수정된 HTML fragment only** 이어야 합니다. (설명/마크다운/코드펜스 금지)
+2. fragment의 최상위 태그와 속성(id/class)은 유지하세요. 내부 텍스트만 자연스럽게 채워주세요.
+3. 표/레이아웃 구조를 삭제하지 말고, 빈 항목만 채우세요.
+4. 이미지/링크/스타일 참조 경로는 유지하세요.
+
+[현재 HTML fragment]
+{fragment}
+
+[사용자 지시]
+{instruction}
+
+수정된 HTML fragment만 출력하세요."""
+
+        return self._call_api(prompt, stream=True)
     
     def _parse_generated_content(self, content: str) -> Dict[str, Any]:
         """생성된 컨테츠를 구조화된 형탌로 파싱 ([gen_img] 태그 처리 포함)"""

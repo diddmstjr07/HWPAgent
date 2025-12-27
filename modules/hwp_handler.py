@@ -12,13 +12,20 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from urllib.parse import urlparse
+import html as html_lib
+import importlib.util
 import os
 import re
+import shutil
+import subprocess
+import sys
 import zipfile
 import xml.etree.ElementTree as ET
 import olefile
 import zlib
 import struct
+from bs4 import BeautifulSoup
 
 
 LATEX_SYMBOL_MAP = {
@@ -124,6 +131,138 @@ class HWPHandler:
                 return content
 
             return "[HWP V5: 텍스트 미리보기(PrvText) 스트림이 없습니다. 텍스트 추출이 제한됩니다.]"
+
+    def convert_hwp_to_html(self, file_path: str, template_id: Optional[str] = None) -> str:
+        """
+        HWP 파일을 HTML로 변환합니다.
+        
+        Args:
+            file_path (str): HWP 파일 경로
+
+        Returns:
+            str: 변환된 HTML 문자열
+        """
+        def wrap_text_as_html(text: str) -> str:
+            escaped = html_lib.escape(text or "")
+            paragraphs = []
+            buffer = []
+            for line in escaped.splitlines():
+                if line.strip():
+                    buffer.append(line)
+                else:
+                    if buffer:
+                        paragraphs.append("<p>" + "<br>".join(buffer) + "</p>")
+                        buffer = []
+            if buffer:
+                paragraphs.append("<p>" + "<br>".join(buffer) + "</p>")
+            return "\n".join(paragraphs) if paragraphs else "<p></p>"
+
+        command = self._resolve_hwp5html_command()
+        if not command:
+            print("[HWP HTML] hwp5html not available. Falling back to text extraction.")
+            text_content = self.read_hwp(file_path)
+            return wrap_text_as_html(text_content)
+
+        safe_id = template_id or Path(file_path).stem
+        html_root = self.output_dir / "templates_html"
+        html_root.mkdir(parents=True, exist_ok=True)
+        output_dir = html_root / safe_id
+
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+
+        try:
+            subprocess.run(
+                [*command, "--output", str(output_dir), file_path],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+        except subprocess.CalledProcessError as exc:
+            err_msg = exc.stderr.strip() if exc.stderr else str(exc)
+            print(f"[HWP HTML] hwp5html failed: {err_msg}")
+            text_content = self.read_hwp(file_path)
+            return wrap_text_as_html(text_content)
+        except Exception as exc:
+            print(f"[HWP HTML] hwp5html error: {exc}")
+            text_content = self.read_hwp(file_path)
+            return wrap_text_as_html(text_content)
+
+        index_path = output_dir / "index.xhtml"
+        if not index_path.exists():
+            index_path = output_dir / "index.html"
+
+        if not index_path.exists():
+            text_content = self.read_hwp(file_path)
+            return wrap_text_as_html(text_content)
+
+        html_text = index_path.read_text(encoding="utf-8", errors="ignore")
+        soup = BeautifulSoup(html_text, "html.parser")
+        if not soup.body:
+            text_content = self.read_hwp(file_path)
+            return wrap_text_as_html(text_content)
+
+        asset_base = f"/api/template/asset/{safe_id}/"
+        for img in soup.find_all("img"):
+            src = img.get("src")
+            if not src:
+                continue
+            parsed = urlparse(src)
+            if parsed.scheme or src.startswith(("data:", "blob:")):
+                continue
+            img["src"] = asset_base + src.lstrip("/")
+
+        for link in soup.find_all("link"):
+            href = link.get("href")
+            if not href:
+                continue
+            parsed = urlparse(href)
+            if parsed.scheme or href.startswith(("data:", "blob:")):
+                continue
+            link["href"] = asset_base + href.lstrip("/")
+
+        return str(soup)
+
+    def _resolve_hwp5html_command(self) -> Optional[List[str]]:
+        env_override = os.getenv("HWP5HTML_PATH")
+        if env_override:
+            candidate = Path(env_override).expanduser()
+            if candidate.exists():
+                return [str(candidate)]
+
+        hwp5html_path = shutil.which("hwp5html")
+        if hwp5html_path:
+            return [hwp5html_path]
+
+        exe_name = "hwp5html.exe" if os.name == "nt" else "hwp5html"
+        venv_prefix = os.getenv("VIRTUAL_ENV")
+        conda_prefix = os.getenv("CONDA_PREFIX")
+        for prefix in (venv_prefix, conda_prefix):
+            if not prefix:
+                continue
+            bin_dir = "Scripts" if os.name == "nt" else "bin"
+            candidate = Path(prefix) / bin_dir / exe_name
+            if candidate.exists():
+                return [str(candidate)]
+
+        candidate = Path(sys.executable).resolve().parent / exe_name
+        if candidate.exists():
+            return [str(candidate)]
+
+        try:
+            if importlib.util.find_spec("hwp5.hwp5html"):
+                return [sys.executable, "-m", "hwp5.hwp5html"]
+        except (ModuleNotFoundError, ValueError):
+            pass
+
+        try:
+            if importlib.util.find_spec("hwp5html"):
+                return [sys.executable, "-m", "hwp5html"]
+        except (ModuleNotFoundError, ValueError):
+            pass
+
+        return None
 
     def create_hwp_document(
         self,

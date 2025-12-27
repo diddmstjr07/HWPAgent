@@ -135,17 +135,31 @@
         .nav-item:hover i { color: var(--accent-primary); }
 
         .user-profile {
-            margin-top: auto; padding: 12px;
-            border-top: 1px solid #E2E8F0;
+            margin-top: auto; 
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            border-radius: 14px;
             display: flex; align-items: center; gap: 12px;
-            cursor: pointer; border-radius: var(--radius-md); transition: 0.2s;
+            cursor: pointer; 
+            transition: all 0.2s ease-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.01);
         }
-        .user-profile:hover { background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .user-profile:hover { 
+            background: #ffffff;
+            border-color: #CBD5E1;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06); 
+            transform: translateY(-2px);
+        }
         .user-avatar { 
-            width: 38px; height: 38px; background: var(--accent-primary);
-            box-shadow: 0 4px 12px var(--accent-glow);
-            border-radius: 12px; display: flex; align-items: center; justify-content: center; 
-            font-weight: 700; color: white; font-size: 0.9rem; 
+            width: 36px; height: 36px; 
+            background: var(--accent-primary);
+            border-radius: 10px; 
+            display: flex; align-items: center; justify-content: center; 
+            font-weight: 600; color: white; font-size: 0.85rem;
+            box-shadow: 0 4px 8px -2px rgba(15, 23, 42, 0.25);
+            flex-shrink: 0;
         }
 
         /* MAIN AREA */
@@ -1043,13 +1057,18 @@
         .analysis-overlay.analysis-error .status-text { color: #991B1B; }
         
         @media (max-width: 768px) {
+            /* Mobile Optimization: Smaller Logo & Text */
+            .hero-logo { width: 52px; height: 52px; font-size: 1.5rem; margin-bottom: 16px; border-radius: 18px; }
+            .hero-text { font-size: 1.5rem; margin-bottom: 8px; }
+            .hero-sub { font-size: 0.9rem; }
+
             .sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-105%); box-shadow: 20px 0 50px rgba(0,0,0,0.1); }
             .sidebar.open { transform: translateX(0); }
             .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.2); z-index: 45; display: none; backdrop-filter: blur(2px); }
             .sidebar-overlay.open { display: block; }
             .mobile-header { display: flex; }
-            .hero-container { margin-top: 15vh; }
-            .paper-sheet { padding: 2.5rem 2rem; transform: none; margin: 1rem; }
+            .hero-container { margin-top: 12vh; }
+            .paper-sheet { padding: 2rem 1.5rem; transform: none; margin: 1rem; }
             .doc-viewer.template-mode { padding: 1rem 0; }
             .canvas-panel {
                 top: 0;
@@ -1065,6 +1084,19 @@
             .modal-box { width: 92%; padding: 28px; }
             .modal-box.login-modal { padding: 32px 20px; width: 92%; }
             .btn-close-icon { top: 12px; right: 12px; }
+        }
+        .user-info {
+            display: flex; flex-direction: column; gap: 2px; flex: 1;
+            overflow: hidden; /* contain floats */
+            min-width: 0; /* allows flex child to shrink below content size */
+        }
+        .user-name {
+            font-size: 0.9rem; font-weight: 600; color: var(--text-main);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .user-email {
+            font-size: 0.75rem; color: var(--text-muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
     </style>
 </head>
@@ -1090,9 +1122,9 @@
         </div>
         <div class="user-profile" id="userProfile">
             <div class="user-avatar" id="userAvatar">G</div>
-            <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
-                <div id="userNameLabel" style="font-size:0.9rem; font-weight:600; color:var(--text-main);">Guest</div>
-                <div id="userEmailLabel" style="font-size:0.75rem; color:var(--text-muted);">로그인 필요</div>
+            <div class="user-info">
+                <div id="userNameLabel" class="user-name">Guest</div>
+                <div id="userEmailLabel" class="user-email">로그인 필요</div>
             </div>
             <button id="btnAuthToggle" style="border:none; background:transparent; color:#94A3B8; cursor:pointer; font-size:1.1rem;" title="로그인 또는 로그아웃">
                 <i class="bi bi-box-arrow-in-right"></i>

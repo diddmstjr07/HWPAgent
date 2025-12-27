@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
-from models import User, DocumentHistory, RiroDocument
+from models import User, DocumentHistory, ChatSession, RiroDocument
 
 class Database:
     def __init__(self, db_path='hwp_agent.db'):
@@ -73,6 +73,23 @@ class Database:
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_riro_documents
             ON riro_documents(riro_id, created_at DESC)
+        ''')
+
+        # 채팅 세션 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                messages TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_chat_sessions_user
+            ON chat_sessions(user_id, updated_at DESC)
         ''')
         
         conn.commit()
@@ -320,6 +337,132 @@ class Database:
         conn.commit()
         conn.close()
         
+        return deleted
+
+    # ============ Chat Sessions ============
+
+    def create_chat_session(self, user_id, title, messages):
+        session_id = f"chat_{uuid4().hex}"
+        now = datetime.now().isoformat()
+        payload = json.dumps(messages or [])
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (session_id, user_id, title, payload, now, now))
+        conn.commit()
+        conn.close()
+
+        return ChatSession(
+            id=session_id,
+            user_id=user_id,
+            title=title,
+            messages=messages or [],
+            created_at=now,
+            updated_at=now
+        )
+
+    def get_chat_sessions(self, user_id, limit=50):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, user_id, title, created_at, updated_at
+            FROM chat_sessions
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            LIMIT ?
+        ''', (user_id, limit))
+        rows = cursor.fetchall()
+        conn.close()
+
+        sessions = []
+        for row in rows:
+            sessions.append(ChatSession(
+                id=row['id'],
+                user_id=row['user_id'],
+                title=row['title'],
+                messages=[],
+                created_at=row['created_at'],
+                updated_at=row['updated_at']
+            ))
+        return sessions
+
+    def get_chat_session(self, session_id, user_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM chat_sessions
+            WHERE id = ? AND user_id = ?
+        ''', (session_id, user_id))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        messages = []
+        if row['messages']:
+            try:
+                messages = json.loads(row['messages'])
+            except json.JSONDecodeError:
+                messages = []
+
+        return ChatSession(
+            id=row['id'],
+            user_id=row['user_id'],
+            title=row['title'],
+            messages=messages,
+            created_at=row['created_at'],
+            updated_at=row['updated_at']
+        )
+
+    def update_chat_session(self, session_id, user_id, title=None, messages=None):
+        fields = []
+        values = []
+
+        if title is not None:
+            fields.append('title = ?')
+            values.append(title)
+
+        if messages is not None:
+            fields.append('messages = ?')
+            values.append(json.dumps(messages))
+
+        if not fields:
+            return self.get_chat_session(session_id, user_id)
+
+        now = datetime.now().isoformat()
+        fields.append('updated_at = ?')
+        values.append(now)
+        values.extend([session_id, user_id])
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(f'''
+            UPDATE chat_sessions
+            SET {", ".join(fields)}
+            WHERE id = ? AND user_id = ?
+        ''', values)
+        updated = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+
+        if not updated:
+            return None
+        return self.get_chat_session(session_id, user_id)
+
+    def delete_chat_session(self, session_id, user_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            DELETE FROM chat_sessions
+            WHERE id = ? AND user_id = ?
+        ''', (session_id, user_id))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
         return deleted
 
     # ============ RiRoSchool Documents ============

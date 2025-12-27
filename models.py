@@ -42,6 +42,28 @@ class DocumentHistory:
             'updated_at': self.updated_at
         }
 
+class ChatSession:
+    """채팅 세션 모델"""
+    def __init__(self, id, user_id, title, messages=None, created_at=None, updated_at=None):
+        self.id = id
+        self.user_id = user_id
+        self.title = title
+        self.messages = messages or []
+        self.created_at = created_at or datetime.now().isoformat()
+        self.updated_at = updated_at or datetime.now().isoformat()
+
+    def to_dict(self, include_messages=True):
+        payload = {
+            'id': self.id,
+            'user_id': self.user_id,
+            'title': self.title,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at
+        }
+        if include_messages:
+            payload['messages'] = self.messages
+        return payload
+
 class RiroDocument:
     """리로스쿨 사용자 문서"""
     def __init__(self, id, riro_id, title, content, image_urls=None, created_at=None):

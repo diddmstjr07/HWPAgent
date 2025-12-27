@@ -3,246 +3,417 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HWP Agent | 로그인</title>
+    <title>DOC Agent | 로그인</title>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    
     <style>
         :root {
             --bg-deep: #F8FAFC;
+            --bg-card: #FFFFFF;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
             --accent-primary: #0F172A;
             --accent-glow: rgba(15, 23, 42, 0.15);
             --accent-gradient: linear-gradient(135deg, #0F172A 0%, #334155 100%);
+            --shadow-soft: 0 20px 40px -10px rgba(15, 23, 42, 0.05);
+            --radius-md: 16px;
         }
 
-        * { box-sizing: border-box; outline: none; }
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
         
         body {
             margin: 0; padding: 0;
             background-color: var(--bg-deep);
+            color: var(--text-main);
             font-family: 'Inter', 'Noto Sans KR', sans-serif;
             height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            position: relative;
         }
 
-        /* CARD STYLE FROM index.html */
+        /* Ambient Background Effect */
+        body::before {
+            content: ''; position: absolute; top: -10%; right: -5%; width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(203, 213, 225, 0.2) 0%, transparent 70%);
+            pointer-events: none; z-index: 0;
+        }
+        body::after {
+            content: ''; position: absolute; bottom: -10%; left: -5%; width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(226, 232, 240, 0.25) 0%, transparent 70%);
+            pointer-events: none; z-index: 0;
+        }
+
+        .login-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
+
+        .brand-logo {
+            width: 64px; height: 64px;
+            background: #fff;
+            border: 1px solid #E2E8F0;
+            border-radius: 18px; margin: 0 auto 24px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; color: var(--accent-primary);
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+            background: linear-gradient(135deg, #fff, #F8FAFC);
+            /* Burst Source Animation */
+            position: relative; z-index: 20;
+            animation: logo-pop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        .brand-logo i { background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
         .login-card {
-            position: relative;
-            width: min(92vw, 400px);
-            max-width: 400px;
-            padding: 50px 36px;
-            overflow: hidden;
-            background: url('/static/images/riro.jpg') center/cover no-repeat;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
-            border-radius: 28px;
-            animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        .login-card::before {
-            content: '';
-            position: absolute; inset: 0;
-            background: linear-gradient(to bottom, rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.9));
-            z-index: 1;
-            backdrop-filter: blur(1px);
-        }
-
-        .login-content {
-            position: relative;
-            z-index: 5;
-            display: flex;
-            flex-direction: column;
-            gap: 28px;
-            color: white;
+            background: var(--bg-card);
+            border: 1px solid #E2E8F0;
+            border-radius: 24px;
+            padding: 40px 32px;
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.1);
             text-align: center;
+            /* Burst Out Animation */
+            animation: card-burst 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.3s both;
+            transform-origin: top center;
         }
 
-        .login-heading h3 {
-            margin: 0 0 6px;
-            font-family: 'Noto Serif KR', serif;
-            font-size: 1.8rem;
-            font-weight: 700;
-            letter-spacing: -0.01em;
-            color: #fff;
-            text-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        /* Staggered Content Animation */
+        .login-title { animation: item-slide-down 0.5s 0.4s backwards; }
+        .login-desc { animation: item-slide-down 0.5s 0.45s backwards; }
+        #authForm > * { animation: item-slide-down 0.5s backwards; }
+        #authForm .input-group { animation-delay: 0.5s; }
+        #authForm .btn-primary { animation-delay: 0.55s; }
+        #authForm .status-message { animation-delay: 0.55s; }
+        #authForm .toggle-link { animation-delay: 0.6s; }
+        #authForm .divider { animation-delay: 0.65s; }
+        #authForm .social-login { animation-delay: 0.7s; }
+
+        @keyframes logo-pop {
+            0% { opacity: 0; transform: scale(0) rotate(-45deg); }
+            60% { transform: scale(1.1) rotate(5deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); }
         }
-        .login-heading p {
-            margin: 0;
-            color: #94A3B8;
-            font-size: 0.9rem;
-            font-weight: 400;
+        @keyframes card-burst {
+            0% { opacity: 0; transform: translateY(-40px) scale(0.8); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes item-slide-down {
+            0% { opacity: 0; transform: translateY(-15px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-title {
+            font-family: 'Noto Serif KR', serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0 0 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .login-desc {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            line-height: 1.5;
         }
 
         .input-group {
-            display: flex; flex-direction: column; gap: 14px;
+            display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px;
         }
 
-        .input-glass {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .input-field {
+            position: relative;
+            display: flex; align-items: center;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
             border-radius: 14px;
-            padding: 14px 18px;
-            backdrop-filter: blur(4px);
-            display: flex; align-items: center; gap: 12px;
+            padding: 14px 16px;
             transition: all 0.2s ease;
         }
-        .input-glass:focus-within {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.3);
+        .input-field:focus-within {
+            background: #fff;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
             transform: translateY(-1px);
         }
-        .input-glass i { color: #64748B; font-size: 1.1rem; transition: 0.2s; }
-        .input-glass:focus-within i { color: #E2E8F0; }
-        
-        .form-input {
-            width: 100%; background: transparent; border: none; padding: 0;
-            color: white; font-size: 0.95rem; font-family: inherit;
+        .input-field i {
+            color: #94A3B8; font-size: 1.1rem; margin-right: 12px; transition: color 0.2s;
         }
-        .form-input::placeholder { color: #64748B; }
+        .input-field:focus-within i { color: var(--accent-primary); }
 
-        /* Autofill Fix */
-        input:-webkit-autofill,
-        input:-webkit-autofill:hover, 
-        input:-webkit-autofill:focus, 
-        input:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 100px rgba(0,0,0,0) inset !important;
-            -webkit-text-fill-color: white !important;
-            transition: background-color 5000s ease-in-out 0s;
+        .input-field input {
+            flex: 1; border: none; background: transparent;
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            font-size: 0.95rem; color: var(--text-main);
+            padding: 0;
         }
+        .input-field input::placeholder { color: #CBD5E1; }
 
-        .btn-submit {
-            width: 100%; padding: 14px;
-            background: white; color: #0F172A;
-            border: none; border-radius: 14px;
-            font-weight: 600; font-size: 0.95rem; font-family: inherit;
+        .btn-primary {
+            width: 100%;
+            padding: 16px;
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            transition: all 0.2s;
-            margin-top: 10px;
+            box-shadow: 0 10px 20px -5px var(--accent-glow);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            letter-spacing: 0.01em;
         }
-        .btn-submit:hover {
+        .btn-primary:hover {
             transform: translateY(-2px);
-            background: #F8FAFC;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 15px 30px -8px var(--accent-glow);
         }
-        .btn-submit:disabled { opacity: 0.7; cursor: wait; transform: none; }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-primary:disabled { opacity: 0.7; cursor: wait; transform: none; }
 
-        .btn-link {
-            background: none; border: none; padding: 0;
-            color: #94A3B8; font-size: 0.85rem; font-family: inherit;
-            cursor: pointer; text-decoration: underline;
-            margin-top: 10px;
+        .toggle-link {
+            display: inline-block;
+            margin-top: 24px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            cursor: pointer;
+            transition: color 0.2s;
         }
-        .btn-link:hover { color: white; }
+        .toggle-link:hover { color: var(--accent-primary); text-decoration: underline; }
 
-        .status-msg {
-            font-size: 0.85rem; color: #EF4444; min-height: 20px;
-            margin-top: 10px; font-weight: 500;
+        .divider {
+            display: flex; align-items: center; margin: 28px 0 20px;
+            color: var(--text-muted); font-size: 0.8rem;
+        }
+        .divider::before, .divider::after {
+            content: ''; flex: 1; height: 1px; background: #E2E8F0;
+        }
+        .divider span { padding: 0 12px; }
+
+        .social-login {
+            display: flex; gap: 14px; justify-content: center;
+        }
+        .btn-social {
+            width: 50px; height: 50px; border-radius: 50%; border: 1px solid #E2E8F0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            background: #fff; color: var(--text-main);
+            text-decoration: none;
+        }
+        .btn-social:hover { transform: translateY(-3px); box-shadow: 0 8px 16px -4px rgba(0,0,0,0.1); }
+        .btn-google { background: #fff; border-color: #E2E8F0; }
+        .btn-google:hover { border-color: #E2E8F0; background: #fff; }
+        .btn-kakao { background: #FEE500; border-color: #FEE500; color: #3C1E1E; }
+        .btn-kakao:hover { background: #FDD835; }
+        .btn-naver { background: #03C75A; border-color: #03C75A; color: white; }
+        .btn-naver:hover { background: #00B34E; }
+        
+        .home-link {
+            position: absolute; top: 24px; left: 24px;
+            display: flex; align-items: center; gap: 6px;
+            color: var(--text-muted); text-decoration: none;
+            font-size: 0.9rem; font-weight: 500;
+            padding: 8px 12px; border-radius: 10px;
+            transition: all 0.2s;
+            z-index: 20;
+        }
+        .home-link:hover { background: rgba(255,255,255,0.5); color: var(--accent-primary); }
+
+        .status-message {
+            margin-top: 16px;
+            min-height: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #EF4444;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .status-message.success { color: #10B981; }
+
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 480px) {
+            .login-container { padding: 16px; }
+            .login-card { padding: 32px 24px; }
+        }
     </style>
 </head>
 <body>
-    <div class="login-card">
-        <div class="login-content">
-            <div class="login-heading">
-                <h3 id="formTitle">계정 로그인</h3>
-                <p id="formDesc">내 문서를 저장하고 이어서 작업하려면 로그인하세요.</p>
-            </div>
 
-            <form id="authForm" style="display:flex; flex-direction:column; gap:14px; width:100%;">
+    <a href="/" class="home-link"><i class="bi bi-chevron-left"></i> 홈으로</a>
+
+    <div class="login-container">
+        <div class="brand-logo">
+            <i class="bi bi-stars"></i>
+        </div>
+
+        <div class="login-card">
+            <h1 class="login-title" id="pageTitle">환영합니다</h1>
+            <p class="login-desc" id="pageDesc">계정에 로그인하고 문서 작업을 계속하세요.</p>
+
+            <form id="authForm">
                 <div class="input-group">
-                    <div class="input-glass" id="nameField" style="display:none;">
+                    <div class="input-field" id="field-name" style="display:none;">
                         <i class="bi bi-person"></i>
-                        <input type="text" id="name" class="form-input" placeholder="이름">
+                        <input type="text" id="input-name" placeholder="이름 (회원가입용)">
                     </div>
-                    <div class="input-glass">
+                    <div class="input-field">
                         <i class="bi bi-envelope"></i>
-                        <input type="email" id="email" class="form-input" placeholder="이메일" required>
+                        <input type="email" id="input-email" placeholder="이메일 주소" required>
                     </div>
-                    <div class="input-glass">
-                        <i class="bi bi-lock-fill"></i>
-                        <input type="password" id="password" class="form-input" placeholder="비밀번호" required>
+                    <div class="input-field">
+                        <i class="bi bi-lock"></i>
+                        <input type="password" id="input-password" placeholder="비밀번호" required>
                     </div>
                 </div>
 
-                <button type="submit" class="btn-submit" id="submitBtn">로그인</button>
-                <div class="status-msg" id="statusMsg"></div>
+                <button type="submit" class="btn-primary" id="btn-submit">로그인</button>
                 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-                    <button type="button" class="btn-link" id="toggleModeBtn">계정이 없으신가요?</button>
-                    <button type="button" class="btn-link" onclick="window.location.href='/'">홈으로</button>
+                <div class="status-message" id="status-msg"></div>
+
+                <div class="toggle-link" id="btn-toggle-mode">계정이 없으신가요? 회원가입</div>
+
+                <div class="divider"><span>또는 소셜 계정으로 계속</span></div>
+                <div class="social-login">
+                    <a href="/api/auth/social/google" class="btn-social btn-google" title="Google로 계속하기">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+                    </a>
+                    <a href="/api/auth/social/kakao" class="btn-social btn-kakao" title="Kakao로 계속하기">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.75C7.29 3.75 3.75 6.77 3.75 10.5c0 2.21 1.25 4.14 3.09 5.28L6.2 19.45l3.87-2.31c.91.13 1.86.2 2.8.2 4.71 0 8.25-3.02 8.25-6.75S16.71 3.75 12 3.75z" fill="#3C1E1E"/></svg>
+                    </a>
+                    <a href="/api/auth/social/naver" class="btn-social btn-naver" title="Naver로 계속하기">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><path fill="#ffffff" d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727v12.845z"/></svg>
+                    </a>
                 </div>
             </form>
+        </div>
+        
+        <div style="text-align: center; margin-top: 24px; color: #94A3B8; font-size: 0.75rem;">
+            &copy; DOC Agent. All rights reserved.
         </div>
     </div>
 
     <script>
-        const form = document.getElementById('authForm');
-        const nameField = document.getElementById('nameField');
-        const submitBtn = document.getElementById('submitBtn');
-        const toggleBtn = document.getElementById('toggleModeBtn');
-        const titleEl = document.getElementById('formTitle');
-        const descEl = document.getElementById('formDesc');
-        const statusEl = document.getElementById('statusMsg');
+        const state = {
+            isLogin: true
+        };
 
-        let isLogin = true;
+        const elements = {
+            title: document.getElementById('pageTitle'),
+            desc: document.getElementById('pageDesc'),
+            fieldName: document.getElementById('field-name'),
+            inputName: document.getElementById('input-name'),
+            inputEmail: document.getElementById('input-email'),
+            inputPw: document.getElementById('input-password'),
+            btnSubmit: document.getElementById('btn-submit'),
+            btnToggle: document.getElementById('btn-toggle-mode'),
+            statusMsg: document.getElementById('status-msg'),
+            form: document.getElementById('authForm')
+        };
 
-        toggleBtn.addEventListener('click', () => {
-            isLogin = !isLogin;
-            nameField.style.display = isLogin ? 'none' : 'flex';
-            titleEl.textContent = isLogin ? '계정 로그인' : '회원가입';
-            descEl.textContent = isLogin ? '내 문서를 저장하고 이어서 작업하려면 로그인하세요.' : '새로운 계정을 만들어 문서를 관리하세요.';
-            submitBtn.textContent = isLogin ? '로그인' : '가입하기';
-            toggleBtn.textContent = isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?';
-            statusEl.textContent = '';
+        // Toggle Login / Register Mode
+        elements.btnToggle.addEventListener('click', () => {
+            state.isLogin = !state.isLogin;
+            updateUI();
         });
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            const name = document.getElementById('name').value.trim();
-
-            if (!email || !password) {
-                statusEl.textContent = '이메일과 비밀번호를 입력해주세요.';
-                return;
+        function updateUI() {
+            elements.statusMsg.textContent = '';
+            elements.statusMsg.className = 'status-message';
+            
+            if (state.isLogin) {
+                elements.title.textContent = '환영합니다';
+                elements.desc.textContent = '계정에 로그인하고 문서 작업을 계속하세요.';
+                elements.fieldName.style.display = 'none';
+                elements.inputName.removeAttribute('required');
+                elements.btnSubmit.textContent = '로그인';
+                elements.btnToggle.textContent = '계정이 없으신가요? 회원가입';
+            } else {
+                elements.title.textContent = '회원가입';
+                elements.desc.textContent = '새로운 계정을 만들고 DOC Agent를 시작하세요.';
+                elements.fieldName.style.display = 'flex';
+                elements.inputName.setAttribute('required', 'true');
+                elements.btnSubmit.textContent = '계정 만들기';
+                elements.btnToggle.textContent = '이미 계정이 있으신가요? 로그인';
             }
+        }
 
-            submitBtn.disabled = true;
-            submitBtn.textContent = '처리 중...';
-            statusEl.textContent = '';
+        // Handle Submit
+        elements.form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = elements.inputEmail.value.trim();
+            const password = elements.inputPw.value;
+            const name = elements.inputName.value.trim();
+
+            if (!email || !password) return;
+            if (!state.isLogin && !name) return;
+
+            setLoading(true);
 
             try {
-                const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-                const body = { email, password };
-                if (!isLogin) body.name = name;
+                const endpoint = state.isLogin ? '/api/auth/login' : '/api/auth/register';
+                const payload = { email, password };
+                if (!state.isLogin) payload.name = name;
 
                 const res = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify(payload)
                 });
+
                 const data = await res.json();
 
                 if (data.success) {
-                    window.location.href = '/';
+                    showStatus(state.isLogin ? '로그인 성공! 이동합니다...' : '가입 성공! 로그인해주세요.', true);
+                    setTimeout(() => {
+                        if (state.isLogin) {
+                            window.location.href = '/';
+                        } else {
+                            // Switch to login mode after register
+                            state.isLogin = true;
+                            updateUI();
+                            elements.inputEmail.value = email; // Keep email
+                            elements.inputPw.value = '';
+                            setLoading(false);
+                        }
+                    }, 1500);
                 } else {
-                    statusEl.textContent = data.error || '오류가 발생했습니다.';
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = isLogin ? '로그인' : '가입하기';
+                    showStatus(data.error || '오류가 발생했습니다.', false);
+                    setLoading(false);
                 }
             } catch (err) {
-                statusEl.textContent = '서버 연결 실패';
-                submitBtn.disabled = false;
-                submitBtn.textContent = isLogin ? '로그인' : '가입하기';
+                console.error(err);
+                showStatus('서버 연결에 실패했습니다.', false);
+                setLoading(false);
             }
         });
+
+        function setLoading(isLoading) {
+            elements.btnSubmit.disabled = isLoading;
+            elements.btnSubmit.textContent = isLoading ? '처리 중...' : (state.isLogin ? '로그인' : '계정 만들기');
+        }
+
+        function showStatus(msg, isSuccess) {
+            elements.statusMsg.textContent = msg;
+            elements.statusMsg.className = isSuccess ? 'status-message success' : 'status-message';
+            if(isSuccess) {
+                elements.statusMsg.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${msg}`;
+            } else {
+                elements.statusMsg.innerHTML = `<i class="bi bi-exclamation-circle-fill"></i> ${msg}`;
+            }
+        }
     </script>
 </body>
 </html>
