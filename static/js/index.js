@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
         TEMPLATES: '/api/templates',
         TEMPLATE_SELECT: '/api/template/select'
     };
+    const supportsSrcdoc = 'srcdoc' in document.createElement('iframe');
 
     // DOM 요소 캐싱 (에러 방지를 위해 Optional Chaining 사용)
     const els = {
@@ -133,6 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         frameHtml: '',
         frameDocumentRef: null,
         frameResizeObserver: null,
+        frameBlobUrl: null,
         selectionChangeTimer: null,
         riroEvents: [],
         riroLoggedIn: false,
@@ -270,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const serializeFrameHtml = () => {
         const doc = getFrameDocument();
         if (!doc) return state.templateHtml;
-        const styles = Array.from(doc.head.querySelectorAll('style'))
+        const styles = Array.from(doc.head.querySelectorAll('style, link[rel="stylesheet"]'))
             .filter((style) => style.id !== 'hwp-editor-overlay')
             .map((style) => style.outerHTML)
             .join('\n');
@@ -283,6 +285,62 @@ document.addEventListener('DOMContentLoaded', () => {
         state.frameHtml = html;
     };
 
+    const getFrameScale = (doc = getFrameDocument()) => {
+        if (!doc || !doc.body) return 1;
+        const raw = parseFloat(doc.body.dataset.hwpScale || '1');
+        return Number.isFinite(raw) && raw > 0 ? raw : 1;
+    };
+
+    const clearFrameScale = (doc) => {
+        if (!doc || !doc.body) return;
+        if (!doc.body.dataset.hwpScale) return;
+        doc.body.style.transform = '';
+        doc.body.style.transformOrigin = '';
+        doc.body.style.width = '';
+        delete doc.body.dataset.hwpScale;
+    };
+
+    const getFrameContentWidth = (doc) => {
+        if (!doc) return 0;
+        const candidate = doc.querySelector('.Section, .Paper, .hwp-doc');
+        if (candidate) {
+            const width = candidate.scrollWidth || candidate.getBoundingClientRect().width;
+            if (width) return width;
+        }
+        return Math.max(
+            doc.documentElement ? doc.documentElement.scrollWidth : 0,
+            doc.body ? doc.body.scrollWidth : 0
+        );
+    };
+
+    const applyFrameScale = () => {
+        const doc = getFrameDocument();
+        if (!doc || !doc.body || !els.docFrame) return;
+        const isCompact = window.matchMedia
+            ? window.matchMedia('(max-width: 768px)').matches
+            : window.innerWidth <= 768;
+        if (!isCompact) {
+            clearFrameScale(doc);
+            return;
+        }
+
+        const frameWidth = els.docFrame.clientWidth;
+        if (!frameWidth) return;
+        const contentWidth = getFrameContentWidth(doc);
+        if (!contentWidth) return;
+
+        const scale = Math.min(1, frameWidth / contentWidth);
+        if (scale >= 0.98) {
+            clearFrameScale(doc);
+            return;
+        }
+
+        doc.body.dataset.hwpScale = String(scale);
+        doc.body.style.transformOrigin = 'top left';
+        doc.body.style.transform = `scale(${scale})`;
+        doc.body.style.width = `${contentWidth}px`;
+    };
+
     const syncFrameHeight = () => {
         if (!els.docFrame) return;
         const doc = getFrameDocument();
@@ -291,11 +349,20 @@ document.addEventListener('DOMContentLoaded', () => {
             doc.documentElement.scrollHeight,
             doc.body ? doc.body.scrollHeight : 0
         );
+        const scale = getFrameScale(doc);
+        if (scale !== 1) height = Math.ceil(height * scale);
         if (state.canvasOpen && els.canvasBody) {
             const canvasHeight = els.canvasBody.clientHeight;
             if (canvasHeight) height = Math.max(height, canvasHeight);
         }
-        els.docFrame.style.height = `${height}px`;
+        if (height) {
+            els.docFrame.style.height = `${height}px`;
+        }
+    };
+
+    const syncFrameLayout = () => {
+        applyFrameScale();
+        syncFrameHeight();
     };
 
     const attachFrameListeners = () => {
@@ -305,7 +372,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         doc.addEventListener('mouseup', handleDocSelection);
         doc.addEventListener('keyup', handleDocSelection);
-        doc.addEventListener('scroll', clearSelectedSnippet, { passive: true });
+        doc.addEventListener('scroll', () => {
+            dismissEditCover();
+            clearSelectedSnippet();
+        }, { passive: true });
         doc.addEventListener('mousedown', () => clearSelectedSnippet());
         doc.addEventListener('selectionchange', () => {
             if (state.selectionChangeTimer) {
@@ -330,7 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
             img.addEventListener('load', syncFrameHeight);
             img.addEventListener('error', syncFrameHeight);
         });
-        syncFrameHeight();
+        syncFrameLayout();
     };
 
     const createCanvasMessageRow = (msg) => {
@@ -427,7 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('canvas-open');
         state.canvasOpen = true;
         state.canvasDismissed = false;
-        requestAnimationFrame(() => syncFrameHeight());
+        requestAnimationFrame(() => syncFrameLayout());
     };
 
     const closeCanvasOverlay = (dismiss = false) => {
@@ -1078,6 +1148,7 @@ document.addEventListener('DOMContentLoaded', () => {
             els.docFrame.srcdoc = '';
             els.docFrame.classList.add('hidden');
         }
+        revokeFrameBlobUrl();
         if (els.docTitle) els.docTitle.textContent = '문서 제목';
         if (els.editTargetInput) els.editTargetInput.value = '';
         if (els.editTargetSelect) els.editTargetSelect.value = '';
@@ -1527,6 +1598,240 @@ document.addEventListener('DOMContentLoaded', () => {
         return { styleBlock, body };
     };
 
+    const extractBodyHtml = (html) => {
+        const trimmed = (html || '').trim();
+        if (!trimmed) return '';
+        if (!/<(?:html|body)[\s>]/i.test(trimmed) && !/<!doctype/i.test(trimmed)) {
+            return trimmed;
+        }
+        try {
+            const doc = new DOMParser().parseFromString(trimmed, 'text/html');
+            if (doc && doc.body) {
+                const bodyHtml = doc.body.innerHTML.trim();
+                return bodyHtml || trimmed;
+            }
+        } catch (e) {
+            return trimmed;
+        }
+        return trimmed;
+    };
+
+    const getHtmlMetrics = (html) => {
+        const normalized = extractBodyHtml(html);
+        if (!normalized) {
+            return { normalized: '', textLength: 0, mediaCount: 0, flags: null };
+        }
+        try {
+            const doc = new DOMParser().parseFromString(normalized, 'text/html');
+            const body = doc.body;
+            if (!body) {
+                return { normalized, textLength: 0, mediaCount: 0, flags: null };
+            }
+            const textLength = (body.textContent || '').replace(/\s+/g, '').length;
+            const mediaCount = body.querySelectorAll('img, svg, canvas, iframe').length;
+            const flags = {
+                hasSection: !!body.querySelector('.Section, .Paper, .hwp-doc'),
+                hasTable: !!body.querySelector('table')
+            };
+            return { normalized, textLength, mediaCount, flags };
+        } catch (e) {
+            return {
+                normalized,
+                textLength: normalized.replace(/\s+/g, '').length,
+                mediaCount: 0,
+                flags: null
+            };
+        }
+    };
+
+    const validateRenderedUpdate = (originalHtml, updatedHtml, options = {}) => {
+        const { enforceStructure = false } = options;
+        const original = getHtmlMetrics(originalHtml);
+        const updated = getHtmlMetrics(updatedHtml);
+        if (!updated.normalized) return { ok: false, normalized: '' };
+        if (updated.textLength === 0 && updated.mediaCount === 0) {
+            return { ok: false, normalized: updated.normalized };
+        }
+        if (original.textLength > 0 && updated.textLength === 0 && updated.mediaCount === 0) {
+            return { ok: false, normalized: updated.normalized };
+        }
+        if (enforceStructure && original.flags && updated.flags) {
+            if (original.flags.hasSection && !updated.flags.hasSection) {
+                return { ok: false, normalized: updated.normalized };
+            }
+            if (original.flags.hasTable && !updated.flags.hasTable) {
+                return { ok: false, normalized: updated.normalized };
+            }
+        }
+        return { ok: true, normalized: updated.normalized };
+    };
+
+    const BLOCK_LEVEL_TAGS = new Set([
+        'P', 'DIV', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER',
+        'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+        'UL', 'OL', 'LI', 'DL', 'DT', 'DD',
+        'TABLE', 'THEAD', 'TBODY', 'TFOOT', 'TR', 'TD', 'TH',
+        'BLOCKQUOTE', 'PRE', 'HR'
+    ]);
+
+    const isInlineHtml = (html) => {
+        const normalized = extractBodyHtml(html);
+        if (!normalized) return true;
+        try {
+            const doc = new DOMParser().parseFromString(normalized, 'text/html');
+            const body = doc.body;
+            if (!body) return true;
+            return !Array.from(body.querySelectorAll('*')).some((node) => BLOCK_LEVEL_TAGS.has(node.tagName));
+        } catch (e) {
+            return true;
+        }
+    };
+
+    const mergeElementAttributes = (source, target) => {
+        if (!source || !target) return;
+        Array.from(source.attributes).forEach((attr) => {
+            if (attr.name === 'class' && target.classList) {
+                const merged = new Set([
+                    ...source.classList,
+                    ...target.classList
+                ]);
+                target.setAttribute('class', Array.from(merged).join(' '));
+                return;
+            }
+            if (!target.hasAttribute(attr.name)) {
+                target.setAttribute(attr.name, attr.value);
+            }
+        });
+    };
+
+    const PRESERVE_CONTAINER_TAGS = new Set(['TD', 'TH', 'TR', 'TBODY', 'THEAD', 'TFOOT', 'TABLE']);
+
+    const normalizeFragmentForReplacement = (block, html) => {
+        const normalized = extractBodyHtml(html);
+        if (!block) return { html: normalized, innerOnly: false, innerHtml: '' };
+        const doc = block.ownerDocument || document;
+        const temp = doc.createElement('div');
+        temp.innerHTML = normalized;
+        const firstEl = temp.firstElementChild;
+        const tag = block.tagName;
+
+        if (PRESERVE_CONTAINER_TAGS.has(tag)) {
+            const candidate = temp.querySelector(tag.toLowerCase());
+            const inner = candidate ? candidate.innerHTML : normalized;
+            return { html: normalized, innerOnly: true, innerHtml: inner };
+        }
+
+        if (firstEl && firstEl.tagName === tag) {
+            mergeElementAttributes(block, firstEl);
+            return { html: temp.innerHTML, innerOnly: false, innerHtml: '' };
+        }
+
+        if (temp.childElementCount === 1 && firstEl) {
+            const inner = firstEl.innerHTML;
+            return { html: normalized, innerOnly: true, innerHtml: inner };
+        }
+
+        if (temp.childElementCount === 0) {
+            return { html: normalized, innerOnly: true, innerHtml: normalized };
+        }
+
+        return { html: normalized, innerOnly: false, innerHtml: '' };
+    };
+
+    const getPreviewHtmlForBlock = (block, html) => {
+        const normalized = extractBodyHtml(html);
+        if (!block || !normalized) return null;
+        const doc = block.ownerDocument || document;
+        const temp = doc.createElement('div');
+        temp.innerHTML = normalized;
+        const firstEl = temp.firstElementChild;
+        if (PRESERVE_CONTAINER_TAGS.has(block.tagName)) {
+            const candidate = temp.querySelector(block.tagName.toLowerCase());
+            return candidate ? candidate.innerHTML : null;
+        }
+        if (firstEl && firstEl.tagName === block.tagName) {
+            return firstEl.innerHTML;
+        }
+        if (!firstEl) return normalized;
+        return null;
+    };
+
+    const cleanupEraseSpans = (root) => {
+        if (!root) return;
+        const spans = Array.from(root.querySelectorAll('.edit-erase-span'));
+        spans.forEach((span) => {
+            const parent = span.parentNode;
+            if (!parent) return;
+            const fragment = span.ownerDocument.createDocumentFragment();
+            while (span.firstChild) {
+                fragment.appendChild(span.firstChild);
+            }
+            parent.replaceChild(fragment, span);
+        });
+    };
+
+    const replaceRangeWithHtml = (range, html) => {
+        if (!range) return false;
+        const container = range.commonAncestorContainer;
+        const doc = container && container.ownerDocument ? container.ownerDocument : document;
+        if (!doc || !doc.contains(container)) return false;
+
+        const normalized = extractBodyHtml(html);
+        if (!normalized) return false;
+
+        const block = getBlockElement(container);
+        const temp = doc.createElement('div');
+        temp.innerHTML = normalized;
+
+        let replacement = normalized;
+        if (block) {
+            const blockTag = block.tagName.toLowerCase();
+            const candidate = temp.querySelector(blockTag);
+            if (candidate) {
+                replacement = candidate.innerHTML;
+            } else if (temp.childElementCount === 1 && temp.firstElementChild) {
+                replacement = temp.firstElementChild.innerHTML;
+            }
+        }
+
+        const wrap = doc.createElement('div');
+        wrap.innerHTML = replacement;
+        const fragment = doc.createDocumentFragment();
+        while (wrap.firstChild) {
+            fragment.appendChild(wrap.firstChild);
+        }
+
+        const safeRange = range.cloneRange();
+        safeRange.deleteContents();
+        safeRange.insertNode(fragment);
+        return true;
+    };
+
+    const getRangeFragmentHtml = (range) => {
+        if (!range) return '';
+        const doc = range.startContainer && range.startContainer.ownerDocument
+            ? range.startContainer.ownerDocument
+            : document;
+        const wrapper = doc.createElement('div');
+        const cloned = range.cloneContents();
+        wrapper.appendChild(cloned);
+        return wrapper.innerHTML || '';
+    };
+
+    const getInlineSelectionInfo = () => {
+        if (!state.selectedRange || !state.selectedBlock) return null;
+        const startBlock = getBlockElement(state.selectedRange.startContainer);
+        const endBlock = getBlockElement(state.selectedRange.endContainer);
+        if (!startBlock || !endBlock || startBlock !== endBlock) return null;
+        const fragmentHtml = getRangeFragmentHtml(state.selectedRange);
+        if (!fragmentHtml) return null;
+        return {
+            range: state.selectedRange,
+            block: startBlock,
+            fragmentHtml
+        };
+    };
+
     const buildFrameOverlayStyles = () => {
         return `
 <style id="hwp-editor-overlay">
@@ -1585,11 +1890,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return `<!DOCTYPE html><html><head><meta charset="utf-8">${baseTag}${styleBlock || ''}${overlayStyle}</head><body>${body || ''}</body></html>`;
     };
 
+    const revokeFrameBlobUrl = () => {
+        if (state.frameBlobUrl) {
+            URL.revokeObjectURL(state.frameBlobUrl);
+            state.frameBlobUrl = null;
+        }
+    };
+
     const renderTemplateFrame = (html) => {
         if (!els.docFrame) return;
         const frameHtml = buildFrameHtml(html, getTemplateBaseHref());
         state.frameHtml = html;
-        els.docFrame.srcdoc = frameHtml;
+        revokeFrameBlobUrl();
+        if (supportsSrcdoc) {
+            els.docFrame.removeAttribute('src');
+            els.docFrame.srcdoc = frameHtml;
+        } else {
+            const blob = new Blob([frameHtml], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            state.frameBlobUrl = url;
+            els.docFrame.src = url;
+        }
         hideInlineEditBubble();
     };
 
@@ -1634,21 +1955,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateBlockFromFragment(block, html) {
         if (!block || !block.isConnected) return;
         const doc = block.ownerDocument || document;
-        const temp = doc.createElement('div');
-        temp.innerHTML = html;
-        const firstEl = temp.firstElementChild;
-        if (firstEl && firstEl.tagName === block.tagName) {
-            block.innerHTML = firstEl.innerHTML;
-        } else {
-            block.innerHTML = html;
-        }
+        const { ok } = validateRenderedUpdate(block.outerHTML || '', html);
+        if (!ok) return;
+        const previewHtml = getPreviewHtmlForBlock(block, html);
+        if (previewHtml === null) return;
+        block.innerHTML = previewHtml;
     }
 
     function updateFrameBodyFromStream(html) {
         const doc = getFrameDocument();
         if (!doc || !doc.body) return;
         const { body } = splitHtmlStyles(html);
-        doc.body.innerHTML = body || html || '';
+        const baseHtml = doc.body.innerHTML || '';
+        const { ok, normalized } = validateRenderedUpdate(baseHtml, body || html || '', { enforceStructure: true });
+        if (!ok) return;
+        doc.body.innerHTML = normalized;
         syncFrameHeight();
     }
 
@@ -1722,6 +2043,12 @@ document.addEventListener('DOMContentLoaded', () => {
         els.editCover.style.transition = '';
         state.editCoverActive = false;
         state.editCoverLocked = false;
+    }
+
+    function dismissEditCover() {
+        if (!state.editCoverActive) return;
+        state.editCoverLocked = false;
+        hideEditCover();
     }
 
     function startEditCoverAnimation(originRect = null) {
@@ -1817,6 +2144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.selectedRange = null;
         const selection = getFrameSelection();
         if (selection) selection.removeAllRanges();
+        cleanupEraseSpans(getDocRoot());
         if (els.editTargetInput) els.editTargetInput.value = '';
         if (els.editTargetSelect) els.editTargetSelect.value = '';
         hideInlineEditBubble();
@@ -1889,33 +2217,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function startEraseAnimation() {
         const docRoot = getDocRoot();
         if (!docRoot) return null;
+        cleanupEraseSpans(docRoot);
         const block = state.selectedBlock;
-        const range = state.selectedRange;
-
-        if (range && block && block.isConnected) {
-            const startBlock = getBlockElement(range.startContainer);
-            const endBlock = getBlockElement(range.endContainer);
-            if (startBlock && startBlock === endBlock) {
-                try {
-                    const wrapped = range.cloneRange();
-                    const doc = range.startContainer.ownerDocument || document;
-                    const span = doc.createElement('span');
-                    span.className = 'edit-erase-span';
-                    wrapped.surroundContents(span);
-                } catch (e) {
-                    block.classList.add('edit-erase-block');
-                }
-            } else {
-                block.classList.add('edit-erase-block');
-            }
-            return block;
-        }
-
         if (block && block.isConnected) {
             block.classList.add('edit-erase-block');
             return block;
         }
-
         return null;
     }
 
@@ -1944,20 +2251,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!firstBlock || !firstBlock.parentNode) return;
 
         const doc = firstBlock.ownerDocument || document;
-        const temp = doc.createElement('div');
-        temp.innerHTML = html;
-        const firstEl = temp.firstElementChild;
-
-        if (!firstEl || firstEl.tagName !== firstBlock.tagName) {
-            firstBlock.innerHTML = html;
+        const normalized = normalizeFragmentForReplacement(firstBlock, html);
+        if (normalized.innerOnly) {
+            firstBlock.innerHTML = normalized.innerHtml;
             blocks.slice(1).forEach((block) => block.remove());
             return;
         }
+
+        const temp = doc.createElement('div');
+        temp.innerHTML = normalized.html;
 
         const fragment = doc.createDocumentFragment();
         while (temp.firstChild) {
             fragment.appendChild(temp.firstChild);
         }
+        if (!fragment.childNodes.length) return;
         firstBlock.parentNode.insertBefore(fragment, firstBlock);
         blocks.forEach((block) => block.remove());
     }
@@ -2191,7 +2499,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const fragmentHtml = getSelectedFragment();
 
         if (fragmentHtml) {
+            const inlineInfo = getInlineSelectionInfo();
             const hasSelectedBlocks = state.selectedBlocks && state.selectedBlocks.length > 0;
+            const hasInlineSelection = !hasSelectedBlocks && !!inlineInfo;
+            const fragmentSource = hasInlineSelection ? inlineInfo.fragmentHtml : fragmentHtml;
+            const editInstruction = hasInlineSelection
+                ? `${instruction}\n추가 규칙: 선택된 범위에 삽입 가능한 인라인 HTML만 반환하세요. <p>, <div>, <table> 같은 블록 태그는 금지합니다.`
+                : instruction;
             if (hasSelectedBlocks) {
                 applyEraseAnimationToBlocks(state.selectedBlocks);
             } else {
@@ -2208,10 +2522,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 let lastStreamAt = 0;
                 const previewBlock = hasSelectedBlocks ? state.selectedBlocks[0] : state.selectedBlock;
                 updatedFragment = await streamHtmlFragmentEdit({
-                    fragment: fragmentHtml,
-                    instruction,
+                    fragment: fragmentSource,
+                    instruction: editInstruction,
                     onChunk: (partial) => {
-                        if (!previewBlock) return;
+                        if (!previewBlock || hasInlineSelection) return;
                         const now = Date.now();
                         if (now - lastStreamAt < STREAM_UPDATE_INTERVAL) return;
                         lastStreamAt = now;
@@ -2228,19 +2542,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw error;
             }
 
-            if (!updatedFragment) {
+            const fragmentCheck = validateRenderedUpdate(fragmentSource, updatedFragment);
+            if (!fragmentCheck.ok) {
                 if (hasSelectedBlocks) {
                     replaceBlocksWithHtml(state.selectedBlocks, fragmentHtml);
                 } else if (state.selectedBlock) {
                     replaceBlocksWithHtml([state.selectedBlock], fragmentHtml);
                 }
-                throw new Error('편집 결과를 받지 못했습니다.');
+                throw new Error('편집 결과가 비어 있습니다.');
             }
 
-            if (hasSelectedBlocks) {
-                replaceBlocksWithHtml(state.selectedBlocks, updatedFragment);
+            if (hasInlineSelection) {
+                if (isInlineHtml(fragmentCheck.normalized)) {
+                    const applied = replaceRangeWithHtml(inlineInfo.range, fragmentCheck.normalized);
+                    if (!applied) {
+                        replaceBlocksWithHtml([inlineInfo.block], fragmentHtml);
+                        throw new Error('선택 영역 편집을 적용하지 못했습니다.');
+                    }
+                } else {
+                    replaceBlocksWithHtml([inlineInfo.block], fragmentCheck.normalized);
+                }
+            } else if (hasSelectedBlocks) {
+                replaceBlocksWithHtml(state.selectedBlocks, fragmentCheck.normalized);
             } else if (state.selectedBlock) {
-                replaceBlocksWithHtml([state.selectedBlock], updatedFragment);
+                replaceBlocksWithHtml([state.selectedBlock], fragmentCheck.normalized);
             }
             flashDocContent();
             syncTemplateHtmlFromFrame();
@@ -2261,15 +2586,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 })()
             });
 
-            if (!updatedBody) {
+            const bodyCheck = validateRenderedUpdate(baseHtml, updatedBody, { enforceStructure: true });
+            if (!bodyCheck.ok) {
                 state.templateHtml = baseHtml;
                 renderTemplateFrame(baseHtml);
-                throw new Error('편집 결과를 받지 못했습니다.');
+                throw new Error('편집 결과가 비어 있습니다.');
             }
 
-            let mergedHtml = updatedBody;
-            if (styleBlock && !updatedBody.includes('<style')) {
-                mergedHtml = `${styleBlock}\n${updatedBody}`;
+            let mergedHtml = bodyCheck.normalized;
+            if (styleBlock && !bodyCheck.normalized.includes('<style')) {
+                mergedHtml = `${styleBlock}\n${bodyCheck.normalized}`;
             }
 
             state.templateHtml = mergedHtml;
@@ -2350,13 +2676,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 })()
             });
-            if (!updatedBody) {
+            const bodyCheck = validateRenderedUpdate(currentHtml, updatedBody, { enforceStructure: true });
+            if (!bodyCheck.ok) {
                 updateSectionFillStatus(sectionLabel, 'error');
-                throw new Error('전체 작성 결과를 받지 못했습니다.');
+                throw new Error('전체 작성 결과가 비어 있습니다.');
             }
-            let mergedHtml = updatedBody;
-            if (styleBlock && !updatedBody.includes('<style')) {
-                mergedHtml = `${styleBlock}\n${updatedBody}`;
+            let mergedHtml = bodyCheck.normalized;
+            if (styleBlock && !bodyCheck.normalized.includes('<style')) {
+                mergedHtml = `${styleBlock}\n${bodyCheck.normalized}`;
             }
             currentHtml = mergedHtml;
             state.templateHtml = mergedHtml;
@@ -2399,13 +2726,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw error;
                 }
 
-                if (!updatedFragment) {
+                const fragmentCheck = validateRenderedUpdate(fragment, updatedFragment);
+                if (!fragmentCheck.ok) {
                     replaceBlocksWithHtml(blocks, fragment);
                     updateSectionFillStatus(section, 'error');
-                    throw new Error(`"${section}" 섹션 작성 결과를 받지 못했습니다.`);
+                    throw new Error(`"${section}" 섹션 작성 결과가 비어 있습니다.`);
                 }
 
-                replaceBlocksWithHtml(blocks, updatedFragment);
+                replaceBlocksWithHtml(blocks, fragmentCheck.normalized);
                 flashDocContent();
                 syncTemplateHtmlFromFrame();
                 currentHtml = state.templateHtml;
@@ -3165,12 +3493,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (els.docFrame) {
         els.docFrame.addEventListener('load', () => {
             attachFrameListeners();
-            syncFrameHeight();
         });
     }
 
+    window.addEventListener('resize', () => {
+        if (!els.docFrame || !state.templateHtml) return;
+        requestAnimationFrame(() => syncFrameLayout());
+    });
+
     if (els.canvasBody) {
-        els.canvasBody.addEventListener('scroll', () => clearSelectedSnippet(), { passive: true });
+        els.canvasBody.addEventListener('scroll', () => {
+            dismissEditCover();
+            clearSelectedSnippet();
+        }, { passive: true });
+    }
+
+    if (els.scrollContainer) {
+        els.scrollContainer.addEventListener('scroll', () => {
+            dismissEditCover();
+        }, { passive: true });
     }
 
     if (els.btnCanvasClose) {

@@ -10,6 +10,10 @@ from docx import Document
 from docx.shared import Pt, RGBColor, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
+from docx.oxml.table import CT_Tbl
+from docx.oxml.text.paragraph import CT_P
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
@@ -159,7 +163,10 @@ class HWPHandler:
 
         command = self._resolve_hwp5html_command()
         if not command:
-            print("[HWP HTML] hwp5html not available. Falling back to text extraction.")
+            print("[HWP HTML] hwp5html not available. Falling back to alternate extraction.")
+            docx_html = self._convert_docx_to_html_if_possible(file_path)
+            if docx_html:
+                return docx_html
             text_content = self.read_hwp(file_path)
             return wrap_text_as_html(text_content)
 
@@ -182,10 +189,16 @@ class HWPHandler:
         except subprocess.CalledProcessError as exc:
             err_msg = exc.stderr.strip() if exc.stderr else str(exc)
             print(f"[HWP HTML] hwp5html failed: {err_msg}")
+            docx_html = self._convert_docx_to_html_if_possible(file_path)
+            if docx_html:
+                return docx_html
             text_content = self.read_hwp(file_path)
             return wrap_text_as_html(text_content)
         except Exception as exc:
             print(f"[HWP HTML] hwp5html error: {exc}")
+            docx_html = self._convert_docx_to_html_if_possible(file_path)
+            if docx_html:
+                return docx_html
             text_content = self.read_hwp(file_path)
             return wrap_text_as_html(text_content)
 
@@ -204,6 +217,45 @@ class HWPHandler:
             return wrap_text_as_html(text_content)
 
         asset_base = f"/api/template/asset/{safe_id}/"
+        head = soup.head
+        if not head:
+            head = soup.new_tag("head")
+            if soup.html:
+                soup.html.insert(0, head)
+            else:
+                soup.insert(0, head)
+
+        if not head.find("meta", attrs={"name": "viewport"}):
+            viewport = soup.new_tag("meta")
+            viewport.attrs["name"] = "viewport"
+            viewport.attrs["content"] = "width=device-width, initial-scale=1"
+            head.append(viewport)
+
+        inline_css = []
+        for link in list(soup.find_all("link")):
+            rel = [item.lower() for item in (link.get("rel") or [])]
+            if "stylesheet" not in rel and (link.get("type") or "").lower() != "text/css":
+                continue
+            href = link.get("href")
+            if not href:
+                continue
+            parsed = urlparse(href)
+            if parsed.scheme or href.startswith(("data:", "blob:")):
+                continue
+            if href.startswith(asset_base):
+                href_path = href[len(asset_base):]
+            else:
+                href_path = href.lstrip("/")
+            css_path = output_dir / href_path
+            if css_path.exists():
+                inline_css.append(css_path.read_text(encoding="utf-8", errors="ignore"))
+                link.decompose()
+
+        if inline_css:
+            style_tag = soup.new_tag("style")
+            style_tag.string = "\n".join(inline_css)
+            head.append(style_tag)
+
         for img in soup.find_all("img"):
             src = img.get("src")
             if not src:
@@ -250,6 +302,18 @@ class HWPHandler:
         if candidate.exists():
             return [str(candidate)]
 
+        if os.name != "nt":
+            common_bins = (
+                "/opt/homebrew/bin",
+                "/opt/homebrew/anaconda3/bin",
+                "/usr/local/bin",
+                "/usr/bin",
+            )
+            for bin_dir in common_bins:
+                candidate = Path(bin_dir) / exe_name
+                if candidate.exists():
+                    return [str(candidate)]
+
         try:
             if importlib.util.find_spec("hwp5.hwp5html"):
                 return [sys.executable, "-m", "hwp5.hwp5html"]
@@ -263,6 +327,102 @@ class HWPHandler:
             pass
 
         return None
+
+    def _is_docx_package(self, file_path: str) -> bool:
+        try:
+            if not zipfile.is_zipfile(file_path):
+                return False
+            with zipfile.ZipFile(file_path, "r") as zf:
+                return "word/document.xml" in zf.namelist()
+        except Exception:
+            return False
+
+    def _iter_block_items(self, parent):
+        parent_elm = parent._element
+        for child in parent_elm.iterchildren():
+            if isinstance(child, CT_P):
+                yield Paragraph(child, parent)
+            elif isinstance(child, CT_Tbl):
+                yield Table(child, parent)
+
+    def _render_docx_runs(self, runs) -> str:
+        parts = []
+        for run in runs:
+            text = run.text or ""
+            if not text:
+                continue
+            text = html_lib.escape(text).replace("\n", "<br>")
+            if run.bold:
+                text = f"<strong>{text}</strong>"
+            if run.italic:
+                text = f"<em>{text}</em>"
+            if run.underline:
+                text = f"<u>{text}</u>"
+            parts.append(text)
+        return "".join(parts)
+
+    def _render_docx_paragraph(self, paragraph: Paragraph) -> str:
+        content = self._render_docx_runs(paragraph.runs)
+        if not content:
+            return "<p></p>"
+        tag = "p"
+        style_name = (getattr(paragraph.style, "name", "") or "").lower()
+        if style_name.startswith("heading"):
+            parts = style_name.split()
+            if len(parts) > 1 and parts[1].isdigit():
+                level = max(1, min(6, int(parts[1])))
+                tag = f"h{level}"
+        return f"<{tag}>{content}</{tag}>"
+
+    def _render_docx_table(self, table: Table) -> str:
+        row_html = []
+        for row in table.rows:
+            cell_html = []
+            for cell in row.cells:
+                cell_parts = []
+                for block in self._iter_block_items(cell):
+                    if isinstance(block, Paragraph):
+                        cell_parts.append(self._render_docx_paragraph(block))
+                    elif isinstance(block, Table):
+                        cell_parts.append(self._render_docx_table(block))
+                cell_html.append(f"<td>{''.join(cell_parts)}</td>")
+            row_html.append(f"<tr>{''.join(cell_html)}</tr>")
+        return f"<table class=\"docx-table\"><tbody>{''.join(row_html)}</tbody></table>"
+
+    def _convert_docx_to_html_if_possible(self, file_path: str) -> Optional[str]:
+        if not self._is_docx_package(file_path):
+            return None
+        try:
+            return self._convert_docx_to_html(file_path)
+        except Exception as exc:
+            print(f"[DOCX HTML] docx conversion failed: {exc}")
+            return None
+
+    def _convert_docx_to_html(self, file_path: str) -> str:
+        doc = Document(str(file_path))
+        body_parts = []
+        for block in self._iter_block_items(doc):
+            if isinstance(block, Paragraph):
+                body_parts.append(self._render_docx_paragraph(block))
+            elif isinstance(block, Table):
+                body_parts.append(self._render_docx_table(block))
+
+        body_html = "".join(body_parts) or "<p></p>"
+        style = (
+            "<style>"
+            ".docx-doc{font-family:'Noto Serif KR',serif;font-size:14px;line-height:1.6;color:#0f172a;}"
+            ".docx-doc p{margin:0 0 0.7em;}"
+            ".docx-doc table{width:100%;border-collapse:collapse;margin:0.6em 0;}"
+            ".docx-doc td{border:1px solid #cbd5e1;padding:6px 8px;vertical-align:top;}"
+            ".docx-doc table p{margin:0;}"
+            "</style>"
+        )
+        return (
+            "<!DOCTYPE html>"
+            "<html><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            f"{style}</head><body><div class=\"docx-doc\">{body_html}</div></body></html>"
+        )
 
     def create_hwp_document(
         self,
