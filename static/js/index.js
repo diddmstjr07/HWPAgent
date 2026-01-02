@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
         TEMPLATE_SELECT: '/api/template/select'
     };
     const supportsSrcdoc = 'srcdoc' in document.createElement('iframe');
+    const THEME_STORAGE_KEY = 'docAgentTheme';
+    const THEME_COLORS = {
+        light: '#F8FAFC',
+        dark: '#0B0F17'
+    };
+    const CANVAS_WIDTH_STORAGE_KEY = 'docAgentCanvasWidth';
 
     // DOM 요소 캐싱 (에러 방지를 위해 Optional Chaining 사용)
     const els = {
@@ -54,6 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
         inlineEditClose: document.getElementById('inlineEditClose'),
         editCover: document.getElementById('editCover'),
         canvasOverlay: document.getElementById('canvasOverlay'),
+        canvasPanel: document.querySelector('.canvas-panel'),
+        canvasResizeHandle: document.getElementById('canvasResizeHandle'),
         canvasBody: document.getElementById('canvasBody'),
         btnCanvasClose: document.getElementById('btnCanvasClose'),
         
@@ -68,14 +76,27 @@ document.addEventListener('DOMContentLoaded', () => {
         // Modals
         modalAuth: document.getElementById('modalAuth'),
         modalLogin: document.getElementById('modalLogin'),
+        modalProfile: document.getElementById('modalProfile'),
+        profileModalBox: document.getElementById('profileModalBox'),
         modalCalendar: document.getElementById('modalCalendar'),
         modalTemplate: document.getElementById('modalTemplate'),
+        modalDownload: document.getElementById('modalDownload'),
         templateList: document.getElementById('templateList'),
         templateSearch: document.getElementById('templateSearch'),
         templateEmpty: document.getElementById('templateEmpty'),
         btnCloseTemplate: document.getElementById('closeTemplateModal'),
+        btnDownloadConfirm: document.getElementById('btnDownloadConfirm'),
+        btnDownloadCancel: document.getElementById('btnDownloadCancel'),
+        btnDownloadClose: document.getElementById('closeDownloadModal'),
         btnOpenAuth: document.getElementById('btnOpenAuth'),
         btnAuthToggle: document.getElementById('btnAuthToggle'),
+        closeProfile: document.getElementById('closeProfile'),
+        profileAvatar: document.getElementById('profileAvatar'),
+        profileName: document.getElementById('profileName'),
+        profileEmail: document.getElementById('profileEmail'),
+        profileProvider: document.getElementById('profileProvider'),
+        profileLogin: document.getElementById('profileLogin'),
+        profileLogout: document.getElementById('profileLogout'),
         
         // Riro Inputs
         riroSchool: document.getElementById('riroSchool'),
@@ -89,10 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
         authPassword: document.getElementById('authPassword'),
         btnAuthLogin: document.getElementById('btnAuthLogin'),
         btnAuthRegister: document.getElementById('btnAuthRegister'),
+        btnAuthGoogle: document.getElementById('btnAuthGoogle'),
         authStatus: document.getElementById('authStatus'),
         userNameLabel: document.getElementById('userNameLabel'),
         userEmailLabel: document.getElementById('userEmailLabel'),
         userAvatar: document.getElementById('userAvatar'),
+        userProfile: document.getElementById('userProfile'),
         
         // New Chat Button
         btnNewChat: document.getElementById('btnNewChat'),
@@ -120,6 +143,17 @@ document.addEventListener('DOMContentLoaded', () => {
         templateMode: null,
         templateSections: [],
         templateSectionSignature: '',
+        templateAnalysis: null,
+        templateFillFields: [],
+        fillSessionActive: false,
+        fillIntakeBusy: false,
+        fillEssentialFields: [],
+        fillRemainingFields: [],
+        fillVerificationPending: false,
+        fillDetectedFields: [],
+        fillQueue: [],
+        fillActiveField: '',
+        fillAnswers: {},
         selectedSnippet: '',
         selectedBlocks: [],
         selectedSectionTitle: '',
@@ -131,6 +165,11 @@ document.addEventListener('DOMContentLoaded', () => {
         canvasDismissed: false,
         canvasRestoreParent: null,
         canvasRestoreNext: null,
+        canvasUserWidth: null,
+        canvasResizing: false,
+        canvasResizeStartX: 0,
+        canvasResizeStartWidth: 0,
+        canvasResizePointerId: null,
         frameHtml: '',
         frameDocumentRef: null,
         frameResizeObserver: null,
@@ -148,6 +187,70 @@ document.addEventListener('DOMContentLoaded', () => {
         docTypingTimeoutId: null,
         // Chat History
         currentSessionId: null
+    };
+
+    const theme = {
+        meta: document.querySelector('meta[name="theme-color"]'),
+        toggles: Array.from(document.querySelectorAll('[data-theme-toggle]')),
+        icons: Array.from(document.querySelectorAll('[data-theme-icon]'))
+    };
+
+    const applyTheme = (themeName, { persist = true } = {}) => {
+        const resolved = themeName === 'dark' ? 'dark' : 'light';
+        document.body.dataset.theme = resolved;
+        document.documentElement.style.colorScheme = resolved;
+        if (theme.meta) theme.meta.setAttribute('content', THEME_COLORS[resolved]);
+        theme.toggles.forEach((btn) => {
+            btn.setAttribute('aria-pressed', resolved === 'dark' ? 'true' : 'false');
+        });
+        theme.icons.forEach((icon) => {
+            icon.classList.toggle('bi-sun', resolved === 'dark');
+            icon.classList.toggle('bi-moon-stars', resolved !== 'dark');
+        });
+        if (persist) localStorage.setItem(THEME_STORAGE_KEY, resolved);
+    };
+
+    const toggleTheme = () => {
+        const current = document.body.dataset.theme === 'dark' ? 'dark' : 'light';
+        applyTheme(current === 'dark' ? 'light' : 'dark');
+    };
+
+    const initTheme = () => {
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
+        const hasStored = stored === 'dark' || stored === 'light';
+        if (hasStored) {
+            applyTheme(stored, { persist: true });
+            return;
+        }
+        applyTheme('light', { persist: false });
+    };
+
+    const getPremiumState = () => {
+        const hostname = window.location.hostname.toLowerCase();
+        const email = (state.user?.email || '').toLowerCase();
+        const matchesDomain = hostname === 'okgwa.hs.jne.kr' || hostname.endsWith('.okgwa.hs.jne.kr');
+        const matchesEmail = email.endsWith('@okgwa.hs.jne.kr');
+        const tierValue = String(state.user?.tier || state.user?.plan || state.user?.subscription || '').toLowerCase();
+        const hasPremiumFlag = state.user?.is_premium === true;
+        const hasTier = ['premium', 'plus', 'pro'].includes(tierValue);
+        const isPremium = hasPremiumFlag || hasTier || matchesDomain || matchesEmail;
+
+        return { matchesDomain, matchesEmail, isPremium };
+    };
+
+    const applyAccountUIState = () => {
+        const { matchesDomain, matchesEmail, isPremium } = getPremiumState();
+        const shouldHideUpgrade = matchesDomain || matchesEmail;
+
+        document.querySelectorAll('[data-upgrade-item]').forEach((item) => {
+            item.classList.toggle('hidden', shouldHideUpgrade);
+            item.setAttribute('aria-hidden', shouldHideUpgrade ? 'true' : 'false');
+        });
+
+        document.querySelectorAll('[data-premium-badge]').forEach((badge) => {
+            badge.classList.toggle('hidden', !isPremium);
+            badge.setAttribute('aria-hidden', isPremium ? 'false' : 'true');
+        });
     };
 
     // ============================================================ 
@@ -279,6 +382,38 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${styles}${doc.body.innerHTML}`;
     };
 
+    const getAbsoluteTemplateBaseHref = () => {
+        const relative = getTemplateBaseHref();
+        if (!relative) return '';
+        try {
+            return new URL(relative, window.location.href).toString();
+        } catch (e) {
+            return relative;
+        }
+    };
+
+    const getExportHtmlFromFrame = () => {
+        const doc = getFrameDocument();
+        if (!doc || !doc.body) return state.templateHtml;
+        const clone = doc.body.cloneNode(true);
+        clone.querySelectorAll('.selected-block, .edit-erase-span, .edit-erase-block, .doc-fill-flash')
+            .forEach((el) => el.classList.remove('selected-block', 'edit-erase-span', 'edit-erase-block', 'doc-fill-flash'));
+        return clone.innerHTML.trim();
+    };
+
+    const getExportHtmlDocument = () => {
+        const doc = getFrameDocument();
+        if (!doc) return state.templateHtml;
+        const styles = Array.from(doc.head.querySelectorAll('style, link[rel="stylesheet"]'))
+            .filter((style) => style.id !== 'hwp-editor-overlay')
+            .map((style) => style.outerHTML)
+            .join('\n');
+        const body = getExportHtmlFromFrame();
+        const baseHref = getAbsoluteTemplateBaseHref();
+        const baseTag = baseHref ? `<base href="${baseHref}">` : '';
+        return `<!DOCTYPE html><html><head><meta charset="utf-8">${baseTag}${styles}</head><body>${body}</body></html>`;
+    };
+
     const syncTemplateHtmlFromFrame = () => {
         const html = serializeFrameHtml();
         state.templateHtml = html;
@@ -365,6 +500,151 @@ document.addEventListener('DOMContentLoaded', () => {
         syncFrameHeight();
     };
 
+    const getCanvasLayoutMetrics = () => {
+        const isMobile = window.matchMedia
+            ? window.matchMedia('(max-width: 768px)').matches
+            : window.innerWidth <= 768;
+        const mainContent = document.querySelector('.main-content');
+        const mainRect = mainContent ? mainContent.getBoundingClientRect() : null;
+        const viewportWidth = Math.max(
+            window.innerWidth || 0,
+            document.documentElement ? document.documentElement.clientWidth : 0
+        );
+        const mainWidth = mainRect ? Math.round(mainRect.width) : viewportWidth;
+        const computedMax = (() => {
+            if (!els.resultView) return 850;
+            const maxWidth = window.getComputedStyle(els.resultView).maxWidth;
+            const parsed = parseFloat(maxWidth);
+            return Number.isFinite(parsed) ? parsed : 850;
+        })();
+        const minChat = 560;
+        const targetRatio = 0.6;
+        const gutter = mainWidth < 1100 ? 20 : 32;
+        const minCanvas = Math.min(240, Math.round(mainWidth * 0.24));
+        const maxCanvas = Math.min(viewportWidth * 0.52, 820, mainWidth);
+        const maxChat = Math.min(computedMax, mainWidth);
+        const minSideBySide = minChat + minCanvas + gutter;
+        const overlayMode = isMobile || mainWidth < minSideBySide;
+
+        return {
+            isMobile,
+            mainWidth,
+            viewportWidth,
+            computedMax,
+            minChat,
+            targetRatio,
+            gutter,
+            minCanvas,
+            maxCanvas,
+            maxChat,
+            overlayMode
+        };
+    };
+
+    const clampCanvasWidth = (width, metrics) => {
+        const maxCanvasByChat = Math.max(
+            metrics.minCanvas,
+            metrics.mainWidth - metrics.minChat - metrics.gutter
+        );
+        const maxAllowed = Math.min(metrics.maxCanvas, maxCanvasByChat);
+        return Math.max(metrics.minCanvas, Math.min(maxAllowed, width));
+    };
+
+    const loadCanvasUserWidth = () => {
+        const raw = localStorage.getItem(CANVAS_WIDTH_STORAGE_KEY);
+        const parsed = raw ? parseFloat(raw) : NaN;
+        if (!Number.isFinite(parsed) || parsed <= 0) return null;
+        return parsed;
+    };
+
+    const persistCanvasUserWidth = (width) => {
+        if (!Number.isFinite(width) || width <= 0) return;
+        localStorage.setItem(CANVAS_WIDTH_STORAGE_KEY, String(Math.round(width)));
+    };
+
+    const updateCanvasLayoutVars = () => {
+        if (!document.body) return;
+        const metrics = getCanvasLayoutMetrics();
+        const {
+            overlayMode,
+            mainWidth,
+            maxChat,
+            minChat,
+            targetRatio,
+            gutter,
+            minCanvas,
+            maxCanvas
+        } = metrics;
+        let canvasWidth = maxCanvas;
+
+        if (!overlayMode) {
+            if (Number.isFinite(state.canvasUserWidth)) {
+                canvasWidth = clampCanvasWidth(state.canvasUserWidth, metrics);
+            } else {
+                let desiredChatWidth = Math.min(
+                    maxChat,
+                    Math.max(minChat, Math.round(mainWidth * targetRatio))
+                );
+                desiredChatWidth = Math.min(desiredChatWidth, mainWidth - minCanvas - gutter);
+                canvasWidth = mainWidth - desiredChatWidth - gutter;
+                canvasWidth = Math.max(minCanvas, Math.min(maxCanvas, canvasWidth));
+            }
+        } else {
+            canvasWidth = Math.min(maxCanvas, Math.max(minCanvas, Math.round(mainWidth * 0.6)));
+        }
+
+        if (!Number.isFinite(canvasWidth) || canvasWidth <= 0) {
+            canvasWidth = Math.min(maxCanvas, mainWidth);
+        }
+
+        const reserveWidth = overlayMode ? 0 : canvasWidth;
+        document.body.dataset.canvasMode = overlayMode ? 'overlay' : 'side';
+        document.body.style.setProperty('--canvas-panel-width', `${Math.round(canvasWidth)}px`);
+        document.body.style.setProperty('--canvas-reserve-width', `${Math.round(reserveWidth)}px`);
+    };
+
+    const startCanvasResize = (event) => {
+        if (!els.canvasPanel || !state.canvasOpen) return;
+        if (event.button !== undefined && event.button !== 0) return;
+        const metrics = getCanvasLayoutMetrics();
+        if (metrics.overlayMode) return;
+        event.preventDefault();
+        state.canvasResizing = true;
+        state.canvasResizePointerId = typeof event.pointerId === 'number' ? event.pointerId : null;
+        state.canvasResizeStartX = event.clientX;
+        state.canvasResizeStartWidth = els.canvasPanel.getBoundingClientRect().width;
+        document.body.classList.add('canvas-resizing');
+        if (event.target && typeof event.target.setPointerCapture === 'function' && state.canvasResizePointerId !== null) {
+            event.target.setPointerCapture(state.canvasResizePointerId);
+        }
+    };
+
+    const updateCanvasResize = (event) => {
+        if (!state.canvasResizing) return;
+        if (state.canvasResizePointerId !== null && event.pointerId !== state.canvasResizePointerId) return;
+        const metrics = getCanvasLayoutMetrics();
+        if (metrics.overlayMode) return;
+        const delta = state.canvasResizeStartX - event.clientX;
+        const desiredWidth = state.canvasResizeStartWidth + delta;
+        const clampedWidth = clampCanvasWidth(desiredWidth, metrics);
+        if (!Number.isFinite(clampedWidth)) return;
+        state.canvasUserWidth = clampedWidth;
+        document.body.style.setProperty('--canvas-panel-width', `${Math.round(clampedWidth)}px`);
+        document.body.style.setProperty('--canvas-reserve-width', `${Math.round(clampedWidth)}px`);
+    };
+
+    const endCanvasResize = (event) => {
+        if (!state.canvasResizing) return;
+        if (event && state.canvasResizePointerId !== null && event.pointerId !== state.canvasResizePointerId) return;
+        state.canvasResizing = false;
+        state.canvasResizePointerId = null;
+        document.body.classList.remove('canvas-resizing');
+        if (Number.isFinite(state.canvasUserWidth)) {
+            persistCanvasUserWidth(state.canvasUserWidth);
+        }
+        updateCanvasLayoutVars();
+    };
+
     const attachFrameListeners = () => {
         const doc = getFrameDocument();
         if (!doc || state.frameDocumentRef === doc) return;
@@ -446,11 +726,73 @@ document.addEventListener('DOMContentLoaded', () => {
         return div;
     };
 
+    const createVerificationRow = (msg) => {
+        const div = document.createElement('div');
+        div.className = 'message-row';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'role-avatar ai';
+        avatar.innerHTML = '<i class="bi bi-stars"></i>';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const name = document.createElement('div');
+        name.className = 'message-name';
+        name.textContent = 'AI Agent';
+
+        const card = document.createElement('div');
+        card.className = 'verification-card';
+
+        const title = document.createElement('div');
+        title.className = 'verification-title';
+        const count = Array.isArray(msg.fields) ? msg.fields.length : 0;
+        title.textContent = `학생 작성 항목 확인 (${count}개)`;
+
+        const list = document.createElement('ul');
+        list.className = 'verification-list';
+        if (Array.isArray(msg.fields)) {
+            msg.fields.forEach((field) => {
+                const item = document.createElement('li');
+                item.textContent = field;
+                list.appendChild(item);
+            });
+        }
+
+        const note = document.createElement('div');
+        note.className = 'verification-note';
+        note.textContent = '확인 후 기본 정보만 질문하고, 나머지는 AI가 자동 작성합니다. 제외/추가는 입력창에 "제외: ..." 또는 "추가: ..."로 입력하세요.';
+
+        const actions = document.createElement('div');
+        actions.className = 'verification-actions';
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.type = 'button';
+        confirmBtn.className = 'verification-btn primary';
+        confirmBtn.dataset.action = 'verification-confirm';
+        confirmBtn.textContent = '확인';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'verification-btn ghost';
+        cancelBtn.dataset.action = 'verification-cancel';
+        cancelBtn.textContent = '취소';
+
+        actions.append(confirmBtn, cancelBtn);
+        card.append(title, list, note, actions);
+        content.append(name, card);
+        div.append(avatar, content);
+        return div;
+    };
+
     // [New] 채팅 메시지 DOM 생성 헬퍼
     const createMessageRow = (roleOrMsg, text, isStreaming = false) => {
         const msg = typeof roleOrMsg === 'object' ? roleOrMsg : { role: roleOrMsg, text };
         if (msg.type === 'canvas') {
             return createCanvasMessageRow(msg);
+        }
+        if (msg.type === 'verification') {
+            return createVerificationRow(msg);
         }
         const role = msg.role;
         const bodyText = msg.text || '';
@@ -497,11 +839,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('canvas-open');
         state.canvasOpen = true;
         state.canvasDismissed = false;
+        updateCanvasLayoutVars();
         requestAnimationFrame(() => syncFrameLayout());
     };
 
     const closeCanvasOverlay = (dismiss = false) => {
         if (!els.canvasOverlay || !els.docPaper) return;
+        endCanvasResize();
         if (state.canvasOpen) {
             if (state.canvasRestoreParent) {
                 state.canvasRestoreParent.insertBefore(els.docPaper, state.canvasRestoreNext);
@@ -510,6 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
             els.canvasOverlay.classList.add('hidden');
             document.body.classList.remove('canvas-open');
             state.canvasOpen = false;
+            updateCanvasLayoutVars();
         }
 
         if (dismiss) {
@@ -667,6 +1012,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const clearChatStream = () => {
+        if (!els.chatStream) return;
+        els.chatStream.innerHTML = '';
+    };
+
     // ============================================================
     // 2. 핵심 로직: 데이터 통신 (Streaming)
     // ============================================================
@@ -675,6 +1025,124 @@ document.addEventListener('DOMContentLoaded', () => {
         const prompt = els.userRequest.value.trim();
         if (!prompt || state.isGenerating) return;
         hideInlineEditBubble();
+
+        if (state.fillVerificationPending) {
+            if (state.fillIntakeBusy) return;
+            state.fillIntakeBusy = true;
+            state.chatHistory.push({ role: 'user', text: prompt });
+            try {
+                await saveChatSession();
+
+                els.userRequest.value = '';
+                els.userRequest.style.height = 'auto';
+
+                const response = handleFillVerificationResponse(prompt);
+                if (!response.handled) {
+                    state.fillIntakeBusy = false;
+                    return;
+                }
+
+                if (!response.proceed) {
+                    updateUI();
+                    scrollToBottom();
+                    await saveChatSession();
+                    return;
+                }
+
+                state.fillVerificationPending = false;
+                const analysis = state.templateAnalysis
+                    ? { ...state.templateAnalysis, fields: state.fillDetectedFields }
+                    : { fields: state.fillDetectedFields, sections: [] };
+                const started = await startTemplateFillIntake(analysis);
+                if (!started) {
+                    updateUI();
+                    scrollToBottom();
+                    await saveChatSession();
+                    return;
+                }
+
+                if (response.treatAsAnswer) {
+                    const shouldRunFill = advanceFillIntake(prompt);
+                    updateUI();
+                    scrollToBottom();
+                    await saveChatSession();
+
+                    if (!shouldRunFill) return;
+
+                    const fillPrompt = buildFillPromptFromAnswers(state.fillAnswers, state.fillRemainingFields);
+                    state.templateMode = 'fill';
+                    state.isGenerating = true;
+                    setLoadingState(true);
+                    updateUI();
+                    try {
+                        await runTemplateFillSequence(fillPrompt);
+                    } catch (error) {
+                        console.error(error);
+                        showToast(`생성 중 오류 발생: ${error.message}`, 'error');
+                        state.chatHistory.push({ role: 'ai', text: `템플릿 처리 중 오류 발생: ${error.message}` });
+                    } finally {
+                        state.isGenerating = false;
+                        setLoadingState(false);
+                        state.fillAnswers = {};
+                        state.fillRemainingFields = [];
+                        state.fillEssentialFields = [];
+                        updateUI();
+                        await saveChatSession();
+                    }
+                    return;
+                }
+
+                updateUI();
+                scrollToBottom();
+                await saveChatSession();
+                return;
+            } finally {
+                state.fillIntakeBusy = false;
+            }
+        }
+
+        if (state.fillSessionActive) {
+            if (state.fillIntakeBusy) return;
+            state.fillIntakeBusy = true;
+            state.chatHistory.push({ role: 'user', text: prompt });
+            try {
+                await saveChatSession();
+
+                els.userRequest.value = '';
+                els.userRequest.style.height = 'auto';
+
+                const shouldRunFill = advanceFillIntake(prompt);
+                updateUI();
+                scrollToBottom();
+                await saveChatSession();
+
+                if (!shouldRunFill) return;
+
+                const fillPrompt = buildFillPromptFromAnswers(state.fillAnswers, state.fillRemainingFields);
+                state.templateMode = 'fill';
+                state.isGenerating = true;
+                setLoadingState(true);
+                updateUI();
+                try {
+                    await runTemplateFillSequence(fillPrompt);
+                } catch (error) {
+                    console.error(error);
+                    showToast(`생성 중 오류 발생: ${error.message}`, 'error');
+                    state.chatHistory.push({ role: 'ai', text: `템플릿 처리 중 오류 발생: ${error.message}` });
+                } finally {
+                    state.isGenerating = false;
+                    setLoadingState(false);
+                    state.fillAnswers = {};
+                    state.fillRemainingFields = [];
+                    state.fillEssentialFields = [];
+                    updateUI();
+                    await saveChatSession();
+                }
+                return;
+            } finally {
+                state.fillIntakeBusy = false;
+            }
+        }
 
         // 1. 초기화 및 UI 준비
         state.isGenerating = true;
@@ -927,15 +1395,51 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2.5. Download Logic
     // ============================================================
 
-    const handleDownload = async () => {
-        // 1. 문서 내용 확인
+    const getSelectedDownloadFormat = () => {
+        const inputs = document.querySelectorAll('input[name="downloadFormat"]');
+        for (const input of inputs) {
+            if (input.checked) return input.value;
+        }
+        return 'hwp';
+    };
+
+    const setSelectedDownloadFormat = (value) => {
+        const inputs = document.querySelectorAll('input[name="downloadFormat"]');
+        let matched = false;
+        inputs.forEach((input) => {
+            const isMatch = input.value === value;
+            input.checked = isMatch;
+            if (isMatch) matched = true;
+        });
+        if (!matched && inputs.length) {
+            inputs[0].checked = true;
+        }
+    };
+
+    const openDownloadModal = (defaultFormat = 'hwp') => {
+        if (!els.modalDownload) return;
+        setSelectedDownloadFormat(defaultFormat);
+        els.modalDownload.style.display = 'flex';
+        setTimeout(() => els.modalDownload.classList.add('show'), 10);
+    };
+
+    const closeDownloadModal = () => {
+        if (!els.modalDownload) return;
+        els.modalDownload.classList.remove('show');
+        setTimeout(() => {
+            if (els.modalDownload) els.modalDownload.style.display = 'none';
+        }, 200);
+    };
+
+    const performDownload = async (formatOverride) => {
         const isTemplateDoc = !!state.templateName || !!state.templateHtml;
         if (isTemplateDoc && getFrameDocument()) {
             syncTemplateHtmlFromFrame();
         }
-        const content = isTemplateDoc ? state.templateHtml : state.document.content;
+        const content = isTemplateDoc ? getExportHtmlDocument() : state.document.content;
         const title = isTemplateDoc ? (state.templateName || '문서') : (state.document.title || '새 문서');
-        
+        const format = formatOverride || (isTemplateDoc ? 'pdf' : 'hwp');
+
         if (!content) {
             showToast('저장할 문서 내용이 없습니다.', 'error');
             return;
@@ -943,18 +1447,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const btnSide = document.getElementById('btnDownloadSide');
         const btnMobile = document.getElementById('btnDownloadMobile');
-        
-        // 로딩 표시
+
         const originalSideText = btnSide ? btnSide.innerHTML : '';
         if (btnSide) btnSide.innerHTML = '<div class="spinner"></div> 저장 중...';
         if (btnMobile) btnMobile.style.opacity = '0.5';
 
         try {
-            // 2. 저장 요청
             const payload = {
                 title: title,
                 content: content,
-                format: 'hwp',
+                format: format,
                 content_type: isTemplateDoc ? 'html' : 'text'
             };
 
@@ -970,10 +1472,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const data = await response.json();
-            
+
             if (data.success) {
                 showToast('파일이 생성되었습니다. 다운로드를 시작합니다.', 'success');
-                // 3. 다운로드 트리거
                 const filename = data.file_path.split('/').pop(); 
                 window.location.href = `/api/download/${encodeURIComponent(filename)}`;
             } else {
@@ -984,10 +1485,22 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(e);
             showToast(`저장 중 오류가 발생했습니다: ${e.message}`, 'error');
         } finally {
-            // 버튼 복구
             if (btnSide) btnSide.innerHTML = originalSideText || '<i class="bi bi-download"></i> 문서 저장';
             if (btnMobile) btnMobile.style.opacity = '1';
         }
+    };
+
+    const handleDownload = async () => {
+        const isTemplateDoc = !!state.templateName || !!state.templateHtml;
+        if (isTemplateDoc) {
+            if (els.modalDownload) {
+                openDownloadModal('hwp');
+                return;
+            }
+            await performDownload('hwp');
+            return;
+        }
+        await performDownload('hwp');
     };
 
     // 화면에 렌더링된 이미지 정보 수집 (선택적)
@@ -1059,6 +1572,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleFileUpload = async (file) => {
         if (!file) return;
 
+        resetChatSession({ clearTemplate: true });
+
         // Show analysis badge with loading state
         updateAnalysisBadge(true, 'loading', '문서 분석 중...');
 
@@ -1078,7 +1593,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.templateSource = 'upload';
                 state.canvasDismissed = false;
                 state.docMode = true;
-                applyTemplateAnalysis(state.templateHtml);
+                const analysis = applyTemplateAnalysis(state.templateHtml);
                 
                 renderTemplateFrame(state.templateHtml);
                 if (els.docTitle) {
@@ -1095,8 +1610,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (els.attachMenu) els.attachMenu.classList.remove('open');
 
                 // Add message to chat stream
-                state.chatHistory.push({ role: 'ai', text: `"${payload.template_name}" 템플릿을 불러왔습니다. 이제 문서에 대한 변경을 요청할 수 있습니다.` });
+                const startedFill = analysis && analysis.mode === 'fill'
+                    ? startTemplateFillVerification(analysis)
+                    : false;
+                if (!startedFill) {
+                    const modeMessage = analysis && analysis.mode === 'fill'
+                        ? '양식을 채우기 위한 정보를 입력해주세요.'
+                        : '이제 문서에 대한 변경을 요청할 수 있습니다.';
+                    state.chatHistory.push({ role: 'ai', text: `"${payload.template_name}" 템플릿을 불러왔습니다. ${modeMessage}` });
+                }
                 updateUI();
+                scrollToBottom();
             } else {
                 throw new Error(payload.error || '업로드 실패');
             }
@@ -1121,6 +1645,17 @@ document.addEventListener('DOMContentLoaded', () => {
         state.templateMode = null;
         state.templateSections = [];
         state.templateSectionSignature = '';
+        state.templateAnalysis = null;
+        state.templateFillFields = [];
+        state.fillSessionActive = false;
+        state.fillIntakeBusy = false;
+        state.fillEssentialFields = [];
+        state.fillRemainingFields = [];
+        state.fillVerificationPending = false;
+        state.fillDetectedFields = [];
+        state.fillQueue = [];
+        state.fillActiveField = '';
+        state.fillAnswers = {};
         state.selectedSnippet = '';
         state.selectedSectionTitle = '';
         if (state.selectedBlocks && state.selectedBlocks.length > 0) {
@@ -1253,6 +1788,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectTemplateFromCatalog = async (item) => {
         if (!item) return;
 
+        resetChatSession({ clearTemplate: true });
+
         updateAnalysisBadge(true, 'loading', '템플릿 불러오는 중...');
 
         try {
@@ -1278,7 +1815,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.templateSource = data.template_type || item.type;
             state.canvasDismissed = false;
             state.docMode = true;
-            applyTemplateAnalysis(state.templateHtml);
+            const analysis = applyTemplateAnalysis(state.templateHtml);
 
             renderTemplateFrame(state.templateHtml);
             if (els.docTitle) els.docTitle.textContent = state.templateName || '문서';
@@ -1287,8 +1824,17 @@ document.addEventListener('DOMContentLoaded', () => {
             updateAnalysisBadge(false);
             closeTemplateModal();
 
-            state.chatHistory.push({ role: 'ai', text: `"${state.templateName}" 템플릿을 불러왔습니다. 이제 문서 내용을 채워달라고 요청하세요.` });
+                const startedFill = analysis && analysis.mode === 'fill'
+                    ? startTemplateFillVerification(analysis)
+                    : false;
+            if (!startedFill) {
+                const modeMessage = analysis && analysis.mode === 'fill'
+                    ? '양식을 채우기 위한 정보를 입력해주세요.'
+                    : '이제 문서에 대한 변경을 요청할 수 있습니다.';
+                state.chatHistory.push({ role: 'ai', text: `"${state.templateName}" 템플릿을 불러왔습니다. ${modeMessage}` });
+            }
             updateUI();
+            scrollToBottom();
         } catch (e) {
             console.error(e);
             showToast(`템플릿 로드 실패: ${e.message}`, 'error');
@@ -1301,15 +1847,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2.8. Template Mode Logic (Fill vs Edit)
     // ============================================================
 
-    const extractSectionsFromHtml = (html) => {
-        if (!html) return [];
-        let doc;
-        try {
-            doc = new DOMParser().parseFromString(html, 'text/html');
-        } catch (e) {
-            return [];
-        }
+    const PLACEHOLDER_PATTERN = /(작성|입력|기입|선택|예시)(?=$|\s|[:：])|OO|○|□|■|△|▲|▽|▼|__+|\.{3,}|·{2,}|ㆍ{2,}|\[\s*\]|\(\s*\)/g;
+    const ESSENTIAL_FIELD_KEYWORDS = [
+        '학번',
+        '이름',
+        '성명',
+        '학교',
+        '학년',
+        '반',
+        '번호',
+        '연락처',
+        '전화',
+        '이메일',
+        '주소',
+        '소속',
+        '학과',
+        '전공',
+        '지도교사',
+        '담당',
+        '제출자',
+        '작성자',
+        '진로',
+        '관심'
+    ];
+    const MAX_ESSENTIAL_FIELDS = 6;
 
+    const extractSectionsFromDoc = (doc) => {
+        if (!doc) return [];
         const unique = new Set();
         const results = [];
         const pushUnique = (text) => {
@@ -1335,6 +1899,151 @@ document.addEventListener('DOMContentLoaded', () => {
         return results.slice(0, 12);
     };
 
+    const extractSectionsFromHtml = (html) => {
+        if (!html) return [];
+        try {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            return extractSectionsFromDoc(doc);
+        } catch (e) {
+            return [];
+        }
+    };
+
+    const sanitizeCellText = (value) => {
+        return (value || '')
+            .replace(PLACEHOLDER_PATTERN, '')
+            .replace(/[·•ㆍ]+/g, ' ')
+            .replace(/[_\.]{2,}/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
+
+    const hasPlaceholderTokens = (value) => {
+        const raw = value || '';
+        PLACEHOLDER_PATTERN.lastIndex = 0;
+        return PLACEHOLDER_PATTERN.test(raw);
+    };
+
+    const normalizeLabelText = (label) => {
+        const raw = (label || '').replace(/\s+/g, ' ').trim();
+        if (!raw) return '';
+        const cleaned = raw
+            .replace(/[:：]\s*$/, '')
+            .replace(/[()\[\]]/g, '')
+            .trim();
+        if (!cleaned || cleaned.length > 60) return '';
+        const placeholderRemoved = sanitizeCellText(cleaned);
+        if (!placeholderRemoved) return '';
+        return cleaned;
+    };
+
+    const normalizeFieldLabel = (label) => {
+        return normalizeLabelText(label);
+    };
+
+    const getCellInfo = (cell) => {
+        const raw = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+        const cleaned = sanitizeCellText(raw);
+        const hasText = cleaned.length > 0;
+        const hasPlaceholder = hasPlaceholderTokens(raw);
+        const hasMedia = !!cell.querySelector('img, svg, canvas');
+        const hasInput = !!cell.querySelector('input, textarea, select');
+        const isEmpty = (!hasText || hasPlaceholder) && !hasMedia && !hasInput;
+        return { raw, cleaned, hasText, hasPlaceholder, isEmpty };
+    };
+
+    const extractFieldPromptsFromDoc = (doc) => {
+        const fields = [];
+        const seen = new Set();
+        let emptyCount = 0;
+        let filledCount = 0;
+
+        const pushField = (label) => {
+            const cleaned = normalizeFieldLabel(label);
+            if (!cleaned || seen.has(cleaned)) return;
+            seen.add(cleaned);
+            fields.push(cleaned);
+        };
+
+        Array.from(doc.querySelectorAll('table')).forEach((table) => {
+            const columnLabels = [];
+            const rows = Array.from(table.querySelectorAll('tr'));
+            rows.forEach((row) => {
+                const cells = Array.from(row.children).filter((el) => el.matches('td, th'));
+                if (!cells.length) return;
+                const infos = cells.map((cell) => getCellInfo(cell));
+                const labelTexts = cells.map((cell) => normalizeLabelText(cell.textContent));
+                const rowHasLabel = infos.some((info) => info.hasText || info.hasPlaceholder);
+                if (!rowHasLabel) return;
+
+                infos.forEach((info, i) => {
+                    const labelText = labelTexts[i];
+                    if (labelText && cells[i].tagName.toLowerCase() === 'th') {
+                        columnLabels[i] = labelText;
+                    }
+                });
+
+                const rowLabelIndex = labelTexts.findIndex((text, idx) => text && idx === 0);
+                const rowLabel = rowLabelIndex === 0 ? labelTexts[0] : '';
+
+                infos.forEach((info, i) => {
+                    const cell = cells[i];
+                    const labelText = labelTexts[i];
+                    const isHeader = cell.tagName.toLowerCase() === 'th' && labelText;
+                    const isLabelCell = isHeader || (i === 0 && labelText && cells.length > 1);
+                    if (isLabelCell) return;
+
+                    if (info.isEmpty) {
+                        emptyCount += 1;
+                        let label = '';
+                        for (let j = i - 1; j >= 0; j -= 1) {
+                            if (labelTexts[j]) {
+                                label = labelTexts[j];
+                                break;
+                            }
+                        }
+                        if (!label && columnLabels[i]) {
+                            label = columnLabels[i];
+                        }
+                        if (!label && rowLabel) {
+                            label = rowLabel;
+                        }
+                        if (label) {
+                            pushField(label);
+                        }
+                    } else if (info.hasText && !info.hasPlaceholder) {
+                        filledCount += 1;
+                    }
+                });
+            });
+        });
+
+        Array.from(doc.querySelectorAll('input, textarea, select')).forEach((el) => {
+            const placeholder = (el.getAttribute('placeholder') || '').trim();
+            if (placeholder) pushField(placeholder);
+            emptyCount += 1;
+        });
+
+        Array.from(doc.querySelectorAll('p, li, div')).forEach((el) => {
+            const raw = (el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!raw || raw.length > 120) return;
+            if (!hasPlaceholderTokens(raw)) return;
+            const match = raw.match(/^\s*(.+?)\s*[:：]\s*(.+)$/);
+            if (!match) return;
+            const label = normalizeFieldLabel(match[1]);
+            if (label) pushField(label);
+        });
+
+        return {
+            fields,
+            stats: {
+                emptyCount,
+                filledCount,
+                totalCount: emptyCount + filledCount
+            }
+        };
+    };
+
     const analyzeTemplateHtml = (html) => {
         const text = (html || '')
             .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -1342,19 +2051,37 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/\s+/g, ' ')
             .trim();
 
-        const placeholderPattern = /(작성|입력|기입|선택|예시|OO|○|□|■|△|▲|▽|▼|__+|\.{3,}|·{2,}|ㆍ{2,}|\[\s*\]|\(\s*\))/g;
-        const placeholders = text.match(placeholderPattern) || [];
+        let doc = null;
+        try {
+            doc = new DOMParser().parseFromString(html || '', 'text/html');
+        } catch (e) {
+            doc = null;
+        }
+
+        const placeholders = text.match(PLACEHOLDER_PATTERN) || [];
         const placeholderChars = placeholders.reduce((sum, token) => sum + token.length, 0);
         const placeholderRatio = placeholderChars / Math.max(1, text.length);
-        const sections = extractSectionsFromHtml(html);
+        const sections = doc ? extractSectionsFromDoc(doc) : extractSectionsFromHtml(html);
+        const fieldAnalysis = doc ? extractFieldPromptsFromDoc(doc) : { fields: [], stats: { emptyCount: 0, filledCount: 0, totalCount: 0 } };
 
         const isSparse = text.length < 450;
         const hasPlaceholderSignal = placeholders.length >= 2 || placeholderRatio > 0.04;
-        const isLikelyTemplate = hasPlaceholderSignal || (isSparse && placeholders.length > 0);
-        const isLikelyFilled = text.length > 1200 && placeholderRatio < 0.015;
+        const totalFields = fieldAnalysis.stats.totalCount;
+        const emptyRatio = totalFields ? fieldAnalysis.stats.emptyCount / totalFields : 0;
+        const hasFieldSignals = totalFields >= 3;
+        const isMostlyEmpty = hasFieldSignals && (emptyRatio >= 0.45 || fieldAnalysis.stats.emptyCount >= 6);
+        const isMostlyFilled = hasFieldSignals && emptyRatio <= 0.12 && fieldAnalysis.stats.filledCount >= 3;
+
+        const isLikelyTemplate = hasPlaceholderSignal || isMostlyEmpty || (isSparse && placeholders.length > 0);
+        const isLikelyFilled = (text.length > 1200 && placeholderRatio < 0.015) || isMostlyFilled;
         const mode = isLikelyFilled ? 'edit' : (isLikelyTemplate ? 'fill' : 'edit');
 
-        return { mode, sections };
+        return {
+            mode,
+            sections,
+            fields: fieldAnalysis.fields,
+            fieldStats: fieldAnalysis.stats
+        };
     };
 
     const updateTemplateControls = () => {
@@ -1422,13 +2149,35 @@ document.addEventListener('DOMContentLoaded', () => {
             state.templateMode = null;
             state.templateSections = [];
             state.templateSectionSignature = '';
+            state.templateAnalysis = null;
+            state.templateFillFields = [];
+            state.fillSessionActive = false;
+            state.fillIntakeBusy = false;
+            state.fillEssentialFields = [];
+            state.fillRemainingFields = [];
+            state.fillVerificationPending = false;
+            state.fillDetectedFields = [];
+            state.fillQueue = [];
+            state.fillActiveField = '';
+            state.fillAnswers = {};
             updateTemplateControls();
             return;
         }
 
         const analysis = analyzeTemplateHtml(html);
+        state.templateAnalysis = analysis;
         state.templateMode = overrideMode || analysis.mode;
         state.templateSections = analysis.sections;
+        state.templateFillFields = analysis.fields || [];
+        state.fillSessionActive = false;
+        state.fillIntakeBusy = false;
+        state.fillEssentialFields = [];
+        state.fillRemainingFields = [];
+        state.fillVerificationPending = false;
+        state.fillDetectedFields = [];
+        state.fillQueue = [];
+        state.fillActiveField = '';
+        state.fillAnswers = {};
         state.selectedSnippet = '';
         state.selectedSectionTitle = '';
         if (state.selectedBlocks && state.selectedBlocks.length > 0) {
@@ -1445,6 +2194,231 @@ document.addEventListener('DOMContentLoaded', () => {
         if (els.sectionFillPanel) els.sectionFillPanel.classList.add('hidden');
         renderEditTargetOptions();
         updateTemplateControls();
+        return analysis;
+    };
+
+    const splitFillFields = (analysis) => {
+        const fields = Array.isArray(analysis?.fields) ? analysis.fields : [];
+        const sections = Array.isArray(analysis?.sections) ? analysis.sections : [];
+        const combined = fields.length > 0 ? fields : sections;
+        if (combined.length === 0) {
+            return { essential: [], remaining: [] };
+        }
+        const essential = [];
+        const remaining = [];
+        combined.forEach((field) => {
+            const trimmed = (field || '').trim();
+            if (!trimmed) return;
+            const isEssential = ESSENTIAL_FIELD_KEYWORDS.some((keyword) => trimmed.includes(keyword));
+            if (isEssential) {
+                essential.push(trimmed);
+            } else {
+                remaining.push(trimmed);
+            }
+        });
+
+        if (essential.length === 0) {
+            const fallbackCount = Math.min(3, combined.length);
+            const fallback = combined.slice(0, fallbackCount).map((item) => (item || '').trim()).filter(Boolean);
+            return {
+                essential: fallback,
+                remaining: combined.slice(fallbackCount).map((item) => (item || '').trim()).filter(Boolean)
+            };
+        }
+
+        if (essential.length > MAX_ESSENTIAL_FIELDS) {
+            const trimmedEssential = essential.slice(0, MAX_ESSENTIAL_FIELDS);
+            const overflow = essential.slice(MAX_ESSENTIAL_FIELDS);
+            return {
+                essential: trimmedEssential,
+                remaining: remaining.concat(overflow)
+            };
+        }
+
+        return { essential, remaining };
+    };
+
+    const startTemplateFillIntake = async (analysis) => {
+        const { essential, remaining } = splitFillFields(analysis);
+        if (essential.length === 0) return false;
+        state.fillSessionActive = true;
+        state.fillIntakeBusy = false;
+        state.templateMode = 'fill';
+        state.fillAnswers = {};
+        state.fillEssentialFields = essential;
+        state.fillRemainingFields = remaining;
+        state.fillVerificationPending = false;
+        if (!state.fillDetectedFields || state.fillDetectedFields.length === 0) {
+            const fallback = Array.isArray(analysis?.fields) && analysis.fields.length > 0
+                ? analysis.fields
+                : (Array.isArray(analysis?.sections) ? analysis.sections : []);
+            state.fillDetectedFields = fallback.map((item) => (item || '').trim()).filter(Boolean);
+        }
+        state.fillActiveField = essential[0];
+        state.fillQueue = essential.slice(1);
+        const guideMessage = await fetchFillGuideMessage({
+            fields: state.fillDetectedFields,
+            firstField: state.fillActiveField,
+            total: state.fillDetectedFields.length || essential.length
+        });
+        state.chatHistory.push({
+            role: 'ai',
+            text: guideMessage
+        });
+        return true;
+    };
+
+    const buildFillPromptFromAnswers = (answers, remainingFields = []) => {
+        const lines = Object.entries(answers).map(([key, value]) => `- ${key}: ${value}`);
+        const remainingList = remainingFields.filter(Boolean);
+        if (remainingList.length > 0) {
+            lines.push(`- 위 정보를 바탕으로 나머지 항목(${remainingList.join(', ')})은 자연스럽게 추론해 작성하세요.`);
+        } else {
+            lines.push('- 위 정보를 바탕으로 남아 있는 모든 빈 항목을 자연스럽게 작성하세요.');
+        }
+        return `다음 정보를 반영해 양식을 완성하세요.\n${lines.join('\n')}`.trim();
+    };
+
+    async function fetchFillGuideMessage({ fields, firstField, total }) {
+        const fallback = `업로드된 문서가 비어 있는 양식으로 감지되었습니다. 기본 정보만 먼저 알려주세요. (총 ${total}개)\n첫 번째: ${firstField}\n나머지 항목은 AI가 자동으로 작성합니다.`;
+        const recentHistory = (state.chatHistory || [])
+            .filter((msg) => msg && (msg.role === 'user' || msg.role === 'ai'))
+            .filter((msg) => !msg.type && typeof msg.text === 'string' && msg.text.trim())
+            .slice(-6)
+            .map((msg) => ({ role: msg.role, text: msg.text }));
+        try {
+            const response = await fetch('/api/template/fill-guide', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fields,
+                    first_field: firstField,
+                    total,
+                    history: recentHistory
+                })
+            });
+            const data = await response.json();
+            if (response.ok && data.success && data.message) {
+                return data.message;
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        return fallback;
+    }
+
+    const normalizeFieldListInput = (raw) => {
+        return (raw || '')
+            .split(/[,，\n]/)
+            .map((item) => item.trim())
+            .filter(Boolean);
+    };
+
+    const startTemplateFillVerification = (analysis) => {
+        const fields = Array.isArray(analysis?.fields) ? analysis.fields : [];
+        const sections = Array.isArray(analysis?.sections) ? analysis.sections : [];
+        const combined = fields.length > 0 ? fields : sections;
+        if (combined.length === 0) return false;
+        state.fillVerificationPending = true;
+        const seen = new Set();
+        state.fillDetectedFields = combined
+            .map((item) => (item || '').trim())
+            .filter((item) => {
+                if (!item || seen.has(item)) return false;
+                seen.add(item);
+                return true;
+            });
+        state.templateMode = 'fill';
+        state.chatHistory.push({
+            role: 'ai',
+            type: 'verification',
+            fields: state.fillDetectedFields
+        });
+        return true;
+    };
+
+    const handleFillVerificationResponse = (response) => {
+        const raw = (response || '').trim();
+        const lower = raw.toLowerCase();
+        if (!raw) return { handled: false };
+
+        const isConfirm = /^(확인|시작|네|응|ok|okay|yes)$/i.test(raw);
+        const isCancel = /^(취소|중단|그만|아니|아니오|no)$/i.test(raw);
+
+        if (isCancel) {
+            state.fillVerificationPending = false;
+            state.fillDetectedFields = [];
+            state.templateMode = 'edit';
+            state.chatHistory.push({ role: 'ai', text: '작성 검증을 취소했습니다. 필요한 수정 사항을 직접 요청해 주세요.' });
+            return { handled: true, proceed: false };
+        }
+
+        if (lower.startsWith('제외:')) {
+            const items = normalizeFieldListInput(raw.replace(/^제외:/i, ''));
+            if (items.length === 0) {
+                state.chatHistory.push({ role: 'ai', text: '제외할 항목을 알려주세요. 예: 제외: 이름, 학번' });
+                return { handled: true, proceed: false };
+            }
+            state.fillDetectedFields = state.fillDetectedFields.filter((item) => !items.some((remove) => item.includes(remove)));
+            if (state.fillDetectedFields.length === 0) {
+                state.chatHistory.push({
+                    role: 'ai',
+                    text: '모든 항목이 제외되었습니다. 추가할 항목이 있으면 "추가: ..."로 알려주세요. 계속 진행을 원하면 "확인"이라고 입력해 주세요.'
+                });
+                return { handled: true, proceed: false };
+            }
+            const listText = state.fillDetectedFields.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+            state.chatHistory.push({
+                role: 'ai',
+                text: `제외 항목을 반영했습니다. 최종 목록:\n${listText}\n\n맞다면 '확인'이라고 입력해 주세요.`
+            });
+            return { handled: true, proceed: false };
+        }
+
+        if (lower.startsWith('추가:')) {
+            const items = normalizeFieldListInput(raw.replace(/^추가:/i, ''));
+            if (items.length === 0) {
+                state.chatHistory.push({ role: 'ai', text: '추가할 항목을 알려주세요. 예: 추가: 연구 주제, 지도교사' });
+                return { handled: true, proceed: false };
+            }
+            items.forEach((item) => {
+                if (!state.fillDetectedFields.some((existing) => existing === item)) {
+                    state.fillDetectedFields.push(item);
+                }
+            });
+            const listText = state.fillDetectedFields.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+            state.chatHistory.push({
+                role: 'ai',
+                text: `추가 항목을 반영했습니다. 최종 목록:\n${listText}\n\n맞다면 '확인'이라고 입력해 주세요.`
+            });
+            return { handled: true, proceed: false };
+        }
+
+        if (isConfirm) {
+            return { handled: true, proceed: true, treatAsAnswer: false };
+        }
+
+        return { handled: true, proceed: true, treatAsAnswer: true };
+    };
+
+    const advanceFillIntake = (answer) => {
+        if (!state.fillSessionActive || !state.fillActiveField) return false;
+        const trimmed = (answer || '').trim();
+        if (trimmed) {
+            state.fillAnswers[state.fillActiveField] = trimmed;
+        }
+        if (state.fillQueue.length > 0) {
+            state.fillActiveField = state.fillQueue.shift();
+            state.chatHistory.push({
+                role: 'ai',
+                text: `다음 항목을 알려주세요: ${state.fillActiveField}`
+            });
+            return false;
+        }
+        state.fillSessionActive = false;
+        state.fillActiveField = '';
+        state.fillQueue = [];
+        return true;
     };
 
     let sectionFillMap = new Map();
@@ -1539,7 +2513,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        return htmlBuffer;
+        return normalizeGeneratedHtml(htmlBuffer);
     };
 
     const streamHtmlFragmentEdit = async ({ fragment, instruction, onChunk }) => {
@@ -1588,18 +2562,62 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        return htmlBuffer;
+        return normalizeGeneratedHtml(htmlBuffer);
+    };
+
+    const stripCodeFences = (input) => {
+        const trimmed = (input || '').trim();
+        if (!trimmed) return '';
+        const fenced = trimmed.match(/^```(?:html|xml)?\s*([\s\S]*?)```$/i);
+        if (fenced) return (fenced[1] || '').trim();
+        return trimmed;
+    };
+
+    const extractHtmlEnvelope = (input) => {
+        const text = (input || '').trim();
+        if (!text) return '';
+        const lower = text.toLowerCase();
+        const htmlStart = lower.indexOf('<html');
+        const htmlEnd = lower.lastIndexOf('</html>');
+        if (htmlStart !== -1 && htmlEnd !== -1 && htmlEnd > htmlStart) {
+            return text.slice(htmlStart, htmlEnd + 7).trim();
+        }
+        const bodyStart = lower.indexOf('<body');
+        const bodyEnd = lower.lastIndexOf('</body>');
+        if (bodyStart !== -1 && bodyEnd !== -1 && bodyEnd > bodyStart) {
+            return text.slice(bodyStart, bodyEnd + 7).trim();
+        }
+        return text;
+    };
+
+    const decodeHtmlEntities = (input) => {
+        const text = input || '';
+        if (!text) return '';
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = text;
+        return textarea.value;
+    };
+
+    const normalizeGeneratedHtml = (input) => {
+        let result = stripCodeFences(input);
+        result = extractHtmlEnvelope(result);
+        const hasTag = /<\w+[\s>]/.test(result);
+        if (!hasTag && /&lt;|&gt;|&amp;/.test(result)) {
+            result = decodeHtmlEntities(result);
+        }
+        return (result || '').trim();
     };
 
     const splitHtmlStyles = (html) => {
-        const styleMatches = html.match(/<style[\s\S]*?<\/style>/gi) || [];
+        const normalized = normalizeGeneratedHtml(html);
+        const styleMatches = normalized.match(/<style[\s\S]*?<\/style>/gi) || [];
         const styleBlock = styleMatches.join('\n');
-        const body = html.replace(/<style[\s\S]*?<\/style>/gi, '').trim();
+        const body = normalized.replace(/<style[\s\S]*?<\/style>/gi, '').trim();
         return { styleBlock, body };
     };
 
     const extractBodyHtml = (html) => {
-        const trimmed = (html || '').trim();
+        const trimmed = normalizeGeneratedHtml(html);
         if (!trimmed) return '';
         if (!/<(?:html|body)[\s>]/i.test(trimmed) && !/<!doctype/i.test(trimmed)) {
             return trimmed;
@@ -1633,12 +2651,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 hasSection: !!body.querySelector('.Section, .Paper, .hwp-doc'),
                 hasTable: !!body.querySelector('table')
             };
-            return { normalized, textLength, mediaCount, flags };
+            const elementCount = body.querySelectorAll('*').length;
+            return { normalized, textLength, mediaCount, elementCount, flags };
         } catch (e) {
             return {
                 normalized,
                 textLength: normalized.replace(/\s+/g, '').length,
                 mediaCount: 0,
+                elementCount: /<\w+[\s>]/.test(normalized) ? 1 : 0,
                 flags: null
             };
         }
@@ -1656,6 +2676,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return { ok: false, normalized: updated.normalized };
         }
         if (enforceStructure && original.flags && updated.flags) {
+            if (original.elementCount > 0 && updated.elementCount === 0) {
+                return { ok: false, normalized: updated.normalized };
+            }
             if (original.flags.hasSection && !updated.flags.hasSection) {
                 return { ok: false, normalized: updated.normalized };
             }
@@ -1835,6 +2858,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const buildFrameOverlayStyles = () => {
         return `
 <style id="hwp-editor-overlay">
+  .fill-content {
+    text-align: justify !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+  }
+  .fill-content span {
+    font-family: inherit;
+    font-size: inherit;
+  }
+  .Paper {
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .HeaderPageFooter {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  .HeaderPageFooter .Page {
+    padding-top: 0 !important;
+  }
   .edit-erase-span {
     display: inline-block;
     position: relative;
@@ -1868,12 +2911,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const buildFrameHtml = (html, baseHref = '/') => {
         if (!html) return '';
+        const cleanedHtml = html;
         const overlayStyle = buildFrameOverlayStyles();
         const normalizedBase = baseHref ? (baseHref.endsWith('/') ? baseHref : `${baseHref}/`) : '/';
         const baseTag = `<base href="${normalizedBase}">`;
-        const hasHtmlTag = /<html[\s>]/i.test(html);
+        const hasHtmlTag = /<html[\s>]/i.test(cleanedHtml);
         if (hasHtmlTag) {
-            let result = html;
+            let result = cleanedHtml;
             if (!/<head[\s>]/i.test(result)) {
                 result = result.replace(/<html[^>]*>/i, (match) => `${match}<head>${baseTag}${overlayStyle}</head>`);
             }
@@ -1886,7 +2930,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return result;
         }
 
-        const { styleBlock, body } = splitHtmlStyles(html);
+        const { styleBlock, body } = splitHtmlStyles(cleanedHtml);
         return `<!DOCTYPE html><html><head><meta charset="utf-8">${baseTag}${styleBlock || ''}${overlayStyle}</head><body>${body || ''}</body></html>`;
     };
 
@@ -1954,6 +2998,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateBlockFromFragment(block, html) {
         if (!block || !block.isConnected) return;
+        if ((state.templateMode === 'fill' || state.fillSessionActive) && block.matches('td, th')) {
+            const applied = applyFillContentToCell(block, html);
+            if (applied) {
+                syncFrameHeight();
+                return;
+            }
+        }
         const doc = block.ownerDocument || document;
         const { ok } = validateRenderedUpdate(block.outerHTML || '', html);
         if (!ok) return;
@@ -2369,6 +3420,219 @@ document.addEventListener('DOMContentLoaded', () => {
         return { blocks, fragment };
     }
 
+    function isEmptyCellBlock(cell) {
+        if (!cell) return false;
+        const info = getCellInfo(cell);
+        return info.isEmpty;
+    }
+
+    function isLabelCellBlock(cell) {
+        if (!cell) return false;
+        const row = cell.closest('tr');
+        if (!row) return false;
+        const cells = Array.from(row.children).filter((el) => el.matches('td, th'));
+        const index = cells.indexOf(cell);
+        if (index < 0) return false;
+        const labelText = normalizeLabelText(cell.textContent);
+        if (!labelText) return false;
+        if (cell.tagName.toLowerCase() === 'th') return true;
+        return index === 0 && cells.length > 1;
+    }
+
+    function findAdjacentEmptyCell(labelCell) {
+        if (!labelCell) return null;
+        const row = labelCell.closest('tr');
+        if (!row) return null;
+        const cells = Array.from(row.children).filter((el) => el.matches('td, th'));
+        const index = cells.indexOf(labelCell);
+        if (index >= 0) {
+            for (let i = index + 1; i < cells.length; i += 1) {
+                if (isEmptyCellBlock(cells[i])) return cells[i];
+            }
+            for (let i = 0; i < index; i += 1) {
+                if (isEmptyCellBlock(cells[i])) return cells[i];
+            }
+        }
+        let nextRow = row.nextElementSibling;
+        while (nextRow) {
+            const nextCells = Array.from(nextRow.children).filter((el) => el.matches('td, th'));
+            if (index >= 0 && nextCells[index] && isEmptyCellBlock(nextCells[index])) {
+                return nextCells[index];
+            }
+            nextRow = nextRow.nextElementSibling;
+        }
+        return null;
+    }
+
+    function buildFillCellMap(docRoot) {
+        const map = new Map();
+        if (!docRoot) return map;
+
+        const addCell = (key, cell) => {
+            if (!key || !cell) return;
+            if (!map.has(key)) map.set(key, cell);
+        };
+
+        Array.from(docRoot.querySelectorAll('table')).forEach((table) => {
+            const columnLabels = [];
+            const rows = Array.from(table.querySelectorAll('tr'));
+            rows.forEach((row) => {
+                const cells = Array.from(row.children).filter((el) => el.matches('td, th'));
+                if (!cells.length) return;
+                const infos = cells.map((cell) => getCellInfo(cell));
+                const labelTexts = cells.map((cell) => normalizeLabelText(cell.textContent));
+
+                labelTexts.forEach((labelText, idx) => {
+                    if (labelText && cells[idx].tagName.toLowerCase() === 'th') {
+                        columnLabels[idx] = labelText;
+                    }
+                });
+
+                const rowLabel = labelTexts[0] || '';
+
+                cells.forEach((cell, i) => {
+                    const info = infos[i];
+                    const labelText = labelTexts[i];
+                    const isHeader = cell.tagName.toLowerCase() === 'th' && labelText;
+                    const isLabelCell = isHeader || (i === 0 && labelText && cells.length > 1);
+                    if (isLabelCell) return;
+                    if (!info.isEmpty) return;
+
+                    let label = '';
+                    for (let j = i - 1; j >= 0; j -= 1) {
+                        if (labelTexts[j]) {
+                            label = labelTexts[j];
+                            break;
+                        }
+                    }
+                    if (!label && columnLabels[i]) {
+                        label = columnLabels[i];
+                    }
+                    if (!label && rowLabel && i > 0) {
+                        label = rowLabel;
+                    }
+                    if (!label) return;
+
+                    const key = normalizeSectionKey(label);
+                    const cleanedKey = normalizeSectionKey(sanitizeCellText(label));
+                    addCell(key, cell);
+                    if (cleanedKey && cleanedKey !== key) {
+                        addCell(cleanedKey, cell);
+                    }
+                });
+            });
+        });
+
+        return map;
+    }
+
+    function findFillTargetForField(sectionTitle) {
+        const docRoot = getDocRoot();
+        if (!docRoot) return getSectionBlocks(sectionTitle);
+        const normalizedTitle = normalizeSectionKey(sectionTitle);
+        if (!normalizedTitle) return getSectionBlocks(sectionTitle);
+
+        const fillMap = buildFillCellMap(docRoot);
+        const fallbackKey = normalizeSectionKey(sanitizeCellText(sectionTitle));
+        const mappedCell = fillMap.get(normalizedTitle) || (fallbackKey ? fillMap.get(fallbackKey) : null);
+        if (mappedCell) {
+            return { blocks: [mappedCell], fragment: mappedCell.outerHTML };
+        }
+
+        const cells = Array.from(docRoot.querySelectorAll('td, th'));
+        let matchedLabel = null;
+        let matchedLength = Infinity;
+
+        cells.forEach((cell) => {
+            const labelText = normalizeLabelText(cell.textContent);
+            if (!labelText) return;
+            if (labelText.length > 160) return;
+            const cellKey = normalizeSectionKey(labelText);
+            if (!cellKey) return;
+            if (cellKey === normalizedTitle || cellKey.includes(normalizedTitle) || normalizedTitle.includes(cellKey)) {
+                if (labelText.length < matchedLength) {
+                    matchedLabel = cell;
+                    matchedLength = labelText.length;
+                }
+                if (cellKey === normalizedTitle) {
+                    matchedLength = labelText.length;
+                }
+            }
+        });
+
+        if (matchedLabel) {
+            const fillCell = findAdjacentEmptyCell(matchedLabel);
+            if (fillCell) {
+                return { blocks: [fillCell], fragment: fillCell.outerHTML };
+            }
+            return { blocks: [], fragment: '', skip: true };
+        }
+
+        const fallback = getSectionBlocks(sectionTitle);
+        if (fallback.blocks.length === 1 && fallback.blocks[0].matches('td, th')) {
+            const fallbackCell = fallback.blocks[0];
+            if (isLabelCellBlock(fallbackCell) && !isEmptyCellBlock(fallbackCell)) {
+                const fillCell = findAdjacentEmptyCell(fallbackCell);
+                if (fillCell) {
+                    return { blocks: [fillCell], fragment: fillCell.outerHTML };
+                }
+                return { blocks: [], fragment: '', skip: true };
+            }
+        }
+        return fallback;
+    }
+
+    function extractFillLines(html, doc) {
+        const normalized = extractBodyHtml(html) || html || '';
+        const temp = doc.createElement('div');
+        temp.innerHTML = normalized;
+        Array.from(temp.querySelectorAll('br')).forEach((br) => br.replaceWith('\n'));
+        const blocks = Array.from(temp.querySelectorAll('p, div, li'));
+        const lines = [];
+        if (blocks.length > 0) {
+            blocks.forEach((el) => {
+                const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                if (text) lines.push(text);
+            });
+        } else {
+            const text = (temp.textContent || '').replace(/\s+/g, ' ').trim();
+            if (text) {
+                text.split(/\n+/).forEach((line) => {
+                    const trimmed = line.trim();
+                    if (trimmed) lines.push(trimmed);
+                });
+            }
+        }
+        return lines;
+    }
+
+    function applyFillContentToCell(cell, html) {
+        if (!cell) return false;
+        if (isLabelCellBlock(cell) && !isEmptyCellBlock(cell)) {
+            return false;
+        }
+        const doc = cell.ownerDocument || document;
+        const lines = extractFillLines(html, doc);
+        if (lines.length === 0) return false;
+        let target = cell.querySelector('p, div');
+        if (!target) {
+            target = doc.createElement('p');
+            target.className = 'Normal';
+            cell.innerHTML = '';
+            cell.appendChild(target);
+        }
+        target.classList.add('fill-content');
+        target.innerHTML = '';
+        const span = doc.createElement('span');
+        span.className = 'lang-ko';
+        lines.forEach((line, idx) => {
+            if (idx > 0) span.appendChild(doc.createElement('br'));
+            span.appendChild(doc.createTextNode(line));
+        });
+        target.appendChild(span);
+        return true;
+    }
+
     function buildSnippetFromBlocks(blocks) {
         if (!blocks || blocks.length === 0) return '';
         const text = blocks.map((block) => block.textContent || '').join(' ');
@@ -2456,6 +3720,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleDocSelection = () => {
         const docRoot = getDocRoot();
         if (!docRoot || !state.templateHtml) return;
+        if (state.templateMode === 'fill' || state.fillSessionActive || state.fillVerificationPending) return;
         const selection = getFrameSelection();
         if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
 
@@ -2650,18 +3915,77 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const runTemplateFillSequence = async (prompt) => {
-        const sections = state.templateSections.length > 0 ? state.templateSections : ['전체'];
+        const buildChatContextSnippet = () => {
+            const maxMessages = 8;
+            const maxChars = 1200;
+            const skipPattern = /양식 작성 시작|양식 작성이 완료되었습니다|업로드된 문서가 비어 있는/;
+            const messages = (state.chatHistory || [])
+                .filter((msg) => msg && (msg.role === 'user' || msg.role === 'ai'))
+                .filter((msg) => !msg.type && typeof msg.text === 'string' && msg.text.trim())
+                .map((msg) => ({
+                    role: msg.role,
+                    text: msg.text.replace(/\s+/g, ' ').trim()
+                }))
+                .filter((msg) => !skipPattern.test(msg.text));
+
+            const recent = messages.slice(-maxMessages);
+            let output = '';
+            for (const msg of recent) {
+                const label = msg.role === 'user' ? '사용자' : 'AI';
+                let line = `[${label}] ${msg.text}`;
+                if (line.length > 400) {
+                    line = `${line.slice(0, 400)}...`;
+                }
+                if (output.length + line.length + 1 > maxChars) break;
+                output += (output ? '\n' : '') + line;
+            }
+            return output;
+        };
+
+        const historyContext = buildChatContextSnippet();
+        const enrichedPrompt = historyContext
+            ? `이전 대화 기록을 참고하여 작성하세요.\n${historyContext}\n\n${prompt}`
+            : prompt;
+        const sections = (() => {
+            if (Array.isArray(state.fillDetectedFields) && state.fillDetectedFields.length > 0) {
+                return state.fillDetectedFields;
+            }
+            if (Array.isArray(state.templateFillFields) && state.templateFillFields.length > 0) {
+                return state.templateFillFields;
+            }
+            if (Array.isArray(state.templateSections) && state.templateSections.length > 0) {
+                return state.templateSections;
+            }
+            return ['전체'];
+        })();
         renderSectionFillPanel(sections);
 
         let currentHtml = state.templateHtml;
         state.chatHistory.push({ role: 'ai', text: '양식 작성 시작. 파트별로 내용을 채우겠습니다.' });
 
-        const canResolveAny = sections.some((section) => getSectionBlocks(section).blocks.length > 0);
+        const canResolveAny = sections.some((section) => {
+            const target = findFillTargetForField(section);
+            return (target.blocks && target.blocks.length > 0) || target.skip;
+        });
+        const hasFieldSections = Array.isArray(state.fillDetectedFields) && state.fillDetectedFields.length > 0;
+        const onlyFullDoc = sections.length === 1 && sections[0] === '전체';
 
-        if (!canResolveAny || (sections.length === 1 && sections[0] === '전체')) {
+        if (!canResolveAny && hasFieldSections && !onlyFullDoc) {
+            sections.forEach((section) => updateSectionFillStatus(section, 'error'));
+            state.chatHistory.push({ role: 'ai', text: '작성할 위치를 찾지 못했습니다. 양식 구조를 다시 확인해주세요.' });
+            state.templateMode = 'edit';
+            renderEditTargetOptions();
+            updateTemplateControls();
+            if (els.sectionFillPanel) {
+                setTimeout(() => els.sectionFillPanel.classList.add('hidden'), 1200);
+            }
+            return;
+        }
+
+        if (!canResolveAny || onlyFullDoc) {
             const sectionLabel = sections[0] || '전체';
             updateSectionFillStatus(sectionLabel, 'active');
-            const instruction = `사용자 요청: ${prompt}\n전체 양식을 빠짐없이 채워 넣고, 기존 구조는 유지하세요.`;
+            const instruction = `사용자 요청: ${enrichedPrompt}\n전체 양식을 빠짐없이 채워 넣고, 기존 구조는 유지하세요.`;
             const { styleBlock, body } = splitHtmlStyles(currentHtml);
             const updatedBody = await streamHtmlEdit({
                 html: body || currentHtml,
@@ -2692,12 +4016,16 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             for (const section of sections) {
                 updateSectionFillStatus(section, 'active');
-                const instruction = `사용자 요청: ${prompt}\n다음 섹션(${section})에 해당하는 부분만 채워 넣고, 다른 부분은 유지하세요.`;
+                const instruction = `사용자 요청: ${enrichedPrompt}\n다음 섹션(${section})에 해당하는 부분만 채워 넣고, 다른 부분은 유지하세요.`;
 
-                const { blocks, fragment } = getSectionBlocks(section);
-                if (!fragment) {
+                const { blocks, fragment, skip } = findFillTargetForField(section);
+                if (skip) {
+                    updateSectionFillStatus(section, 'done');
+                    continue;
+                }
+                if (!fragment || !blocks || blocks.length === 0) {
                     updateSectionFillStatus(section, 'error');
-                    throw new Error(`"${section}" 섹션을 찾지 못했습니다.`);
+                    continue;
                 }
 
                 applyEraseAnimationToBlocks(blocks);
@@ -2732,8 +4060,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateSectionFillStatus(section, 'error');
                     throw new Error(`"${section}" 섹션 작성 결과가 비어 있습니다.`);
                 }
-
-                replaceBlocksWithHtml(blocks, fragmentCheck.normalized);
+                if (blocks.length === 1 && blocks[0].matches('td, th')) {
+                    const applied = applyFillContentToCell(blocks[0], fragmentCheck.normalized);
+                    if (!applied) {
+                        replaceBlocksWithHtml(blocks, fragmentCheck.normalized);
+                    }
+                } else {
+                    replaceBlocksWithHtml(blocks, fragmentCheck.normalized);
+                }
                 flashDocContent();
                 syncTemplateHtmlFromFrame();
                 currentHtml = state.templateHtml;
@@ -2758,17 +4092,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. 보조 기능 (이미지, UI 상태 등)
     // ============================================================
 
-    const setLoadingState = (loading) => {
+    const updateSendButtonState = (isLoading = state.isGenerating) => {
         if (!els.btnSend) return;
-        if (loading) {
-            els.btnSend.classList.add('active');
-            els.iconSend.style.display = 'none';
-            els.spinnerSend.style.display = 'block';
-        } else {
-            els.btnSend.classList.remove('active');
-            els.iconSend.style.display = 'block';
-            els.spinnerSend.style.display = 'none';
-        }
+        const hasInput = !!(els.userRequest && els.userRequest.value.trim());
+        const loading = !!isLoading;
+
+        els.btnSend.classList.toggle('active', hasInput && !loading);
+        els.btnSend.classList.toggle('loading', loading);
+        els.btnSend.disabled = !hasInput && !loading;
+        els.btnSend.setAttribute('aria-busy', loading ? 'true' : 'false');
+        els.btnSend.setAttribute('aria-disabled', (!hasInput || loading) ? 'true' : 'false');
+
+        if (els.iconSend) els.iconSend.classList.toggle('hidden', loading);
+        if (els.spinnerSend) els.spinnerSend.classList.toggle('hidden', !loading);
+    };
+
+    const setLoadingState = (loading) => {
+        updateSendButtonState(loading);
     };
 
     const showToast = (msg, type='info') => {
@@ -2783,14 +4123,67 @@ document.addEventListener('DOMContentLoaded', () => {
     // 인증 상태 관리
     // ============================================================
 
+    const resolveProviderLabel = (user) => {
+        if (!user || !user.id) return 'Guest';
+        const id = String(user.id);
+        if (id.startsWith('google_')) return 'Google 계정';
+        if (id.startsWith('kakao_')) return 'Kakao 계정';
+        if (id.startsWith('naver_')) return 'Naver 계정';
+        if (id.startsWith('admin_')) return 'Admin 계정';
+        if (id.startsWith('demo_')) return 'Demo 계정';
+        if (id.startsWith('user_')) return 'Local 계정';
+        return '계정';
+    };
+
     const renderUserProfile = () => {
         const name = state.user?.name || 'Guest';
         const email = state.user?.email || '로그인 필요';
         const initial = (name || email || 'G').trim().charAt(0).toUpperCase() || 'G';
+        const picture = state.user?.picture || '';
+        const providerLabel = resolveProviderLabel(state.user);
+        const { isPremium } = getPremiumState();
 
         if (els.userNameLabel) els.userNameLabel.textContent = name;
         if (els.userEmailLabel) els.userEmailLabel.textContent = email;
-        if (els.userAvatar) els.userAvatar.textContent = ''; // Removed initial text from avatar
+        if (els.userAvatar) {
+            if (picture) {
+                els.userAvatar.classList.add('has-photo');
+                els.userAvatar.style.backgroundImage = `url("${picture}")`;
+                els.userAvatar.textContent = '';
+            } else {
+                els.userAvatar.classList.remove('has-photo');
+                els.userAvatar.style.backgroundImage = '';
+                els.userAvatar.textContent = initial;
+            }
+        }
+        if (els.profileName) els.profileName.textContent = name;
+        if (els.profileEmail) els.profileEmail.textContent = email;
+        if (els.profileProvider) {
+            if (isPremium) {
+                els.profileProvider.textContent = '프리미엄 계정';
+                els.profileProvider.classList.add('profile-provider--premium');
+            } else {
+                els.profileProvider.textContent = providerLabel;
+                els.profileProvider.classList.remove('profile-provider--premium');
+            }
+        }
+        if (els.profileAvatar) {
+            if (picture) {
+                els.profileAvatar.classList.add('has-photo');
+                els.profileAvatar.style.backgroundImage = `url("${picture}")`;
+                els.profileAvatar.textContent = '';
+            } else {
+                els.profileAvatar.classList.remove('has-photo');
+                els.profileAvatar.style.backgroundImage = '';
+                els.profileAvatar.textContent = initial;
+            }
+        }
+        if (els.profileLogin) {
+            els.profileLogin.style.display = state.user ? 'none' : 'flex';
+        }
+        if (els.profileLogout) {
+            els.profileLogout.style.display = state.user ? 'flex' : 'none';
+        }
 
         if (els.btnAuthToggle) {
             els.btnAuthToggle.innerHTML = state.user
@@ -2802,6 +4195,26 @@ document.addEventListener('DOMContentLoaded', () => {
         // Toggle Login Button visibility
         if (els.btnOpenAuth) {
             els.btnOpenAuth.style.display = state.user ? 'none' : 'flex';
+        }
+
+        applyAccountUIState();
+    };
+
+    const getSafeNextPath = () => {
+        const next = window.location.pathname + window.location.search;
+        if (!next.startsWith('/') || next.startsWith('//')) return '/';
+        return next;
+    };
+
+    const withNextParam = (base) => {
+        const next = getSafeNextPath();
+        const joiner = base.includes('?') ? '&' : '?';
+        return `${base}${joiner}next=${encodeURIComponent(next)}`;
+    };
+
+    const updateAuthLinks = () => {
+        if (els.btnAuthGoogle) {
+            els.btnAuthGoogle.href = withNextParam('/api/auth/social/google');
         }
     };
 
@@ -2835,6 +4248,49 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!els.modalAuth) return;
         els.modalAuth.classList.remove('show');
         setTimeout(() => els.modalAuth.style.display = 'none', 200);
+    };
+
+    const openProfileModal = () => {
+        if (!els.modalProfile || !els.profileModalBox) return;
+        renderUserProfile();
+        els.modalProfile.style.display = 'flex';
+
+        const anchor = els.userProfile;
+        const modalBox = els.profileModalBox;
+        const gap = 12;
+
+        let top = (window.innerHeight - modalBox.offsetHeight) / 2;
+        let left = (window.innerWidth - modalBox.offsetWidth) / 2;
+        let origin = '50% 50%';
+
+        if (anchor) {
+            const rect = anchor.getBoundingClientRect();
+            const modalRect = modalBox.getBoundingClientRect();
+            left = rect.right - modalRect.width;
+            top = rect.top - modalRect.height - gap;
+            let placeBelow = false;
+            if (top < 12) {
+                top = rect.bottom + gap;
+                placeBelow = true;
+            }
+            const maxLeft = window.innerWidth - modalRect.width - 12;
+            const maxTop = window.innerHeight - modalRect.height - 12;
+            left = Math.min(Math.max(left, 12), Math.max(12, maxLeft));
+            top = Math.min(Math.max(top, 12), Math.max(12, maxTop));
+            origin = placeBelow ? '50% 0%' : '50% 100%';
+        }
+
+        modalBox.style.left = `${left}px`;
+        modalBox.style.top = `${top}px`;
+        modalBox.style.transformOrigin = origin;
+
+        setTimeout(() => els.modalProfile.classList.add('show'), 10);
+    };
+
+    const closeProfileModal = () => {
+        if (!els.modalProfile) return;
+        els.modalProfile.classList.remove('show');
+        setTimeout(() => els.modalProfile.style.display = 'none', 200);
     };
 
     const fetchAuthMe = async () => {
@@ -3213,18 +4669,41 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
 
     const restoreSessionFromLocalStorage = async () => {
-        const lastLoadedSessionId = localStorage.getItem('lastLoadedSessionId');
-        const lastLoadedDocMode = localStorage.getItem('lastLoadedDocMode') === 'true'; // Convert string to boolean
-        
-        if (lastLoadedSessionId) {
-            console.log('Restoring session from localStorage:', lastLoadedSessionId);
-            await loadChatSession(lastLoadedSessionId);
-            state.docMode = lastLoadedDocMode; // Restore docMode
-            els.btnDocMode?.classList.toggle('on', state.docMode);
+        localStorage.removeItem('lastLoadedSessionId');
+        localStorage.removeItem('lastLoadedDocMode');
+        state.currentSessionId = null;
+        state.chatHistory = [];
+        state.docMode = false;
+        clearChatStream();
+        updateUI();
+        loadChatSessions();
+    };
+
+    const resetChatSession = ({ clearTemplate = false, closeSidebar = false } = {}) => {
+        state.chatHistory = [];
+        state.currentSessionId = null;
+        state.document = { title: '', content: '' };
+        state.docMode = false;
+        state.streamingBuffer = '';
+        state.displayedChatContent = '';
+        state.displayedDocContent = '';
+        if (state.chatTypingTimeoutId) clearTimeout(state.chatTypingTimeoutId);
+        if (state.docTypingTimeoutId) clearTimeout(state.docTypingTimeoutId);
+        state.chatTypingTimeoutId = null;
+        state.docTypingTimeoutId = null;
+        state.isGenerating = false;
+        localStorage.removeItem('lastLoadedSessionId');
+        localStorage.removeItem('lastLoadedDocMode');
+        clearChatStream();
+
+        if (clearTemplate) {
+            clearFileSelection();
         } else {
-            // If no session to restore, ensure home view is shown if no other content
             updateUI();
         }
+
+        loadChatSessions();
+        if (closeSidebar) toggleSidebar(false);
     };
 
     const loadChatSessions = async () => {
@@ -3314,6 +4793,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reset current view
             state.chatHistory = [];
             state.docMode = false;
+            clearChatStream();
             updateUI();
             
             const res = await fetch(`/api/chat/sessions/${sessionId}`);
@@ -3322,6 +4802,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success && data.session) {
                 state.currentSessionId = data.session.id;
                 state.chatHistory = data.session.messages || [];
+                clearChatStream();
                 // Save this session as the last loaded one
                 localStorage.setItem('lastLoadedSessionId', sessionId);
                 localStorage.setItem('lastLoadedDocMode', state.docMode);
@@ -3403,24 +4884,54 @@ document.addEventListener('DOMContentLoaded', () => {
         els.userRequest.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
+            updateSendButtonState();
         });
     }
     if (els.btnSend) els.btnSend.addEventListener('click', handleGenerate);
+    updateSendButtonState();
     if (els.btnLoginAction) els.btnLoginAction.addEventListener('click', handleRiroLogin);
     if (els.btnAuthLogin) els.btnAuthLogin.addEventListener('click', handleAuthLogin);
     if (els.btnAuthRegister) els.btnAuthRegister.addEventListener('click', handleAuthRegister);
     if (els.btnOpenAuth) {
         els.btnOpenAuth.addEventListener('click', () => {
-            window.location.href = '/login';
+            window.location.href = withNextParam('/login');
         });
     }
     if (els.btnAuthToggle) {
-        els.btnAuthToggle.addEventListener('click', () => {
+        els.btnAuthToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
             if (state.user) {
                 handleAuthLogout();
             } else {
-                window.location.href = '/login';
+                window.location.href = withNextParam('/login');
             }
+        });
+    }
+    if (els.userProfile) {
+        els.userProfile.addEventListener('click', () => {
+            openProfileModal();
+        });
+    }
+    if (els.closeProfile) {
+        els.closeProfile.addEventListener('click', closeProfileModal);
+    }
+    if (els.modalProfile) {
+        els.modalProfile.addEventListener('click', (e) => {
+            if (e.target === els.modalProfile) closeProfileModal();
+        });
+    }
+    if (els.profileLogin) {
+        els.profileLogin.addEventListener('click', () => {
+            closeProfileModal();
+            if (!state.user) {
+                window.location.href = withNextParam('/login');
+            }
+        });
+    }
+    if (els.profileLogout) {
+        els.profileLogout.addEventListener('click', async () => {
+            await handleAuthLogout();
+            closeProfileModal();
         });
     }
     const btnCloseAuth = document.getElementById('closeAuth');
@@ -3429,20 +4940,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // New Chat Button
     if (els.btnNewChat) {
         els.btnNewChat.addEventListener('click', () => {
-            state.chatHistory = [];
-            state.currentSessionId = null;
-            state.document = { title: '', content: '' };
-            state.docMode = false;
-            state.streamingBuffer = '';
-            state.displayedChatContent = '';
-            clearFileSelection();
-            
-            localStorage.removeItem('lastLoadedSessionId');
-            localStorage.removeItem('lastLoadedDocMode');
-            
-            updateUI();
-            loadChatSessions(); // Clear active state
-            toggleSidebar(false); // Close sidebar on mobile
+            resetChatSession({ clearTemplate: true, closeSidebar: true });
         });
     }
 
@@ -3497,6 +4995,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.addEventListener('resize', () => {
+        updateCanvasLayoutVars();
         if (!els.docFrame || !state.templateHtml) return;
         requestAnimationFrame(() => syncFrameLayout());
     });
@@ -3506,6 +5005,29 @@ document.addEventListener('DOMContentLoaded', () => {
             dismissEditCover();
             clearSelectedSnippet();
         }, { passive: true });
+    }
+
+    if (els.canvasResizeHandle) {
+        els.canvasResizeHandle.addEventListener('pointerdown', startCanvasResize);
+        els.canvasResizeHandle.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            const metrics = getCanvasLayoutMetrics();
+            if (metrics.overlayMode) return;
+            event.preventDefault();
+            const step = event.shiftKey ? 64 : 24;
+            const baseWidth = Number.isFinite(state.canvasUserWidth)
+                ? state.canvasUserWidth
+                : (els.canvasPanel ? els.canvasPanel.getBoundingClientRect().width : metrics.maxCanvas);
+            const delta = event.key === 'ArrowLeft' ? step : -step;
+            const nextWidth = clampCanvasWidth(baseWidth + delta, metrics);
+            state.canvasUserWidth = nextWidth;
+            persistCanvasUserWidth(nextWidth);
+            updateCanvasLayoutVars();
+        });
+        window.addEventListener('pointermove', updateCanvasResize);
+        window.addEventListener('pointerup', endCanvasResize);
+        window.addEventListener('pointercancel', endCanvasResize);
+        window.addEventListener('blur', () => endCanvasResize());
     }
 
     if (els.scrollContainer) {
@@ -3532,6 +5054,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (els.chatStream) {
         els.chatStream.addEventListener('click', (e) => {
+            const verifyBtn = e.target.closest('[data-action="verification-confirm"], [data-action="verification-cancel"]');
+            if (verifyBtn) {
+                if (!els.userRequest) return;
+                const action = verifyBtn.dataset.action;
+                const value = action === 'verification-cancel' ? '취소' : '확인';
+                if (state.isGenerating) return;
+                els.userRequest.value = value;
+                handleGenerate();
+                return;
+            }
             const card = e.target.closest('[data-action="open-canvas"]');
             if (!card) return;
             openCanvasOverlay(true);
@@ -3650,6 +5182,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === els.modalTemplate) closeTemplateModal();
         });
     }
+    if (els.btnDownloadClose) {
+        els.btnDownloadClose.addEventListener('click', closeDownloadModal);
+    }
+    if (els.btnDownloadCancel) {
+        els.btnDownloadCancel.addEventListener('click', closeDownloadModal);
+    }
+    if (els.btnDownloadConfirm) {
+        els.btnDownloadConfirm.addEventListener('click', async () => {
+            const format = getSelectedDownloadFormat();
+            closeDownloadModal();
+            await performDownload(format);
+        });
+    }
+    if (els.modalDownload) {
+        els.modalDownload.addEventListener('click', (e) => {
+            if (e.target === els.modalDownload) closeDownloadModal();
+        });
+    }
 
     // 리로스쿨 토글 버튼 (첨부 메뉴 안)
     const btnToggleRiro = document.getElementById('btnToggleRiro');
@@ -3681,6 +5231,7 @@ document.addEventListener('DOMContentLoaded', () => {
             els.sidebar.classList.remove('open');
             els.sidebarOverlay.classList.remove('open');
         }
+        updateCanvasLayoutVars();
     };
     els.btnMenu?.addEventListener('click', () => toggleSidebar(true));
     els.sidebarOverlay?.addEventListener('click', () => toggleSidebar(false));
@@ -3689,6 +5240,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (els.btnDesktopSidebarToggle) {
         els.btnDesktopSidebarToggle.addEventListener('click', () => {
             els.sidebar.classList.toggle('collapsed');
+            updateCanvasLayoutVars();
+        });
+    }
+
+    if (theme.toggles.length) {
+        theme.toggles.forEach((btn) => {
+            btn.addEventListener('click', toggleTheme);
         });
     }
 
@@ -3729,7 +5287,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 초기 실행
     console.log('DOC Agent Initialized. Debug Mode:', DEBUG_MODE);
+    state.canvasUserWidth = loadCanvasUserWidth();
+    updateCanvasLayoutVars();
+    initTheme();
+    applyAccountUIState();
     renderUserProfile();
+    updateAuthLinks();
     fetchAuthMe().then(() => {
         restoreSessionFromLocalStorage();
     });

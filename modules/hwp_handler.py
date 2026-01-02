@@ -146,29 +146,9 @@ class HWPHandler:
         Returns:
             str: 변환된 HTML 문자열
         """
-        def wrap_text_as_html(text: str) -> str:
-            escaped = html_lib.escape(text or "")
-            paragraphs = []
-            buffer = []
-            for line in escaped.splitlines():
-                if line.strip():
-                    buffer.append(line)
-                else:
-                    if buffer:
-                        paragraphs.append("<p>" + "<br>".join(buffer) + "</p>")
-                        buffer = []
-            if buffer:
-                paragraphs.append("<p>" + "<br>".join(buffer) + "</p>")
-            return "\n".join(paragraphs) if paragraphs else "<p></p>"
-
         command = self._resolve_hwp5html_command()
         if not command:
-            print("[HWP HTML] hwp5html not available. Falling back to alternate extraction.")
-            docx_html = self._convert_docx_to_html_if_possible(file_path)
-            if docx_html:
-                return docx_html
-            text_content = self.read_hwp(file_path)
-            return wrap_text_as_html(text_content)
+            raise ValueError("hwp5html 변환기를 찾을 수 없습니다.")
 
         safe_id = template_id or Path(file_path).stem
         html_root = self.output_dir / "templates_html"
@@ -188,33 +168,21 @@ class HWPHandler:
             )
         except subprocess.CalledProcessError as exc:
             err_msg = exc.stderr.strip() if exc.stderr else str(exc)
-            print(f"[HWP HTML] hwp5html failed: {err_msg}")
-            docx_html = self._convert_docx_to_html_if_possible(file_path)
-            if docx_html:
-                return docx_html
-            text_content = self.read_hwp(file_path)
-            return wrap_text_as_html(text_content)
+            raise ValueError(f"hwp5html 변환 실패: {err_msg}") from exc
         except Exception as exc:
-            print(f"[HWP HTML] hwp5html error: {exc}")
-            docx_html = self._convert_docx_to_html_if_possible(file_path)
-            if docx_html:
-                return docx_html
-            text_content = self.read_hwp(file_path)
-            return wrap_text_as_html(text_content)
+            raise ValueError(f"hwp5html 변환 중 오류가 발생했습니다: {exc}") from exc
 
         index_path = output_dir / "index.xhtml"
         if not index_path.exists():
             index_path = output_dir / "index.html"
 
         if not index_path.exists():
-            text_content = self.read_hwp(file_path)
-            return wrap_text_as_html(text_content)
+            raise ValueError("HWP HTML 변환 결과 파일을 찾을 수 없습니다.")
 
         html_text = index_path.read_text(encoding="utf-8", errors="ignore")
         soup = BeautifulSoup(html_text, "html.parser")
         if not soup.body:
-            text_content = self.read_hwp(file_path)
-            return wrap_text_as_html(text_content)
+            raise ValueError("HWP HTML 변환 결과에 본문이 없습니다.")
 
         asset_base = f"/api/template/asset/{safe_id}/"
         head = soup.head

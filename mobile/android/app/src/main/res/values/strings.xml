@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">HWP Agent</string>
+    <string name="title_activity_main">HWP Agent</string>
+    <string name="package_name">com.hwp.agent</string>
+    <string name="custom_url_scheme">com.hwp.agent</string>
+    <string name="app_token">G9zPjvkdeQQa3kLaJwlhHNamz0UgkN4lMBj-TWXrCxI</string>
+</resources>

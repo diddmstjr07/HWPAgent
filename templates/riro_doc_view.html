@@ -4,11 +4,75 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RiRo 문서 보기</title>
+    <meta name="theme-color" content="#F8FAFC">
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        (() => {
+            let theme = 'light';
+            try {
+                const stored = localStorage.getItem('docAgentTheme');
+                theme = stored === 'dark' || stored === 'light' ? stored : 'light';
+            } catch (e) {
+                theme = 'light';
+            }
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.style.colorScheme = theme;
+            const meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', theme === 'dark' ? '#0B0F17' : '#F8FAFC');
+        })();
+    </script>
     <style>
+        :root {
+            --page-bg: #F8FAFC;
+            --page-ambient-1: rgba(203, 213, 225, 0.35);
+            --page-ambient-2: rgba(226, 232, 240, 0.45);
+            --surface: rgba(255, 255, 255, 0.96);
+            --surface-muted: #F1F5F9;
+            --border: rgba(226, 232, 240, 0.95);
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            --text-subtle: #94A3B8;
+            --text-tertiary: #94A3B8;
+            --accent-primary: #0F172A;
+            --accent-gradient: linear-gradient(135deg, #0F172A 0%, #334155 100%);
+            --accent-glow: rgba(15, 23, 42, 0.15);
+            --shadow-soft: 0 20px 40px -24px rgba(15, 23, 42, 0.2);
+            --shadow-float: 0 16px 30px -20px rgba(15, 23, 42, 0.2);
+        }
+        html[data-theme="dark"] {
+            --page-bg: #0B0F17;
+            --page-ambient-1: rgba(30, 41, 59, 0.35);
+            --page-ambient-2: rgba(15, 23, 42, 0.6);
+            --surface: rgba(15, 23, 42, 0.96);
+            --surface-muted: #111827;
+            --border: rgba(30, 41, 59, 0.85);
+            --text-main: #E2E8F0;
+            --text-muted: #94A3B8;
+            --text-subtle: #64748B;
+            --text-tertiary: #64748B;
+            --accent-primary: #E2E8F0;
+            --accent-gradient: linear-gradient(135deg, #1E293B 0%, #475569 100%);
+            --accent-glow: rgba(148, 163, 184, 0.18);
+            --shadow-soft: 0 24px 50px -30px rgba(0, 0, 0, 0.8);
+            --shadow-float: 0 18px 35px -22px rgba(0, 0, 0, 0.7);
+        }
         body {
-            background: radial-gradient(circle at top, #fdf2ff 0%, #e9f2ff 65%, #ffffff 100%);
+            background: var(--page-bg);
             min-height: 100vh;
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            color: var(--text-main);
+            overflow-x: hidden;
+            overflow-y: auto;
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(circle at 18% 12%, var(--page-ambient-1), transparent 55%),
+                radial-gradient(circle at 82% 8%, var(--page-ambient-2), transparent 60%);
+            z-index: -1;
         }
         .doc-view-wrapper {
             max-width: 900px;
@@ -16,67 +80,86 @@
             padding: 3rem 1.5rem 4rem;
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
+            gap: 1.75rem;
         }
         .doc-view-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             gap: 1rem;
         }
         .doc-view-header h1 {
             margin: 0;
             font-size: 2rem;
+            color: var(--text-main);
+            letter-spacing: -0.01em;
         }
         .doc-view-header .back-link {
             padding: 0.5rem 1.2rem;
             border-radius: var(--radius-full);
-            background: rgba(99, 102, 241, 0.1);
-            color: var(--primary);
+            background: var(--surface-muted);
+            color: var(--text-main);
             text-decoration: none;
             font-weight: 700;
-            border: 1px solid rgba(99, 102, 241, 0.25);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-float);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .doc-view-header .back-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 18px 32px -20px var(--accent-glow);
         }
         .doc-meta {
             font-size: 0.9rem;
-            color: var(--text-tertiary);
+            color: var(--text-subtle);
             display: flex;
             gap: 1.5rem;
             flex-wrap: wrap;
         }
         .doc-content {
-            background: #fff;
+            background: var(--surface);
             border-radius: var(--radius-2xl);
-            border: 1px solid rgba(15, 23, 42, 0.08);
+            border: 1px solid var(--border);
             padding: 2rem;
-            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+            box-shadow: var(--shadow-soft);
         }
         .doc-content pre {
             white-space: pre-wrap;
-            font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
             line-height: 1.7;
-            color: var(--text-secondary);
+            color: var(--text-muted);
         }
         .doc-toolbar {
             display: flex;
             gap: 0.75rem;
             flex-wrap: wrap;
         }
-        .doc-toolbar button {
+        .doc-toolbar button,
+        .doc-toolbar .btn-outline {
             border: none;
             border-radius: var(--radius-full);
             padding: 0.6rem 1.4rem;
             font-weight: 700;
             cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
         .btn-primary {
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: var(--text-inverse);
+            background: var(--accent-gradient);
+            color: #fff;
+            box-shadow: 0 10px 18px -12px var(--accent-glow);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 24px -14px var(--accent-glow);
         }
         .btn-outline {
-            border: 1px solid rgba(99, 102, 241, 0.35);
-            background: transparent;
-            color: var(--primary);
+            border: 1px solid var(--border);
+            background: var(--surface-muted);
+            color: var(--text-main);
+        }
+        .btn-outline:hover {
+            box-shadow: 0 10px 18px -14px var(--accent-glow);
+            transform: translateY(-1px);
         }
         .image-grid {
             margin-top: 1.5rem;
@@ -87,7 +170,7 @@
         .image-grid img {
             width: 100%;
             border-radius: var(--radius-lg);
-            border: 1px solid rgba(15, 23, 42, 0.08);
+            border: 1px solid var(--border);
         }
     </style>
 </head>

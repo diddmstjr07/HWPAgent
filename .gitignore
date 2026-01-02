@@ -23,3 +23,11 @@ modules/output/
 hwp_agent.db
 output/*.hwp
 output/*.hwpx
+electron/node_modules/
+electron/dist/
+vpn/data/
+vpn/clients/
+.local/
+build/
+tools/build/
+mobile/node_modules/

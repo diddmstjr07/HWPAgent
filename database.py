@@ -3,10 +3,16 @@ SQLite 데이터베이스 매니저
 """
 import sqlite3
 import json
-from datetime import datetime
+import os
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 from models import User, DocumentHistory, ChatSession, RiroDocument
+from werkzeug.security import generate_password_hash, check_password_hash
+
+DEFAULT_ADMIN_ID = os.getenv("ADMIN_BOOTSTRAP_ID", "diddmstjr")
+DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_BOOTSTRAP_PASSWORD", "diddmstjrdiddmstjrCOM*********")
+DEFAULT_ADMIN_NAME = os.getenv("ADMIN_BOOTSTRAP_NAME", "Admin")
 
 class Database:
     def __init__(self, db_path='hwp_agent.db'):
@@ -14,86 +20,120 @@ class Database:
         self.init_database()
     
     def get_connection(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
+        # WAL 모드 활성화 (동시성 향상)
+        conn.execute('PRAGMA journal_mode=WAL')
         return conn
     
     def init_database(self):
         """데이터베이스 초기화"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # 사용자 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                name TEXT NOT NULL,
-                picture TEXT,
-                password_hash TEXT,
-                created_at TEXT NOT NULL,
-                last_login TEXT
-            )
-        ''')
-        # legacy DB 대응: 누락된 컬럼을 추가
-        self._ensure_column(cursor, 'users', 'password_hash', 'TEXT')
-        self._ensure_column(cursor, 'users', 'last_login', 'TEXT')
-        
-        # 문서 히스토리 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS document_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        ''')
-        
-        # 인덱스 생성
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_document_user 
-            ON document_history(user_id, created_at DESC)
-        ''')
+        try:
+            cursor = conn.cursor()
+            
+            # 사용자 테이블
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    picture TEXT,
+                    password_hash TEXT,
+                    created_at TEXT NOT NULL,
+                    last_login TEXT
+                )
+            ''')
+            # legacy DB 대응: 누락된 컬럼을 추가
+            self._ensure_column(cursor, 'users', 'password_hash', 'TEXT')
+            self._ensure_column(cursor, 'users', 'last_login', 'TEXT')
+            
+            # 문서 히스토리 테이블
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS document_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            ''')
+            
+            # 인덱스 생성
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_document_user 
+                ON document_history(user_id, created_at DESC)
+            ''')
 
-        # 리로스쿨 문서 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS riro_documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                riro_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                image_urls TEXT,
-                created_at TEXT NOT NULL
-            )
-        ''')
+            # 리로스쿨 문서 테이블
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS riro_documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    riro_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    image_urls TEXT,
+                    created_at TEXT NOT NULL
+                )
+            ''')
 
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_riro_documents
-            ON riro_documents(riro_id, created_at DESC)
-        ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_riro_documents
+                ON riro_documents(riro_id, created_at DESC)
+            ''')
 
-        # 채팅 세션 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS chat_sessions (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                messages TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        ''')
+            # 채팅 세션 테이블
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS chat_sessions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    messages TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            ''')
 
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_chat_sessions_user
-            ON chat_sessions(user_id, updated_at DESC)
-        ''')
-        
-        conn.commit()
-        conn.close()
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_chat_sessions_user
+                ON chat_sessions(user_id, updated_at DESC)
+            ''')
+
+            # 사용자 분석 이벤트 테이블
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS analytics_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    user_id TEXT,
+                    session_id TEXT,
+                    path TEXT,
+                    referrer TEXT,
+                    ip TEXT,
+                    user_agent TEXT,
+                    status_code INTEGER,
+                    created_at TEXT NOT NULL
+                )
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_analytics_events_type_time
+                ON analytics_events(event_type, created_at)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_analytics_events_path
+                ON analytics_events(path)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_analytics_events_session
+                ON analytics_events(session_id)
+            ''')
+
+            self._seed_admin_user(cursor)
+            
+            conn.commit()
+        finally:
+            conn.close()
 
     def _ensure_column(self, cursor, table, column, definition):
         """테이블에 특정 컬럼이 없으면 추가"""
@@ -101,16 +141,48 @@ class Database:
         columns = [row['name'] for row in cursor.fetchall()]
         if column not in columns:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    def _seed_admin_user(self, cursor):
+        """기본 관리자 계정을 생성하거나 보강"""
+        admin_id = DEFAULT_ADMIN_ID.strip()
+        admin_password = DEFAULT_ADMIN_PASSWORD
+        admin_name = DEFAULT_ADMIN_NAME.strip() or "Admin"
+
+        if not admin_id or not admin_password:
+            return
+
+        cursor.execute('SELECT id, email, password_hash, name FROM users WHERE email = ?', (admin_id,))
+        row = cursor.fetchone()
+        password_hash = generate_password_hash(admin_password)
+        now = datetime.now().isoformat()
+
+        if row:
+            existing_hash = row['password_hash'] or ''
+            needs_update = not existing_hash or not check_password_hash(existing_hash, admin_password)
+            if needs_update:
+                cursor.execute(
+                    'UPDATE users SET password_hash = ?, name = COALESCE(NULLIF(name, \'\'), ?), last_login = COALESCE(last_login, ?) WHERE id = ?',
+                    (password_hash, admin_name, now, row['id'])
+                )
+            return
+
+        admin_user_id = f"admin_{admin_id}"
+        cursor.execute('''
+            INSERT INTO users (id, email, name, picture, password_hash, created_at, last_login)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (admin_user_id, admin_id, admin_name, None, password_hash, now, now))
     
     # ============ User 관련 메서드 ============
     
     def get_user(self, user_id):
         """사용자 조회"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+            row = cursor.fetchone()
+        finally:
+            conn.close()
         
         if row:
             return User(
@@ -125,10 +197,12 @@ class Database:
     def get_user_by_email(self, email):
         """이메일로 사용자 조회"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+            row = cursor.fetchone()
+        finally:
+            conn.close()
         
         if row:
             return User(
@@ -143,10 +217,13 @@ class Database:
     def get_user_credentials(self, email):
         """이메일로 사용자 계정 조회 (패스워드 포함)"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+            row = cursor.fetchone()
+        finally:
+            conn.close()
+
         if not row:
             return None
         return {
@@ -162,28 +239,30 @@ class Database:
     def create_or_update_user(self, user_id, email, name, picture, password_hash=None, last_login=None):
         """사용자 생성 또는 업데이트"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # 기존 사용자 확인
-        cursor.execute('SELECT id FROM users WHERE id = ?', (user_id,))
-        existing = cursor.fetchone()
-        
-        if existing:
-            # 업데이트
-            cursor.execute('''
-                UPDATE users 
-                SET email = ?, name = ?, picture = ?, password_hash = COALESCE(?, password_hash), last_login = COALESCE(?, last_login)
-                WHERE id = ?
-            ''', (email, name, picture, password_hash, last_login, user_id))
-        else:
-            # 신규 생성
-            cursor.execute('''
-                INSERT INTO users (id, email, name, picture, password_hash, created_at, last_login)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (user_id, email, name, picture, password_hash, datetime.now().isoformat(), last_login))
-        
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            
+            # 기존 사용자 확인
+            cursor.execute('SELECT id FROM users WHERE id = ?', (user_id,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # 업데이트
+                cursor.execute('''
+                    UPDATE users 
+                    SET email = ?, name = ?, picture = ?, password_hash = COALESCE(?, password_hash), last_login = COALESCE(?, last_login)
+                    WHERE id = ?
+                ''', (email, name, picture, password_hash, last_login, user_id))
+            else:
+                # 신규 생성
+                cursor.execute('''
+                    INSERT INTO users (id, email, name, picture, password_hash, created_at, last_login)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (user_id, email, name, picture, password_hash, datetime.now().isoformat(), last_login))
+            
+            conn.commit()
+        finally:
+            conn.close()
         
         return User(id=user_id, email=email, name=name, picture=picture, password_hash=password_hash)
 
@@ -194,39 +273,181 @@ class Database:
         display_name = name or email.split('@')[0]
 
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO users (id, email, name, picture, password_hash, created_at, last_login)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (user_id, email, display_name, picture, password_hash, now, now))
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO users (id, email, name, picture, password_hash, created_at, last_login)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, email, display_name, picture, password_hash, now, now))
+            conn.commit()
+        finally:
+            conn.close()
         return User(id=user_id, email=email, name=display_name, picture=picture, password_hash=password_hash)
 
     def update_last_login(self, user_id):
         """마지막 로그인 시각 업데이트"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now().isoformat(), user_id))
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now().isoformat(), user_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def log_analytics_event(
+        self,
+        event_type,
+        user_id=None,
+        session_id=None,
+        path=None,
+        referrer=None,
+        ip=None,
+        user_agent=None,
+        status_code=None,
+    ):
+        """사용자 분석 이벤트 기록"""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO analytics_events (
+                    event_type,
+                    user_id,
+                    session_id,
+                    path,
+                    referrer,
+                    ip,
+                    user_agent,
+                    status_code,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    event_type,
+                    user_id,
+                    session_id,
+                    path,
+                    referrer,
+                    ip,
+                    user_agent,
+                    status_code,
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def fetch_analytics_summary(self, days=14, top_limit=8, recent_limit=20):
+        """관리자용 사용자 분석 요약"""
+        days = max(1, int(days or 14))
+        start_date = (datetime.now() - timedelta(days=days - 1)).date().isoformat()
+
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+
+            def daily_counts(event_type, unique_sessions=False):
+                if unique_sessions:
+                    cursor.execute(
+                        '''
+                        SELECT date(created_at) AS day,
+                               COUNT(DISTINCT COALESCE(session_id, ip)) AS count
+                        FROM analytics_events
+                        WHERE event_type = ? AND created_at >= ?
+                        GROUP BY day
+                        ORDER BY day ASC
+                        ''',
+                        (event_type, start_date),
+                    )
+                else:
+                    cursor.execute(
+                        '''
+                        SELECT date(created_at) AS day,
+                               COUNT(*) AS count
+                        FROM analytics_events
+                        WHERE event_type = ? AND created_at >= ?
+                        GROUP BY day
+                        ORDER BY day ASC
+                        ''',
+                        (event_type, start_date),
+                    )
+                return [dict(row) for row in cursor.fetchall()]
+
+            daily_visits = daily_counts("page_view", unique_sessions=True)
+            daily_signups = daily_counts("signup")
+            daily_logins = daily_counts("login")
+
+            cursor.execute(
+                '''
+                SELECT path, COUNT(*) AS count
+                FROM analytics_events
+                WHERE event_type = 'page_view' AND path IS NOT NULL AND path != ''
+                GROUP BY path
+                ORDER BY count DESC
+                LIMIT ?
+                ''',
+                (top_limit,),
+            )
+            top_paths = [dict(row) for row in cursor.fetchall()]
+
+            cursor.execute(
+                '''
+                SELECT referrer, COUNT(*) AS count
+                FROM analytics_events
+                WHERE event_type = 'page_view' AND referrer IS NOT NULL AND referrer != ''
+                GROUP BY referrer
+                ORDER BY count DESC
+                LIMIT ?
+                ''',
+                (top_limit,),
+            )
+            top_referrers = [dict(row) for row in cursor.fetchall()]
+
+            cursor.execute(
+                '''
+                SELECT path, referrer, user_id, session_id, status_code, created_at
+                FROM analytics_events
+                WHERE event_type = 'page_view'
+                ORDER BY id DESC
+                LIMIT ?
+                ''',
+                (recent_limit,),
+            )
+            recent_routes = [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+        return {
+            "days": days,
+            "daily_visits": daily_visits,
+            "daily_signups": daily_signups,
+            "daily_logins": daily_logins,
+            "top_paths": top_paths,
+            "top_referrers": top_referrers,
+            "recent_routes": recent_routes,
+        }
     
     # ============ Document History 관련 메서드 ============
     
     def save_document(self, user_id, title, content):
         """문서 저장"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        now = datetime.now().isoformat()
-        cursor.execute('''
-            INSERT INTO document_history (user_id, title, content, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, title, content, now, now))
-        
-        doc_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            
+            now = datetime.now().isoformat()
+            cursor.execute('''
+                INSERT INTO document_history (user_id, title, content, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, title, content, now, now))
+            
+            doc_id = cursor.lastrowid
+            conn.commit()
+        finally:
+            conn.close()
         
         return DocumentHistory(
             id=doc_id,
@@ -240,16 +461,18 @@ class Database:
     def get_user_documents(self, user_id, limit=50):
         """사용자의 문서 목록 조회"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM document_history
-            WHERE user_id = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-        ''', (user_id, limit))
-        
-        rows = cursor.fetchall()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM document_history
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            ''', (user_id, limit))
+            
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
         
         documents = []
         for row in rows:
@@ -267,14 +490,16 @@ class Database:
     def get_document(self, doc_id, user_id):
         """특정 문서 조회 (소유권 확인)"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM document_history
-            WHERE id = ? AND user_id = ?
-        ''', (doc_id, user_id))
-        
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM document_history
+                WHERE id = ? AND user_id = ?
+            ''', (doc_id, user_id))
+            
+            row = cursor.fetchone()
+        finally:
+            conn.close()
         
         if row:
             return DocumentHistory(
@@ -290,52 +515,55 @@ class Database:
     def update_document(self, doc_id, user_id, title=None, content=None):
         """문서 업데이트"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # 소유권 확인
-        cursor.execute('SELECT id FROM document_history WHERE id = ? AND user_id = ?', (doc_id, user_id))
-        if not cursor.fetchone():
+        try:
+            cursor = conn.cursor()
+            
+            # 소유권 확인
+            cursor.execute('SELECT id FROM document_history WHERE id = ? AND user_id = ?', (doc_id, user_id))
+            if not cursor.fetchone():
+                return None
+            
+            now = datetime.now().isoformat()
+            
+            if title and content:
+                cursor.execute('''
+                    UPDATE document_history
+                    SET title = ?, content = ?, updated_at = ?
+                    WHERE id = ? AND user_id = ?
+                ''', (title, content, now, doc_id, user_id))
+            elif title:
+                cursor.execute('''
+                    UPDATE document_history
+                    SET title = ?, updated_at = ?
+                    WHERE id = ? AND user_id = ?
+                ''', (title, now, doc_id, user_id))
+            elif content:
+                cursor.execute('''
+                    UPDATE document_history
+                    SET content = ?, updated_at = ?
+                    WHERE id = ? AND user_id = ?
+                ''', (content, now, doc_id, user_id))
+            
+            conn.commit()
+        finally:
             conn.close()
-            return None
-        
-        now = datetime.now().isoformat()
-        
-        if title and content:
-            cursor.execute('''
-                UPDATE document_history
-                SET title = ?, content = ?, updated_at = ?
-                WHERE id = ? AND user_id = ?
-            ''', (title, content, now, doc_id, user_id))
-        elif title:
-            cursor.execute('''
-                UPDATE document_history
-                SET title = ?, updated_at = ?
-                WHERE id = ? AND user_id = ?
-            ''', (title, now, doc_id, user_id))
-        elif content:
-            cursor.execute('''
-                UPDATE document_history
-                SET content = ?, updated_at = ?
-                WHERE id = ? AND user_id = ?
-            ''', (content, now, doc_id, user_id))
-        
-        conn.commit()
-        conn.close()
         
         return self.get_document(doc_id, user_id)
     
     def delete_document(self, doc_id, user_id):
         """문서 삭제"""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            DELETE FROM document_history
-            WHERE id = ? AND user_id = ?
-        ''', (doc_id, user_id))
-        
-        deleted = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM document_history
+                WHERE id = ? AND user_id = ?
+            ''', (doc_id, user_id))
+            
+            deleted = cursor.rowcount > 0
+            conn.commit()
+        finally:
+            conn.close()
         
         return deleted
 
@@ -347,13 +575,15 @@ class Database:
         payload = json.dumps(messages or [])
 
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (session_id, user_id, title, payload, now, now))
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (session_id, user_id, title, payload, now, now))
+            conn.commit()
+        finally:
+            conn.close()
 
         return ChatSession(
             id=session_id,
@@ -366,16 +596,18 @@ class Database:
 
     def get_chat_sessions(self, user_id, limit=50):
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT id, user_id, title, created_at, updated_at
-            FROM chat_sessions
-            WHERE user_id = ?
-            ORDER BY updated_at DESC
-            LIMIT ?
-        ''', (user_id, limit))
-        rows = cursor.fetchall()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, user_id, title, created_at, updated_at
+                FROM chat_sessions
+                WHERE user_id = ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+            ''', (user_id, limit))
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
 
         sessions = []
         for row in rows:
@@ -391,13 +623,15 @@ class Database:
 
     def get_chat_session(self, session_id, user_id):
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM chat_sessions
-            WHERE id = ? AND user_id = ?
-        ''', (session_id, user_id))
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM chat_sessions
+                WHERE id = ? AND user_id = ?
+            ''', (session_id, user_id))
+            row = cursor.fetchone()
+        finally:
+            conn.close()
 
         if not row:
             return None
@@ -439,15 +673,17 @@ class Database:
         values.extend([session_id, user_id])
 
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(f'''
-            UPDATE chat_sessions
-            SET {", ".join(fields)}
-            WHERE id = ? AND user_id = ?
-        ''', values)
-        updated = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(f'''
+                UPDATE chat_sessions
+                SET {", ".join(fields)}
+                WHERE id = ? AND user_id = ?
+            ''', values)
+            updated = cursor.rowcount > 0
+            conn.commit()
+        finally:
+            conn.close()
 
         if not updated:
             return None
@@ -455,30 +691,34 @@ class Database:
 
     def delete_chat_session(self, session_id, user_id):
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            DELETE FROM chat_sessions
-            WHERE id = ? AND user_id = ?
-        ''', (session_id, user_id))
-        deleted = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM chat_sessions
+                WHERE id = ? AND user_id = ?
+            ''', (session_id, user_id))
+            deleted = cursor.rowcount > 0
+            conn.commit()
+        finally:
+            conn.close()
         return deleted
 
     # ============ RiRoSchool Documents ============
 
     def save_riro_document(self, riro_id, title, content, image_urls=None):
         conn = self.get_connection()
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
-        payload = json.dumps(image_urls or [])
-        cursor.execute('''
-            INSERT INTO riro_documents (riro_id, title, content, image_urls, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (riro_id, title, content, payload, now))
-        doc_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            payload = json.dumps(image_urls or [])
+            cursor.execute('''
+                INSERT INTO riro_documents (riro_id, title, content, image_urls, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (riro_id, title, content, payload, now))
+            doc_id = cursor.lastrowid
+            conn.commit()
+        finally:
+            conn.close()
         return RiroDocument(
             id=doc_id,
             riro_id=riro_id,
@@ -490,15 +730,17 @@ class Database:
 
     def get_riro_documents(self, riro_id, limit=50):
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM riro_documents
-            WHERE riro_id = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-        ''', (riro_id, limit))
-        rows = cursor.fetchall()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM riro_documents
+                WHERE riro_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            ''', (riro_id, limit))
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
         documents = []
         for row in rows:
             image_urls = []
@@ -519,13 +761,15 @@ class Database:
     
     def get_riro_document(self, doc_id, riro_id):
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM riro_documents
-            WHERE id = ? AND riro_id = ?
-        ''', (doc_id, riro_id))
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM riro_documents
+                WHERE id = ? AND riro_id = ?
+            ''', (doc_id, riro_id))
+            row = cursor.fetchone()
+        finally:
+            conn.close()
         
         if not row:
             return None

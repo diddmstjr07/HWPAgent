@@ -2,17 +2,29 @@
 """
 HWP Agent Web App - ChatGPT Canvas 스타일의 실시간 문서 편집기
 """
-from flask import Flask, render_template, request, jsonify, send_file, Response, stream_with_context, abort, send_from_directory, redirect, url_for
-from flask_cors import CORS
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form, Depends
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse, FileResponse, PlainTextResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 import os
 import json
-import io
 import base64
 import shutil
+import pickle
+import secrets
+import hmac
+import hashlib
+import ipaddress
+import re
+import subprocess
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from collections import deque
 from modules import HWPAgent
 from modules.docx_handler import DOCXHandler
 from modules.pdf_handler import PDFHandler
@@ -21,30 +33,110 @@ from modules.image_searcher import ImageSearcher
 from modules.riroschool_crawler import RiroSchoolCrawler
 from modules.template_parser import extract_template_text, extract_template_html, SUPPORTED_TEMPLATE_EXTENSIONS
 from modules.preset_templates import DOCUMENT_PRESETS
-from urllib.parse import urlparse, parse_qs
+from modules.hwpx_manager import HwpxManager
+from urllib.parse import urlparse, parse_qs, urlencode
 import fitz  # PyMuPDF
 import time
 import requests
+import uvicorn
 from dotenv import load_dotenv
 from database import db
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from bs4 import BeautifulSoup
+from xml.sax.saxutils import escape as xml_escape
 
-load_dotenv()
+try:
+    import psutil
+except Exception:
+    psutil = None
 
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-CORS(app, supports_credentials=True)
+def _load_env() -> None:
+    env_root = os.getenv("HWP_AGENT_ROOT")
+    candidates = []
+    if env_root:
+        candidates.append(Path(env_root) / ".env")
+    candidates.append(Path(__file__).resolve().parent / ".env")
+    candidates.append(Path.cwd() / ".env")
 
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'index'
-login_manager.session_protection = 'strong'
+    for env_path in candidates:
+        if env_path.exists():
+            load_dotenv(env_path, override=True)
+            return
+    load_dotenv(override=True)
 
 
-@login_manager.user_loader
-def load_user(user_id):
-    return db.get_user(user_id)
+_load_env()
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+LOGO_GRADIENT_START = (0, 194, 255)
+LOGO_GRADIENT_END = (255, 179, 71)
+
+DOC_AGENT_ART = r""" ██████╗   ██████╗   ██████╗    
+ ██╔══██╗ ██╔═══██╗ ██╔════╝    
+ ██║  ██║ ██║   ██║ ██║         
+ ██║  ██║ ██║   ██║ ██║         
+ ██████╔╝ ╚██████╔╝ ╚██████╗    
+ ╚═════╝   ╚═════╝   ╚═════╝    
+
+  █████╗   ██████╗  ███████╗ ███╗   ██╗ ████████╗
+ ██╔══██╗ ██╔════╝  ██╔════╝ ████╗  ██║ ╚══██╔══╝
+ ███████║ ██║  ███╗ █████╗   ██╔██╗ ██║    ██║   
+ ██╔══██║ ██║   ██║ ██╔══╝   ██║╚██╗██║    ██║   
+ ██║  ██║ ╚██████╔╝ ███████╗ ██║ ╚████║    ██║   
+ ╚═╝  ╚═╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═══╝    ╚═╝   
+"""
+
+def _apply_gradient(text: str, start: tuple[int, int, int], end: tuple[int, int, int]) -> str:
+    lines = text.splitlines()
+    if not lines:
+        return text
+    width = max(len(line) for line in lines) or 1
+    colored_lines = []
+    for line in lines:
+        if not line:
+            colored_lines.append("")
+            continue
+        out = []
+        for i, ch in enumerate(line):
+            ratio = i / (width - 1) if width > 1 else 0
+            r = int(start[0] + (end[0] - start[0]) * ratio)
+            g = int(start[1] + (end[1] - start[1]) * ratio)
+            b = int(start[2] + (end[2] - start[2]) * ratio)
+            out.append(f"\033[38;2;{r};{g};{b}m{ch}")
+        colored_lines.append("".join(out))
+    return "\n".join(colored_lines) + "\033[0m"
+
+CLI_BANNER = _apply_gradient(DOC_AGENT_ART, LOGO_GRADIENT_START, LOGO_GRADIENT_END)
+
+app = FastAPI(docs_url="/docs", redoc_url="/redoc", openapi_url="/openapi.json")
+APP_SECRET = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+DEFAULT_ADMIN_ACCESS_TOKEN = "5avD9wIGFW6Pdl-Oqhx3-vB03Ei4Xd6Jig0w1XWIEe8"
+DEFAULT_ADMIN_SIGNATURE_SECRET = "Y4hAErFTUX8ZSrkcqi13O3tpsALWN0PLAmuDfR3Xo1UPyylDrAKJXbxzdzC0cR9E"
+DEFAULT_ADMIN_APP_TOKEN = "G9zPjvkdeQQa3kLaJwlhHNamz0UgkN4lMBj-TWXrCxI"
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+app.add_middleware(SessionMiddleware, secret_key=APP_SECRET)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+templates = Jinja2Templates(directory="templates")
+STATIC_DIR = Path("static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+@app.exception_handler(404)
+async def custom_404_handler(request: Request, exc: Exception):
+    return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
 
 BLOCKED_IPS = {"61.52.38.120"}
 
@@ -54,19 +146,325 @@ def _env_flag(name: str, default: bool) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
+TEST_MODE_ENABLED = _env_flag("TEST_MODE", False)
+TEST_MODE_ALLOWED_NETWORKS = [
+    ipaddress.ip_network("192.168.0.0/24"),
+]
+APP_TOKEN_COOKIE_NAME = "app_token"
+ANALYTICS_ENABLED = _env_flag("ANALYTICS_ENABLED", True)
 
-def _get_client_ip() -> str:
+
+def _get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
+    if forwarded and request.client and _is_private_ip(request.client.host):
         return forwarded.split(",")[0].strip()
-    return request.remote_addr or ""
+    if request.client:
+        return request.client.host
+    return ""
+
+def _is_local_request(request: Request) -> bool:
+    client_ip = _get_client_ip(request)
+    if not client_ip:
+        return False
+    try:
+        return ipaddress.ip_address(client_ip).is_loopback
+    except ValueError:
+        return client_ip in {"localhost"}
+
+def _get_session_id(request: Request) -> Optional[str]:
+    if not hasattr(request, "session"):
+        return None
+    session_id = request.session.get("sid")
+    if not session_id:
+        session_id = secrets.token_urlsafe(16)
+        request.session["sid"] = session_id
+    return session_id
+
+def _normalize_referrer(request: Request) -> str:
+    raw = (request.headers.get("referer") or request.headers.get("referrer") or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = urlparse(raw)
+    except Exception:
+        return raw[:200]
+    if not parsed.scheme or not parsed.netloc:
+        return raw[:200]
+    host = (request.headers.get("host") or "").lower()
+    if parsed.netloc.lower() == host:
+        ref_path = parsed.path or "/"
+        if parsed.query:
+            ref_path += f"?{parsed.query}"
+        return ref_path[:200]
+    return f"{parsed.scheme}://{parsed.netloc}"[:200]
+
+def _should_log_page_view(request: Request, response: Response) -> bool:
+    if request.method != "GET":
+        return False
+    path = request.url.path
+    if (
+        path.startswith("/static/")
+        or path.startswith("/api/")
+        or path.startswith("/icons/")
+        or path == "/service-worker.js"
+        or path in {"/favicon.ico", "/manifest.json"}
+    ):
+        return False
+    accept = (request.headers.get("accept") or "").lower()
+    if "text/html" not in accept and "application/xhtml+xml" not in accept:
+        return False
+    return response.status_code >= 200
+
+def _log_analytics_event(
+    request: Request,
+    event_type: str,
+    *,
+    user_id: Optional[str] = None,
+    path: Optional[str] = None,
+    referrer: Optional[str] = None,
+    status_code: Optional[int] = None,
+) -> None:
+    if not ANALYTICS_ENABLED:
+        return
+    try:
+        current_user = _get_current_user(request)
+        resolved_user = user_id or (current_user.id if current_user else None)
+        session_id = _get_session_id(request)
+        db.log_analytics_event(
+            event_type=event_type,
+            user_id=resolved_user,
+            session_id=session_id,
+            path=path or request.url.path,
+            referrer=referrer if referrer is not None else _normalize_referrer(request),
+            ip=_get_client_ip(request),
+            user_agent=(request.headers.get("user-agent") or "")[:200],
+            status_code=status_code,
+        )
+    except Exception as exc:
+        print(f"[ANALYTICS] log failed: {exc}")
+
+def _is_test_mode_allowed(request: Request) -> bool:
+    client_ip = _get_client_ip(request)
+    if not client_ip:
+        return False
+    try:
+        ip = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return client_ip in {"localhost"}
+    if ip.is_loopback:
+        return True
+    for network in TEST_MODE_ALLOWED_NETWORKS:
+        if ip.version == network.version and ip in network:
+            return True
+    return False
+
+def _parse_env_list(name: str) -> List[str]:
+    value = os.getenv(name, "")
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+def _get_current_user(request: Request):
+    user_id = request.session.get("user_id") if hasattr(request, "session") else None
+    if not user_id:
+        return None
+    return db.get_user(user_id)
+
+def _login_user(request: Request, user) -> None:
+    if hasattr(request, "session"):
+        request.session["user_id"] = user.id
+
+def _logout_user(request: Request) -> None:
+    if hasattr(request, "session"):
+        request.session.pop("user_id", None)
+
+async def _get_json(request: Request) -> Dict[str, Any]:
+    try:
+        payload = await request.json()
+        if isinstance(payload, dict):
+            return payload
+        return {}
+    except Exception:
+        return {}
+
+def _json_response(payload: Dict[str, Any], status_code: int = 200) -> JSONResponse:
+    return JSONResponse(payload, status_code=status_code)
+
+def _expected_app_tokens() -> List[str]:
+    expected_env = os.getenv("ADMIN_APP_TOKEN")
+    return [token for token in {expected_env, DEFAULT_ADMIN_APP_TOKEN} if token]
+
+def _app_token_matches(provided: Optional[str]) -> bool:
+    if not provided:
+        return False
+    expected_tokens = _expected_app_tokens()
+    return any(secrets.compare_digest(provided, token) for token in expected_tokens)
+
+def _admin_app_token_check(request: Request) -> tuple[bool, str]:
+    expected_tokens = _expected_app_tokens()
+    if not expected_tokens:
+        return True, "App token not required"
+    provided = request.headers.get("X-App-Token") or request.cookies.get(APP_TOKEN_COOKIE_NAME)
+    if not provided:
+        print(f"[ADMIN] app token missing: expected_set={bool(expected_tokens)} provided=None")
+        return False, "Missing app token header"
+    if not _app_token_matches(provided):
+        print(f"[ADMIN] app token mismatch: provided={provided}")
+        return False, "App token mismatch"
+    return True, "OK"
+
+def _is_private_ip(value: str) -> bool:
+    if not value:
+        return False
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return bool(ip.is_loopback or ip.is_private or ip.is_link_local)
+
+def _admin_access_check(request: Request) -> tuple[bool, str]:
+    client_ip = _get_client_ip(request)
+    if not client_ip:
+        return False, "Client IP missing"
+    if not _is_private_ip(client_ip):
+        return False, "Client IP not allowlisted"
+    app_allowed, app_reason = _admin_app_token_check(request)
+    if not app_allowed:
+        return False, app_reason
+    return True, "OK"
+
+def _admin_access_allowed(request: Request) -> bool:
+    return _admin_access_check(request)[0]
+
+def _require_admin_access(request: Request) -> None:
+    allowed, reason = _admin_access_check(request)
+    if not allowed:
+        print(f"[ADMIN] access denied: {reason}")
+        raise HTTPException(status_code=404, detail="Not found")
+
+def _resolve_admin_log_path() -> Optional[Path]:
+    explicit = os.getenv("ADMIN_LOG_PATH") or os.getenv("APP_LOG_PATH")
+    if explicit:
+        return Path(explicit)
+    candidates = [Path("app.log"), Path("app_background.log")]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+def _is_safe_identifier(value: str) -> bool:
+    return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", value or ""))
+
+def _get_table_columns(table: str) -> List[str]:
+    conn = db.get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f'PRAGMA table_info("{table}")')
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
+    return [row["name"] for row in rows]
+
+def _list_db_tables() -> List[str]:
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    )
+    tables = [row["name"] for row in cursor.fetchall()]
+    conn.close()
+    return tables
+
+def _fetch_table_rows(table: str, limit: int, offset: int) -> Dict[str, Any]:
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f'SELECT * FROM "{table}" LIMIT ? OFFSET ?', (limit, offset))
+    rows = [dict(row) for row in cursor.fetchall()]
+    columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    conn.close()
+    return {"columns": columns, "rows": rows}
+
+def _build_oauth_redirect_uri(request: Request, provider: str) -> str:
+    explicit = os.getenv(f"{provider.upper()}_REDIRECT_URI")
+    if explicit:
+        return explicit
+    public_base = os.getenv("PUBLIC_BASE_URL")
+    if public_base:
+        path = app.url_path_for('social_callback', provider=provider)
+        return public_base.rstrip("/") + str(path)
+    return str(request.url_for('social_callback', provider=provider))
+
+def _is_safe_redirect(target: Optional[str]) -> bool:
+    if not target:
+        return False
+    parsed = urlparse(target)
+    if parsed.scheme or parsed.netloc:
+        return False
+    return target.startswith("/")
 
 
-@app.before_request
-def block_blocklisted_ips():
-    client_ip = _get_client_ip()
+@app.middleware("http")
+async def block_blocklisted_ips(request: Request, call_next):
+    client_ip = _get_client_ip(request)
     if client_ip in BLOCKED_IPS:
-        abort(403)
+        return Response(status_code=403)
+    return await call_next(request)
+
+@app.middleware("http")
+async def docs_local_gate(request: Request, call_next):
+    path = request.url.path
+    if path == "/openapi.json" or path.startswith("/docs") or path.startswith("/redoc"):
+        client_ip = _get_client_ip(request)
+        if not _is_private_ip(client_ip):
+            return Response(status_code=404)
+    return await call_next(request)
+
+@app.middleware("http")
+async def app_token_cookie_bridge(request: Request, call_next):
+    response = await call_next(request)
+    provided = request.headers.get("X-App-Token")
+    if _app_token_matches(provided):
+        secure_cookie = request.url.scheme == "https"
+        response.set_cookie(
+            APP_TOKEN_COOKIE_NAME,
+            provided,
+            httponly=True,
+            secure=secure_cookie,
+            samesite="Lax",
+        )
+    return response
+
+@app.middleware("http")
+async def ready_gate(request: Request, call_next):
+    if not TEST_MODE_ENABLED:
+        return await call_next(request)
+
+    path = request.url.path
+    if (
+        path == "/ready"
+        or path.startswith("/ready/")
+        or path.startswith("/static/")
+        or path.startswith("/icons/")
+        or path == "/service-worker.js"
+        or path in {"/favicon.ico", "/manifest.json"}
+    ):
+        return await call_next(request)
+
+    if _is_test_mode_allowed(request):
+        return await call_next(request)
+
+    return RedirectResponse(url="/ready", status_code=302)
+
+@app.middleware("http")
+async def analytics_page_view(request: Request, call_next):
+    response = await call_next(request)
+    if ANALYTICS_ENABLED and _should_log_page_view(request, response):
+        _log_analytics_event(
+            request,
+            "page_view",
+            status_code=response.status_code,
+        )
+    return response
 
 OUTPUT_DIR = Path("output")
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -82,6 +480,43 @@ TEMPLATE_HTML_DIR.mkdir(exist_ok=True)
 TEMPLATE_LIBRARY_DIR.mkdir(exist_ok=True)
 IMAGE_CACHE_DIR = IMAGE_DIR / "cache"
 IMAGE_CACHE_DIR.mkdir(exist_ok=True)
+HWPX_SESSION_ROOT = Path("temp")
+HWPX_SESSION_ROOT.mkdir(exist_ok=True)
+
+
+def _hwpx_session_dir(session_id: str) -> Path:
+    return HWPX_SESSION_ROOT / session_id
+
+
+def _hwpx_manager_path(session_id: str) -> Path:
+    return _hwpx_session_dir(session_id) / "mgr.pkl"
+
+
+def _hwpx_extract_dir(session_id: str) -> Path:
+    return _hwpx_session_dir(session_id) / "hwpx"
+
+
+def _convert_hwp_to_hwpx(hwp_path: Path, hwpx_path: Path) -> None:
+    commands = [
+        ["hwp5proc", "--format", "hwpx", "--output", str(hwpx_path), str(hwp_path)],
+        ["hwp5proc", str(hwp_path), str(hwpx_path)],
+    ]
+    last_error = None
+    for command in commands:
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+            if hwpx_path.exists():
+                return
+            last_error = RuntimeError(result.stderr.strip() or "hwp5proc failed")
+        except Exception as exc:
+            last_error = exc
+    raise RuntimeError(str(last_error) if last_error else "hwp5proc conversion failed")
 
 
 def ensure_default_fonts():
@@ -90,13 +525,11 @@ def ensure_default_fonts():
         if target.exists():
             continue
         try:
-            print(f"[FONT] Downloading {preset['display_name']}...")
             response = requests.get(preset['url'], timeout=45)
             response.raise_for_status()
             target.write_bytes(response.content)
-            print(f"[FONT] ✅ Saved {preset['display_name']}")
-        except Exception as exc:
-            print(f"[FONT] ❌ Failed to download {preset['display_name']}: {exc}")
+        except Exception:
+            pass
 
 
 def list_available_fonts() -> List[Dict[str, Any]]:
@@ -335,6 +768,68 @@ def _prepare_image_preview(keyword: str, url: str, index: int = 0) -> Dict[str, 
     return result
 
 
+def _extract_html_paragraphs(html_content: str) -> List[str]:
+    soup = BeautifulSoup(html_content or "", "html.parser")
+    root = soup.body if soup.body else soup
+
+    for tag in root.find_all(["script", "style"]):
+        tag.decompose()
+
+    for br in root.find_all("br"):
+        br.replace_with("\n")
+
+    for li in root.find_all("li"):
+        li.insert_before("- ")
+
+    for table in root.find_all("table"):
+        table_lines: List[str] = []
+        for row in table.find_all("tr"):
+            cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["th", "td"])]
+            if cells:
+                table_lines.append(" | ".join(cells))
+        table.replace_with("\n".join(table_lines))
+
+    text = root.get_text("\n")
+    lines = [line.strip() for line in text.splitlines()]
+    return [line for line in lines if line]
+
+
+def _build_hwpx_xml(paragraphs: List[str], title: str) -> str:
+    lines: List[str] = []
+    clean_title = (title or "").strip()
+    if clean_title and (not paragraphs or paragraphs[0] != clean_title):
+        lines.append(clean_title)
+    lines.extend(paragraphs)
+
+    body = "\n".join(
+        f"  <hp:p><hp:run><hp:t>{xml_escape(text)}</hp:t></hp:run></hp:p>"
+        for text in lines
+        if text
+    )
+
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<hp:section xmlns:hp="http://www.hancom.co.kr/hwpml/2011/section">\n'
+        f"{body}\n"
+        "</hp:section>\n"
+    )
+
+
+def _save_hwpx_xml(title: str, content: str, is_html_content: bool) -> str:
+    if is_html_content:
+        paragraphs = _extract_html_paragraphs(content)
+    else:
+        lines = [line.strip() for line in (content or "").splitlines()]
+        paragraphs = [line for line in lines if line]
+
+    hwpx_xml = _build_hwpx_xml(paragraphs, title)
+    safe_title = (title or "document").strip() or "document"
+    safe_title = safe_title.replace("/", "_").replace("\\", "_")
+    file_path = OUTPUT_DIR / f"{safe_title}_hwpx.xml"
+    file_path.write_text(hwpx_xml, encoding="utf-8")
+    return str(file_path)
+
+
 def _get_font_entry_by_id(font_id: Optional[str]) -> Optional[Dict[str, Any]]:
     if not font_id:
         return None
@@ -468,17 +963,12 @@ def normalize_style_config(style_config: Optional[Dict[str, Any]]) -> Dict[str, 
     return config
 
 # IP 주소 기반 사용자 ID 생성
-def get_user_id_from_request():
+def get_user_id_from_request(request: Request) -> str:
     """세션 또는 IP 주소를 기반으로 사용자 ID 생성"""
-    try:
-        if current_user and getattr(current_user, "is_authenticated", False):
-            return str(current_user.id)
-    except Exception:
-        pass
-    ip = request.remote_addr or 'unknown'
-    # X-Forwarded-For 헤더 확인 (프록시 후방 대응)
-    if request.headers.get('X-Forwarded-For'):
-        ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    current_user = _get_current_user(request)
+    if current_user:
+        return str(current_user.id)
+    ip = _get_client_ip(request) or 'unknown'
     return f"user_{ip.replace('.', '_').replace(':', '_')}"
 
 
@@ -490,28 +980,28 @@ def _normalize_email(value: str) -> str:
 # 인증/세션 API
 # ============================================
 
-@app.route('/api/auth/register', methods=['POST'])
-def register_user():
+@app.post('/api/auth/register')
+def register_user(request: Request, payload: Dict[str, Any] = Depends(_get_json)):
     """이메일/비밀번호 기반 계정 생성"""
     try:
-        payload = request.get_json(silent=True) or {}
         email = _normalize_email(payload.get('email'))
         password = payload.get('password') or ''
         name = (payload.get('name') or '').strip()
 
         if not email or not password:
-            return jsonify({'error': '이메일과 비밀번호를 입력하세요.'}), 400
+            return _json_response({'error': '이메일과 비밀번호를 입력하세요.'}, 400)
         if '@' not in email:
-            return jsonify({'error': '유효한 이메일을 입력하세요.'}), 400
+            return _json_response({'error': '유효한 이메일을 입력하세요.'}, 400)
 
         existing = db.get_user_credentials(email)
         if existing and existing.get('password_hash'):
-            return jsonify({'error': '이미 가입된 이메일입니다.'}), 400
+            return _json_response({'error': '이미 가입된 이메일입니다.'}, 400)
 
         password_hash = generate_password_hash(password)
         display_name = name or (existing.get('name') if existing else '') or email.split('@')[0]
         picture = payload.get('picture') or (existing.get('picture') if existing else None)
 
+        is_new_user = existing is None
         if existing:
             user = db.create_or_update_user(
                 existing['id'],
@@ -524,29 +1014,31 @@ def register_user():
         else:
             user = db.create_local_user(email, password_hash, display_name, picture)
 
-        login_user(user)
-        return jsonify({'success': True, 'user': user.to_dict()})
+        _login_user(request, user)
+        if is_new_user:
+            _log_analytics_event(request, "signup", user_id=user.id)
+        _log_analytics_event(request, "login", user_id=user.id)
+        return {'success': True, 'user': user.to_dict()}
     except Exception as exc:
         print(f"[AUTH] register error: {exc}")
-        return jsonify({'error': '계정 생성 중 오류가 발생했습니다.'}), 500
+        return _json_response({'error': '계정 생성 중 오류가 발생했습니다.'}, 500)
 
 
-@app.route('/api/auth/login', methods=['POST'])
-def auth_login():
+@app.post('/api/auth/login')
+def auth_login(request: Request, payload: Dict[str, Any] = Depends(_get_json)):
     """이메일/비밀번호 로그인"""
     try:
-        payload = request.get_json(silent=True) or {}
         email = _normalize_email(payload.get('email'))
         password = payload.get('password') or ''
 
         if not email or not password:
-            return jsonify({'error': '이메일과 비밀번호를 입력하세요.'}), 400
+            return _json_response({'error': '이메일과 비밀번호를 입력하세요.'}, 400)
 
         record = db.get_user_credentials(email)
         if not record or not record.get('password_hash'):
-            return jsonify({'error': '이메일 또는 비밀번호가 올바르지 않습니다.'}), 401
+            return _json_response({'error': '이메일 또는 비밀번호가 올바르지 않습니다.'}, 401)
         if not check_password_hash(record['password_hash'], password):
-            return jsonify({'error': '이메일 또는 비밀번호가 올바르지 않습니다.'}), 401
+            return _json_response({'error': '이메일 또는 비밀번호가 올바르지 않습니다.'}, 401)
 
         user = db.get_user(record['id'])
         if not user:
@@ -561,44 +1053,87 @@ def auth_login():
         else:
             db.update_last_login(user.id)
 
-        login_user(user)
-        return jsonify({'success': True, 'user': user.to_dict()})
+        _login_user(request, user)
+        _log_analytics_event(request, "login", user_id=user.id)
+        return {'success': True, 'user': user.to_dict()}
     except Exception as exc:
         print(f"[AUTH] login error: {exc}")
-        return jsonify({'error': '로그인 처리 중 문제가 발생했습니다.'}), 500
+        return _json_response({'error': '로그인 처리 중 문제가 발생했습니다.'}, 500)
 
 
-@app.route('/api/auth/logout', methods=['POST'])
-def logout():
+@app.post('/api/auth/logout')
+def logout(request: Request):
     """현재 세션 로그아웃"""
     try:
-        logout_user()
-        return jsonify({'success': True})
+        _logout_user(request)
+        return {'success': True}
     except Exception as exc:
         print(f"[AUTH] logout error: {exc}")
-        return jsonify({'error': '로그아웃에 실패했습니다.'}), 500
+        return _json_response({'error': '로그아웃에 실패했습니다.'}, 500)
 
 
-@app.route('/api/auth/me', methods=['GET'])
-def whoami():
+@app.get('/api/auth/me')
+def whoami(request: Request):
     """세션 확인용"""
-    if current_user and getattr(current_user, "is_authenticated", False):
-        return jsonify({'authenticated': True, 'user': current_user.to_dict()})
-    return jsonify({'authenticated': False})
+    current_user = _get_current_user(request)
+    if current_user:
+        return {'authenticated': True, 'user': current_user.to_dict()}
+    return {'authenticated': False}
 
 
 # ============================================
 # 소셜 로그인 API (OAuth 2.0 / Mock)
 # ============================================
 
-@app.route('/api/auth/social/<provider>')
-def social_login(provider):
-    """소셜 로그인 시작 (리다이렉트)"""
+@app.get('/api/auth/social/{provider}')
+def social_login(provider: str, request: Request):
     provider = provider.lower()
-    
-    # 환경변수에서 Client ID 조회
+
+    next_url = request.query_params.get("next")
+    if _is_safe_redirect(next_url):
+        request.session["oauth_next"] = next_url
+    else:
+        request.session.pop("oauth_next", None)
+
+    if provider == 'google':
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+
+        redirect_uri = _build_oauth_redirect_uri(request, provider)
+
+        print("=== OAUTH DEBUG (START) ===")
+        print("provider      :", provider)
+        print("redirect_uri  :", redirect_uri)
+        print("request.host  :", request.headers.get("host"))
+        print("request.scheme:", request.url.scheme)
+        print("==========================")
+
+        state = secrets.token_urlsafe(24)
+        request.session["oauth_state"] = state
+        auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
+        scope = "openid email profile"
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": scope,
+            "state": state,
+            "include_granted_scopes": "true",
+            "prompt": "select_account"
+        }
+        final_url = f"{auth_url}?{urlencode(params)}"
+        
+        print("=== GOOGLE AUTH URL ===")
+        print(final_url)
+        print("=======================")
+        
+        return RedirectResponse(url=f"{auth_url}?{urlencode(params)}")
+
+    # 환경변수에서 Client ID 조회 (Google 외)
     client_id = os.getenv(f"{provider.upper()}_CLIENT_ID")
-    redirect_uri = url_for('social_callback', provider=provider, _external=True)
+    if provider == 'kakao' and not client_id:
+        client_id = os.getenv("KAKAO_API_KEY") or os.getenv("KAKAO_REST_API_KEY")
+    redirect_uri = _build_oauth_redirect_uri(request, provider)
     
     # 키가 없으면 데모 로그인 처리 (프로토타입용)
     if not client_id:
@@ -612,39 +1147,208 @@ def social_login(provider):
             None, # picture
             last_login=datetime.now().isoformat()
         )
-        login_user(user)
+        _login_user(request, user)
+        _log_analytics_event(request, "signup", user_id=user.id)
+        _log_analytics_event(request, "login", user_id=user.id)
         # 홈으로 리다이렉트
-        return redirect(url_for('index'))
+        return RedirectResponse(url=str(app.url_path_for('index')))
 
     # 실제 OAuth 리다이렉트 URL 생성
-    if provider == 'google':
-        auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
-        scope = "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
-        return redirect(f"{auth_url}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope={scope}")
-    
-    elif provider == 'kakao':
+    if provider == 'kakao':
         auth_url = "https://kauth.kakao.com/oauth/authorize"
-        return redirect(f"{auth_url}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code")
+        state = secrets.token_urlsafe(24)
+        request.session["oauth_state"] = state
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "state": state,
+            "scope": "account_email,profile_nickname,profile_image"
+        }
+        return RedirectResponse(url=f"{auth_url}?{urlencode(params)}")
     
     elif provider == 'naver':
         auth_url = "https://nid.naver.com/oauth2.0/authorize"
         state = os.urandom(8).hex()
-        return redirect(f"{auth_url}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&state={state}")
+        return RedirectResponse(url=f"{auth_url}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&state={state}")
     
-    return "Unsupported provider", 400
+    return PlainTextResponse("Unsupported provider", status_code=400)
 
 
-@app.route('/api/auth/social/<provider>/callback')
-def social_callback(provider):
-    """소셜 로그인 콜백 (실제 구현 시 토큰 교환 로직 필요)"""
-    code = request.args.get('code')
-    if not code:
-        return "Login failed: No code received", 400
-    
-    # 실제 서비스에서는 여기서 code -> access_token -> user_info 요청 필요
-    # 현재는 키가 있을 때 리다이렉트만 시키고, 실제 로직은 생략 (credentials 필요)
-    
-    return f"Login with {provider} callback received. Code: {code[:10]}... (Server logic required)"
+@app.get('/api/auth/social/{provider}/callback', name='social_callback')
+def social_callback(provider: str, request: Request):
+    """소셜 로그인 콜백"""
+    provider = provider.lower()
+    error = request.query_params.get('error')
+    if error:
+        return PlainTextResponse(f"Login failed: {error}", status_code=400)
+
+    if provider == 'google':
+        code = request.query_params.get('code')
+        state = request.query_params.get('state')
+        expected_state = request.session.pop("oauth_state", None)
+        if not code:
+            return PlainTextResponse("Login failed: No code received", status_code=400)
+        if not expected_state or state != expected_state:
+            return PlainTextResponse("Login failed: Invalid state", status_code=400)
+
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        if not client_id or not client_secret:
+            return PlainTextResponse("Google OAuth 환경변수가 설정되지 않았습니다.", status_code=500)
+
+        redirect_uri = _build_oauth_redirect_uri(request, provider)
+        token_url = "https://oauth2.googleapis.com/token"
+        try:
+            token_res = requests.post(
+                token_url,
+                data={
+                    "code": code,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code"
+                },
+                timeout=10
+            )
+            token_res.raise_for_status()
+            token_data = token_res.json()
+        except Exception as exc:
+            print(f"[AUTH] Google token exchange failed: {exc}")
+            return PlainTextResponse("Login failed: Token exchange error", status_code=400)
+
+        access_token = token_data.get("access_token")
+        if not access_token:
+            return PlainTextResponse("Login failed: No access token", status_code=400)
+
+        userinfo_url = "https://openidconnect.googleapis.com/v1/userinfo"
+        try:
+            userinfo_res = requests.get(
+                userinfo_url,
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10
+            )
+            userinfo_res.raise_for_status()
+            userinfo = userinfo_res.json()
+        except Exception as exc:
+            print(f"[AUTH] Google userinfo fetch failed: {exc}")
+            return PlainTextResponse("Login failed: Userinfo error", status_code=400)
+
+        email = _normalize_email(userinfo.get("email"))
+        if not email:
+            return PlainTextResponse("Login failed: No email", status_code=400)
+        if userinfo.get("email_verified") is False:
+            return PlainTextResponse("Login failed: Email not verified", status_code=400)
+
+        name = (userinfo.get("name") or userinfo.get("given_name") or email.split("@")[0]).strip()
+        picture = userinfo.get("picture")
+        subject = userinfo.get("sub") or userinfo.get("id")
+        if not subject:
+            return PlainTextResponse("Login failed: Missing user id", status_code=400)
+
+        existing = db.get_user_by_email(email)
+        user_id = existing.id if existing else f"google_{subject}"
+        user = db.create_or_update_user(
+            user_id,
+            email,
+            name,
+            picture,
+            last_login=datetime.now().isoformat()
+        )
+        _login_user(request, user)
+        if not existing:
+            _log_analytics_event(request, "signup", user_id=user.id)
+        _log_analytics_event(request, "login", user_id=user.id)
+
+        next_url = request.session.pop("oauth_next", None)
+        if _is_safe_redirect(next_url):
+            return RedirectResponse(url=next_url)
+        return RedirectResponse(url=str(app.url_path_for('index')))
+
+    if provider == 'kakao':
+        code = request.query_params.get('code')
+        state = request.query_params.get('state')
+        expected_state = request.session.pop("oauth_state", None)
+        if not code:
+            return PlainTextResponse("Login failed: No code received", status_code=400)
+        if not expected_state or state != expected_state:
+            return PlainTextResponse("Login failed: Invalid state", status_code=400)
+
+        client_id = os.getenv("KAKAO_CLIENT_ID") or os.getenv("KAKAO_API_KEY") or os.getenv("KAKAO_REST_API_KEY")
+        client_secret = os.getenv("KAKAO_CLIENT_SECRET")
+        if not client_id:
+            return PlainTextResponse("Kakao OAuth 환경변수가 설정되지 않았습니다.", status_code=500)
+
+        redirect_uri = _build_oauth_redirect_uri(request, provider)
+        token_url = "https://kauth.kakao.com/oauth/token"
+        token_payload = {
+            "grant_type": "authorization_code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "code": code
+        }
+        if client_secret:
+            token_payload["client_secret"] = client_secret
+        try:
+            token_res = requests.post(token_url, data=token_payload, timeout=10)
+            token_res.raise_for_status()
+            token_data = token_res.json()
+        except Exception as exc:
+            print(f"[AUTH] Kakao token exchange failed: {exc}")
+            return PlainTextResponse("Login failed: Token exchange error", status_code=400)
+
+        access_token = token_data.get("access_token")
+        if not access_token:
+            return PlainTextResponse("Login failed: No access token", status_code=400)
+
+        userinfo_url = "https://kapi.kakao.com/v2/user/me"
+        try:
+            userinfo_res = requests.get(
+                userinfo_url,
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10
+            )
+            userinfo_res.raise_for_status()
+            userinfo = userinfo_res.json()
+        except Exception as exc:
+            print(f"[AUTH] Kakao userinfo fetch failed: {exc}")
+            return PlainTextResponse("Login failed: Userinfo error", status_code=400)
+
+        kakao_id = userinfo.get("id")
+        if not kakao_id:
+            return PlainTextResponse("Login failed: Missing user id", status_code=400)
+
+        kakao_account = userinfo.get("kakao_account") or {}
+        email = _normalize_email(kakao_account.get("email"))
+        if not email:
+            return PlainTextResponse("Login failed: No email (account_email scope required)", status_code=400)
+        if kakao_account.get("is_email_valid") is False or kakao_account.get("is_email_verified") is False:
+            return PlainTextResponse("Login failed: Email not verified", status_code=400)
+
+        profile = kakao_account.get("profile") or {}
+        name = (profile.get("nickname") or email.split("@")[0]).strip()
+        picture = profile.get("profile_image_url") or profile.get("thumbnail_image_url")
+
+        existing = db.get_user_by_email(email)
+        user_id = existing.id if existing else f"kakao_{kakao_id}"
+        user = db.create_or_update_user(
+            user_id,
+            email,
+            name,
+            picture,
+            last_login=datetime.now().isoformat()
+        )
+        _login_user(request, user)
+        if not existing:
+            _log_analytics_event(request, "signup", user_id=user.id)
+        _log_analytics_event(request, "login", user_id=user.id)
+
+        next_url = request.session.pop("oauth_next", None)
+        if _is_safe_redirect(next_url):
+            return RedirectResponse(url=next_url)
+        return RedirectResponse(url=str(app.url_path_for('index')))
+
+    return PlainTextResponse("Unsupported provider", status_code=400)
 
 
 # 전역 에이전트
@@ -722,9 +1426,9 @@ def _normalize_riro_events(events_payload: Any) -> List[Dict[str, Any]]:
     return normalized
 
 
-def _build_riro_context_text(user_id: Optional[str] = None) -> Optional[str]:
+def _build_riro_context_text(request: Request, user_id: Optional[str] = None) -> Optional[str]:
     """리로스쿨 세션의 수행평가/과제 정보를 요약하여 텍스트로 반환"""
-    lookup_id = user_id or get_user_id_from_request()
+    lookup_id = user_id or get_user_id_from_request(request)
     session_payload = riro_sessions.get(lookup_id)
     if not session_payload:
         return None
@@ -758,72 +1462,419 @@ def _build_riro_context_text(user_id: Optional[str] = None) -> Optional[str]:
         + "\n".join(lines)
     )
 
-@app.route('/')
-@app.route('/index.html')
-def index():
+
+DOC_INTAKE_SYSTEM_PROMPT = """
+너는 수행평가/보고서 작성 전 상담을 진행하는 코치다.
+다음 흐름을 반드시 지켜 답한다:
+1) 주제를 함께 탐구/구상: 과목/학년/단원, 주제 키워드, 목표(평가 기준), 형식/분량을 질문한다.
+2) 수행평가 양식(템플릿) 유무를 확인한다.
+3) 사용자가 양식이 있다고 답하면 파일 업로드를 요청한다. (클립 아이콘 → 파일 업로드 안내)
+중요:
+- 템플릿 업로드 전에는 문서 본문을 작성하지 않는다.
+- 한 번에 한 단계씩만 진행한다.
+- 이전 대화에서 이미 답한 정보나 완료된 단계는 반복하지 않는다.
+- 사용자가 "양식 없음"을 명확히 답하면 그 다음부터는 일반 문서 작성 안내로 전환한다.
+- 불필요하게 길게 설명하지 말고 짧고 명확하게 질문한다.
+""".strip()
+
+FILL_GUIDE_SYSTEM_PROMPT = """
+너는 DOC Agent다. 사용자와 대화하듯 짧고 자연스럽게 안내한다.
+다음 규칙을 지켜 한국어로 1~2문장, 질문형으로 마무리한다.
+- 업로드된 문서가 비어 있는 양식임을 간단히 알린다.
+- 총 항목 수와 첫 번째로 물어볼 항목명을 포함한다.
+- 나머지 항목은 AI가 자동으로 작성함을 알려준다.
+- 불릿/번호/코드블록 없이 짧고 명확하게 작성한다.
+""".strip()
+
+_TEMPLATE_YES_PATTERN = re.compile(r"(양식|템플릿).*(있|있어|있습니다|있음)")
+_TEMPLATE_NO_PATTERN = re.compile(r"(양식|템플릿).*(없|없어|없습니다|없음|없다)")
+
+
+def _text_has_template_yes(text: str) -> bool:
+    if not text:
+        return False
+    return bool(_TEMPLATE_YES_PATTERN.search(text))
+
+
+def _text_has_template_no(text: str) -> bool:
+    if not text:
+        return False
+    return bool(_TEMPLATE_NO_PATTERN.search(text))
+
+
+def _history_has_template_signal(chat_history: List[Dict[str, Any]], want: str) -> bool:
+    if not chat_history:
+        return False
+    for msg in reversed(chat_history):
+        if msg.get("role") != "user":
+            continue
+        text = (msg.get("text") or "").strip()
+        if not text:
+            continue
+        if want == "yes" and _text_has_template_yes(text):
+            return True
+        if want == "no" and _text_has_template_no(text):
+            return True
+    return False
+
+
+def _should_run_doc_intake(user_request: str, document_template: Optional[str], chat_history: List[Dict[str, Any]]) -> bool:
+    if document_template:
+        return False
+    if _history_has_template_signal(chat_history, "no"):
+        return False
+    if _history_has_template_signal(chat_history, "yes"):
+        return True
+    if _text_has_template_no(user_request) or _text_has_template_yes(user_request):
+        return True
+    return True
+
+
+def _build_fill_guide_prompt(fields: List[str], first_field: str, total: int) -> str:
+    trimmed_fields = [field.strip() for field in (fields or []) if isinstance(field, str) and field.strip()]
+    preview = ", ".join(trimmed_fields[:12])
+    lines = [
+        f"총 항목 수: {total}",
+        f"첫 번째 항목: {first_field}"
+    ]
+    if preview:
+        lines.append(f"항목 목록: {preview}")
+    return "\n".join(lines)
+
+@app.get('/', name='index')
+@app.get('/index.html')
+def index(request: Request):
     """메인 페이지"""
-    return render_template('index.html')
+    return templates.TemplateResponse('index.html', {'request': request})
 
 
-@app.route('/login')
-def login_page():
+@app.get('/login')
+def login_page(request: Request):
     """독립 로그인 페이지"""
-    if current_user and getattr(current_user, "is_authenticated", False):
-        return redirect(url_for('index'))
-    return render_template('login.html')
+    current_user = _get_current_user(request)
+    if current_user:
+        return RedirectResponse(url=str(app.url_path_for('index')))
+    return templates.TemplateResponse('login.html', {'request': request})
 
-@app.route('/offline.html')
-def offline():
+@app.get('/admin')
+def admin_page(request: Request):
+    """관리자 전용 페이지"""
+    _require_admin_access(request)
+    current_user = _get_current_user(request)
+    user_name = getattr(current_user, "name", "") or "Admin"
+    user_email = getattr(current_user, "email", "")
+    user_initial = (user_name.strip() or user_email or "A")[0].upper()
+    return templates.TemplateResponse(
+        'admin.html',
+        {
+            'request': request,
+            'user_name': user_name,
+            'user_email': user_email,
+            'user_initial': user_initial,
+            'client_ip': _get_client_ip(request),
+            'access_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+    )
+
+@app.get('/api/admin/db/tables')
+def admin_db_tables(request: Request):
+    _require_admin_access(request)
+    return {"tables": _list_db_tables()}
+
+@app.get('/api/admin/db/table/{table_name}')
+def admin_db_table(table_name: str, request: Request):
+    _require_admin_access(request)
+    tables = _list_db_tables()
+    if table_name not in tables:
+        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        limit = int(request.query_params.get("limit", 200))
+        offset = int(request.query_params.get("offset", 0))
+    except ValueError:
+        return _json_response({"error": "Invalid limit/offset"}, 400)
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
+    payload = _fetch_table_rows(table_name, limit, offset)
+    payload["table"] = table_name
+    payload["limit"] = limit
+    payload["offset"] = offset
+    return payload
+
+@app.post('/api/admin/db/table/{table_name}/row')
+def admin_db_insert_row(table_name: str, request: Request, payload: Dict[str, Any] = Depends(_get_json)):
+    _require_admin_access(request)
+    if not _is_safe_identifier(table_name) or table_name not in _list_db_tables():
+        return _json_response({"error": "Table not found"}, 404)
+
+    data = payload.get("data")
+    if not isinstance(data, dict) or not data:
+        return _json_response({"error": "Missing data"}, 400)
+
+    columns = _get_table_columns(table_name)
+    allowed = {key: value for key, value in data.items() if key in columns}
+    if not allowed:
+        return _json_response({"error": "No valid columns provided"}, 400)
+
+    col_sql = ", ".join(f'"{col}"' for col in allowed.keys())
+    placeholders = ", ".join(["?"] * len(allowed))
+    values = list(allowed.values())
+
+    conn = db.get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f'INSERT INTO "{table_name}" ({col_sql}) VALUES ({placeholders})', values)
+        conn.commit()
+        return {"success": True, "affected": cursor.rowcount, "id": cursor.lastrowid}
+    except Exception as exc:
+        return _json_response({"error": str(exc)}, 500)
+    finally:
+        conn.close()
+
+@app.patch('/api/admin/db/table/{table_name}/row')
+def admin_db_update_row(table_name: str, request: Request, payload: Dict[str, Any] = Depends(_get_json)):
+    _require_admin_access(request)
+    if not _is_safe_identifier(table_name) or table_name not in _list_db_tables():
+        return _json_response({"error": "Table not found"}, 404)
+
+    data = payload.get("data")
+    where = payload.get("where")
+    if not isinstance(data, dict) or not data:
+        return _json_response({"error": "Missing data"}, 400)
+    if not isinstance(where, dict) or not where:
+        return _json_response({"error": "Missing where clause"}, 400)
+
+    columns = _get_table_columns(table_name)
+    updates = {key: value for key, value in data.items() if key in columns}
+    conditions = {key: value for key, value in where.items() if key in columns}
+    if not updates:
+        return _json_response({"error": "No valid update columns provided"}, 400)
+    if not conditions:
+        return _json_response({"error": "No valid where columns provided"}, 400)
+
+    set_parts = [f'"{col}" = ?' for col in updates.keys()]
+    where_parts = []
+    values: list[Any] = list(updates.values())
+    for col, value in conditions.items():
+        if value is None:
+            where_parts.append(f'"{col}" IS NULL')
+        else:
+            where_parts.append(f'"{col}" = ?')
+            values.append(value)
+
+    set_sql = ", ".join(set_parts)
+    where_sql = " AND ".join(where_parts)
+
+    conn = db.get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f'UPDATE "{table_name}" SET {set_sql} WHERE {where_sql}', values)
+        conn.commit()
+        return {"success": True, "affected": cursor.rowcount}
+    except Exception as exc:
+        return _json_response({"error": str(exc)}, 500)
+    finally:
+        conn.close()
+
+@app.delete('/api/admin/db/table/{table_name}/row')
+def admin_db_delete_row(table_name: str, request: Request, payload: Dict[str, Any] = Depends(_get_json)):
+    _require_admin_access(request)
+    if not _is_safe_identifier(table_name) or table_name not in _list_db_tables():
+        return _json_response({"error": "Table not found"}, 404)
+
+    where = payload.get("where")
+    if not isinstance(where, dict) or not where:
+        return _json_response({"error": "Missing where clause"}, 400)
+
+    columns = _get_table_columns(table_name)
+    conditions = {key: value for key, value in where.items() if key in columns}
+    if not conditions:
+        return _json_response({"error": "No valid where columns provided"}, 400)
+
+    where_parts = []
+    values: list[Any] = []
+    for col, value in conditions.items():
+        if value is None:
+            where_parts.append(f'"{col}" IS NULL')
+        else:
+            where_parts.append(f'"{col}" = ?')
+            values.append(value)
+
+    where_sql = " AND ".join(where_parts)
+
+    conn = db.get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f'DELETE FROM "{table_name}" WHERE {where_sql}', values)
+        conn.commit()
+        return {"success": True, "affected": cursor.rowcount}
+    except Exception as exc:
+        return _json_response({"error": str(exc)}, 500)
+    finally:
+        conn.close()
+
+@app.get('/api/admin/system/metrics')
+def admin_system_metrics(request: Request):
+    _require_admin_access(request)
+    if not psutil:
+        return {"available": False}
+    cpu_percent = psutil.cpu_percent(interval=None)
+    memory = psutil.virtual_memory()._asdict()
+    disk = psutil.disk_usage("/")._asdict()
+    load_avg = os.getloadavg() if hasattr(os, "getloadavg") else None
+    return {
+        "available": True,
+        "cpu": {"percent": cpu_percent, "count": psutil.cpu_count()},
+        "memory": memory,
+        "disk": disk,
+        "load_avg": load_avg,
+        "gpu": None
+    }
+
+@app.get('/api/admin/analytics/summary')
+def admin_analytics_summary(request: Request):
+    _require_admin_access(request)
+    try:
+        days = int(request.query_params.get("days", 14))
+    except Exception:
+        days = 14
+    days = max(1, min(days, 60))
+    summary = db.fetch_analytics_summary(days=days, top_limit=8, recent_limit=24)
+    return _json_response(summary)
+
+@app.get('/api/admin/logs/stream')
+def admin_logs_stream(request: Request):
+    _require_admin_access(request)
+    log_path = _resolve_admin_log_path()
+    if not log_path or not log_path.exists():
+        return _json_response({"error": "Log file not found"}, 404)
+    try:
+        tail = int(request.query_params.get("tail", 200))
+    except ValueError:
+        tail = 200
+    tail = max(0, min(tail, 1000))
+
+    def _tail_lines(path: Path, count: int) -> List[str]:
+        if count <= 0:
+            return []
+        lines = deque(maxlen=count)
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                lines.append(line.rstrip("\n"))
+        return list(lines)
+
+    def generate():
+        for line in _tail_lines(log_path, tail):
+            yield f"data: {line}\n\n"
+
+        while True:
+            try:
+                with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+                    handle.seek(0, os.SEEK_END)
+                    current_inode = os.fstat(handle.fileno()).st_ino
+                    while True:
+                        line = handle.readline()
+                        if line:
+                            yield f"data: {line.rstrip()}\n\n"
+                        else:
+                            time.sleep(0.5)
+                            try:
+                                if log_path.exists() and os.stat(log_path).st_ino != current_inode:
+                                    break
+                            except FileNotFoundError:
+                                yield "event: error\ndata: log file missing\n\n"
+                                time.sleep(1)
+                                break
+            except FileNotFoundError:
+                yield "event: error\ndata: log file missing\n\n"
+                time.sleep(1)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+@app.get('/api/admin/test-mode')
+def admin_get_test_mode(request: Request):
+    _require_admin_access(request)
+    return _json_response({
+        'enabled': TEST_MODE_ENABLED
+    })
+
+@app.post('/api/admin/test-mode')
+def admin_set_test_mode(request: Request, payload: Dict[str, Any] = Depends(_get_json)):
+    _require_admin_access(request)
+    enabled = bool(payload.get('enabled'))
+    global TEST_MODE_ENABLED
+    TEST_MODE_ENABLED = enabled
+    return _json_response({
+        'enabled': TEST_MODE_ENABLED
+    })
+
+@app.get('/offline.html')
+def offline(request: Request):
     """오프라인용 단순 페이지"""
-    return render_template('offline.html')
+    return templates.TemplateResponse('offline.html', {'request': request})
 
-@app.route('/manifest.json')
+@app.get('/manifest.json')
 def manifest():
     """PWA manifest 파일"""
-    response = send_from_directory('static', 'manifest.json')
+    response = FileResponse(STATIC_DIR / 'manifest.json', media_type='application/manifest+json')
     response.headers['Cache-Control'] = 'no-cache'
-    response.mimetype = 'application/manifest+json'
     return response
 
-@app.route('/icons/<path:filename>')
-def pwa_icons(filename):
+@app.get('/icons/{filename:path}')
+def pwa_icons(filename: str):
     """PWA 아이콘 전달"""
-    icon_dir = Path(app.static_folder) / "icons"
-    return send_from_directory(icon_dir, filename)
+    icon_dir = (STATIC_DIR / "icons").resolve()
+    try:
+        icon_path = (icon_dir / filename).resolve()
+        icon_path.relative_to(icon_dir)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not icon_path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(icon_path)
 
-@app.route('/service-worker.js')
+@app.get('/service-worker.js')
 def service_worker():
     """서비스 워커 스크립트"""
-    response = send_from_directory('static', 'service-worker.js')
+    response = FileResponse(STATIC_DIR / 'service-worker.js', media_type='application/javascript')
     response.headers['Cache-Control'] = 'no-cache'
-    response.mimetype = 'application/javascript'
     return response
 
-@app.route('/bet')
-def bet_page():
+@app.get('/bet')
+def bet_page(request: Request):
     """달팽이 경주 토토 페이지"""
-    return render_template('bet.html')
+    return templates.TemplateResponse('bet.html', {'request': request})
 
-@app.route('/riroschool')
-def riroschool_page():
+@app.get('/ready')
+def ready_page(request: Request):
+    """출시 준비중 페이지"""
+    return templates.TemplateResponse('ready.html', {'request': request})
+
+@app.get('/riroschool')
+def riroschool_page(request: Request):
     """리로스쿨 계정 입력 페이지"""
-    return render_template('riroschool.html')
+    return templates.TemplateResponse('riroschool.html', {'request': request})
 
-@app.route('/riroschool/docs')
-def riroschool_docs_page():
+@app.get('/riroschool/docs')
+def riroschool_docs_page(request: Request):
     """리로스쿨 문서 목록 페이지"""
-    return render_template('riro_docs.html')
+    return templates.TemplateResponse('riro_docs.html', {'request': request})
 
-@app.route('/riroschool/docs/<int:doc_id>')
-def riroschool_doc_detail_page(doc_id):
+@app.get('/riroschool/docs/{doc_id}')
+def riroschool_doc_detail_page(doc_id: int, request: Request):
     """리로스쿨 문서 상세 페이지"""
-    return render_template('riro_doc_view.html', doc_id=doc_id)
+    return templates.TemplateResponse('riro_doc_view.html', {'request': request, 'doc_id': doc_id})
 
-@app.route('/api/riroschool/login', methods=['POST'])
-def riroschool_login():
+@app.post('/api/riroschool/login')
+def riroschool_login(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     """리로스쿨 로그인 및 이벤트 가져오기"""
     try:
-        data = request.json
         school = data.get('school', '').strip()
         username = data.get('username', '').strip()
         password = data.get('password', '').strip()
@@ -831,13 +1882,13 @@ def riroschool_login():
         year = data.get('year', '2025')
         
         if not school or not username or not password:
-            return jsonify({
+            return _json_response({
                 'success': False,
                 'error': '학교명, 아이디, 비밀번호를 모두 입력해주세요.'
-            }), 400
+            }, 400)
         
         print(f"[RIRO API] Login request - School: {school}, User: {username}, Grade: {grade}")
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         
         # 크롤러 실행
         crawler = RiroSchoolCrawler()
@@ -883,30 +1934,29 @@ def riroschool_login():
         else:
             print(f"[RIRO API] Failed - {result['error']}")
         
-        return jsonify(result)
+        return result
         
     except Exception as e:
         print(f"[RIRO API ERROR] {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({
+        return _json_response({
             'success': False,
             'error': str(e)
-        }), 500
+        }, 500)
 
-@app.route('/api/riroschool/guide', methods=['POST'])
-def riroschool_guide():
+@app.post('/api/riroschool/guide')
+def riroschool_guide(request: Request, payload: Dict[str, Any] = Depends(_get_json)):
     """리로스쿨 일정에서 과제 가이드라인 추출"""
     try:
-        payload = request.json or {}
         events = payload.get('events') or []
         event_url = payload.get('eventUrl')
         date = payload.get('date')
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         session_payload = riro_sessions.get(user_id)
         
         if not session_payload:
-            return jsonify({'success': False, 'error': '로그인 세션이 만료되었습니다.'}), 401
+            return _json_response({'success': False, 'error': '로그인 세션이 만료되었습니다.'}, 401)
         
         if not event_url:
             for event in events:
@@ -916,7 +1966,7 @@ def riroschool_guide():
                     break
         
         if not event_url and not date:
-            return jsonify({'success': False, 'error': '가져올 이벤트 URL이 없습니다.'}), 400
+            return _json_response({'success': False, 'error': '가져올 이벤트 URL이 없습니다.'}, 400)
         
         guides_map = session_payload.get('guides') or {}
         guide_entry = None
@@ -932,87 +1982,186 @@ def riroschool_guide():
             )
         
         if not guide_entry:
-            return jsonify({'success': False, 'error': '가이드 라인이 없습니다.'})
+            return {'success': False, 'error': '가이드 라인이 없습니다.'}
         
-        return jsonify({
+        return {
             'success': True,
             'guide': guide_entry.get('guide', '').strip(),
             'source': guide_entry.get('source', event_url)
-        })
+        }
     except Exception as exc:
         print(f"[RIRO GUIDE ERROR] {exc}")
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return _json_response({'success': False, 'error': str(exc)}, 500)
 
-@app.route('/api/riroschool/logout', methods=['POST'])
-def riroschool_logout():
+@app.post('/api/riroschool/logout')
+def riroschool_logout(request: Request):
     """리로스쿨 세션 초기화"""
-    user_id = get_user_id_from_request()
+    user_id = get_user_id_from_request(request)
     if user_id in riro_sessions:
         riro_sessions.pop(user_id, None)
-    return jsonify({'success': True})
+    return {'success': True}
 
-@app.route('/api/riroschool/documents', methods=['GET'])
-def riro_documents_list():
+@app.get('/api/riroschool/documents')
+def riro_documents_list(request: Request):
     """리로스쿨 사용자 문서 목록"""
-    user_id = get_user_id_from_request()
+    user_id = get_user_id_from_request(request)
     session_payload = riro_sessions.get(user_id)
     if not session_payload:
-        return jsonify({'success': False, 'error': '로그인이 필요합니다.'}), 401
+        return _json_response({'success': False, 'error': '로그인이 필요합니다.'}, 401)
     docs = db.get_riro_documents(session_payload['riro_id'])
-    return jsonify({
+    return {
         'success': True,
         'documents': [doc.to_dict() for doc in docs]
-    })
+    }
 
-@app.route('/api/riroschool/documents', methods=['POST'])
-def riro_documents_save():
+@app.post('/api/riroschool/documents')
+def riro_documents_save(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     """리로스쿨 사용자 문서 저장"""
-    user_id = get_user_id_from_request()
+    user_id = get_user_id_from_request(request)
     session_payload = riro_sessions.get(user_id)
     if not session_payload:
-        return jsonify({'success': False, 'error': '로그인이 필요합니다.'}), 401
-    data = request.json or {}
+        return _json_response({'success': False, 'error': '로그인이 필요합니다.'}, 401)
     title = (data.get('title') or '문서').strip()
     content = (data.get('content') or '').strip()
     image_urls = data.get('image_urls') or []
     if not content:
-        return jsonify({'success': False, 'error': '내용이 비어있습니다.'}), 400
+        return _json_response({'success': False, 'error': '내용이 비어있습니다.'}, 400)
     doc = db.save_riro_document(session_payload['riro_id'], title, content, image_urls)
-    return jsonify({'success': True, 'document': doc.to_dict()})
+    return {'success': True, 'document': doc.to_dict()}
 
-@app.route('/api/riroschool/documents/<int:doc_id>', methods=['GET'])
-def riro_documents_detail(doc_id):
-    user_id = get_user_id_from_request()
+@app.get('/api/riroschool/documents/{doc_id}')
+def riro_documents_detail(doc_id: int, request: Request):
+    user_id = get_user_id_from_request(request)
     session_payload = riro_sessions.get(user_id)
     if not session_payload:
-        return jsonify({'success': False, 'error': '로그인이 필요합니다.'}), 401
+        return _json_response({'success': False, 'error': '로그인이 필요합니다.'}, 401)
     doc = db.get_riro_document(doc_id, session_payload['riro_id'])
     if not doc:
-        return jsonify({'success': False, 'error': '문서를 찾을 수 없습니다.'}), 404
-    return jsonify({'success': True, 'document': doc.to_dict()})
+        return _json_response({'success': False, 'error': '문서를 찾을 수 없습니다.'}, 404)
+    return {'success': True, 'document': doc.to_dict()}
 
 
-@app.route('/api/template/upload', methods=['POST'])
-def upload_template():
+@app.post('/upload')
+def upload_hwpx(template: Optional[UploadFile] = File(None)):
+    """Upload .hwp/.hwpx, convert to HWPX, map nodes, and return HTML."""
+    try:
+        if not template or not template.filename:
+            return _json_response({'success': False, 'error': '업로드할 파일을 선택해주세요.'}, 400)
+
+        original_name = template.filename
+        suffix = Path(original_name).suffix.lower()
+        if suffix not in {'.hwp', '.hwpx'}:
+            return _json_response({'success': False, 'error': '지원하지 않는 파일 형식입니다.'}, 400)
+
+        session_id = secrets.token_urlsafe(16)
+        session_dir = _hwpx_session_dir(session_id)
+        session_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Upload started: filename=%s session_id=%s", original_name, session_id)
+        logger.info("Session directory created: %s", session_dir)
+
+        safe_stem = secure_filename(Path(original_name).stem) or 'document'
+        input_path = session_dir / f"{safe_stem}{suffix}"
+        with input_path.open("wb") as handle:
+            shutil.copyfileobj(template.file, handle)
+
+        if suffix == '.hwp':
+            hwpx_path = session_dir / f"{safe_stem}.hwpx"
+            try:
+                logger.info("Starting conversion: .hwp -> .hwpx")
+                _convert_hwp_to_hwpx(input_path, hwpx_path)
+                logger.info("Conversion successful: %s", hwpx_path)
+            except Exception as exc:
+                logger.error("Conversion failed: %s", exc)
+                return _json_response({'success': False, 'error': f'변환 실패: {exc}'}, 500)
+        else:
+            hwpx_path = input_path
+
+        extract_dir = _hwpx_extract_dir(session_id)
+        mgr = HwpxManager()
+        try:
+            mgr.load_and_map(str(hwpx_path), extract_dir=str(extract_dir))
+            html = mgr.generate_html_with_ids()
+            mapping = mgr.export_mapping()
+        finally:
+            mgr.close()
+
+        payload = {
+            'mapping': mapping,
+            'base_dir': str(extract_dir),
+        }
+        with _hwpx_manager_path(session_id).open("wb") as handle:
+            pickle.dump(payload, handle)
+        logger.info("Session pickle saved: %s", _hwpx_manager_path(session_id))
+
+        return {
+            'success': True,
+            'session_id': session_id,
+            'html': html
+        }
+    except Exception as exc:
+        print(f"[HWPX UPLOAD ERROR] {exc}")
+        return _json_response({'success': False, 'error': '업로드 처리 중 오류가 발생했습니다.'}, 500)
+
+
+@app.post('/save')
+def save_hwpx(request: Request, data: Dict[str, Any] = Depends(_get_json)):
+    """Apply changes to HWPX and return the updated file."""
+    session_id = (data.get('session_id') or '').strip()
+    changes = data.get('changes') or []
+    if not session_id:
+        return _json_response({'success': False, 'error': 'session_id가 필요합니다.'}, 400)
+
+    mgr_path = _hwpx_manager_path(session_id)
+    if not mgr_path.exists():
+        return _json_response({'success': False, 'error': '세션이 만료되었습니다.'}, 404)
+
+    try:
+        with mgr_path.open("rb") as handle:
+            payload = pickle.load(handle)
+    except Exception as exc:
+        print(f"[HWPX SAVE ERROR] {exc}")
+        return _json_response({'success': False, 'error': '세션 데이터를 읽을 수 없습니다.'}, 500)
+
+    base_dir = payload.get('base_dir')
+    mapping = payload.get('mapping') or {}
+    if not base_dir:
+        return _json_response({'success': False, 'error': '세션 데이터가 손상되었습니다.'}, 500)
+
+    output_path = _hwpx_session_dir(session_id) / f"{session_id}.hwpx"
+    mgr = HwpxManager()
+    try:
+        mgr.load_from_extracted(base_dir, mapping)
+        mgr.update_and_save(changes, str(output_path))
+    except Exception as exc:
+        print(f"[HWPX SAVE ERROR] {exc}")
+        return _json_response({'success': False, 'error': '저장 처리 중 오류가 발생했습니다.'}, 500)
+    finally:
+        mgr.close()
+
+    return FileResponse(output_path, filename=output_path.name)
+
+
+@app.post('/api/template/upload')
+def upload_template(template: Optional[UploadFile] = File(None)):
     """문서 양식 파일 업로드 및 텍스트 추출"""
     try:
-        file = request.files.get('template')
-        if not file or not file.filename:
-            return jsonify({'success': False, 'error': '업로드할 파일을 선택해주세요.'}), 400
-        original_name = file.filename
+        if not template or not template.filename:
+            return _json_response({'success': False, 'error': '업로드할 파일을 선택해주세요.'}, 400)
+        original_name = template.filename
         suffix = Path(original_name).suffix.lower()
         if suffix not in SUPPORTED_TEMPLATE_EXTENSIONS:
-            return jsonify({
+            return _json_response({
                 'success': False,
                 'error': '지원하지 않는 파일 형식입니다. (.docx, .hwp, .hwpx, .pdf, .txt, .md)'
-            }), 400
+            }, 400)
 
         safe_stem = secure_filename(Path(original_name).stem) or 'template'
         filename = f"{safe_stem}{suffix}"
 
         timestamp = int(time.time() * 1000)
         save_path = TEMPLATE_DIR / f"{timestamp}_{filename}"
-        file.save(save_path)
+        with save_path.open("wb") as handle:
+            shutil.copyfileobj(template.file, handle)
 
         try:
             template_text = extract_template_text(save_path)
@@ -1020,22 +2169,57 @@ def upload_template():
         except ValueError as exc:
             if save_path.exists():
                 save_path.unlink()
-            return jsonify({'success': False, 'error': str(exc)}), 400
+            return _json_response({'success': False, 'error': str(exc)}, 400)
 
-        return jsonify({
+        return {
             'success': True,
             'template_name': filename,
             'template_id': save_path.stem,
             'template_text': template_text,
             'template_html': template_html,
             'template_file': str(save_path)
-        })
+        }
     except Exception as exc:
         print(f"[TEMPLATE] Upload failed: {exc}")
-        return jsonify({'success': False, 'error': '템플릿 업로드 중 오류가 발생했습니다.'}), 500
+        return _json_response({'success': False, 'error': '템플릿 업로드 중 오류가 발생했습니다.'}, 500)
 
 
-@app.route('/api/template/asset/<template_id>/<path:asset_path>')
+@app.post('/api/template/fill-guide')
+def template_fill_guide(request: Request, data: Dict[str, Any] = Depends(_get_json)):
+    """빈 양식 안내 문구 생성"""
+    try:
+        fields = data.get('fields') or []
+        first_field = (data.get('first_field') or '').strip()
+        total = data.get('total')
+        chat_history = data.get('history') or []
+        if not first_field and fields:
+            first_field = str(fields[0]).strip()
+        if not first_field:
+            return _json_response({'success': False, 'error': '첫 번째 항목이 필요합니다.'}, 400)
+        if not isinstance(total, int):
+            total = len(fields) if isinstance(fields, list) else 1
+        total = max(1, total)
+
+        prompt = _build_fill_guide_prompt(fields, first_field, total)
+        message = ""
+        stream = agent.content_generator.generate_chat_stream(
+            prompt,
+            history=chat_history,
+            system_prompt=FILL_GUIDE_SYSTEM_PROMPT
+        )
+        for chunk in stream:
+            if chunk:
+                message += chunk
+        message = (message or "").strip()
+        if not message:
+            return _json_response({'success': False, 'error': '안내 문구 생성 실패'}, 500)
+        return {'success': True, 'message': message}
+    except Exception as exc:
+        print(f"[FILL GUIDE ERROR] {exc}")
+        return _json_response({'success': False, 'error': '안내 문구 생성 중 오류가 발생했습니다.'}, 500)
+
+
+@app.get('/api/template/asset/{template_id}/{asset_path:path}')
 def serve_template_asset(template_id: str, asset_path: str):
     """HWP HTML 변환 시 생성된 템플릿 자산 제공"""
     base_dir = TEMPLATE_HTML_DIR / template_id
@@ -1044,15 +2228,15 @@ def serve_template_asset(template_id: str, asset_path: str):
         asset_resolved = (base_resolved / asset_path).resolve()
         asset_resolved.relative_to(base_resolved)
     except Exception:
-        return abort(404)
+        raise HTTPException(status_code=404, detail="Not found")
 
     if not asset_resolved.exists():
-        return abort(404)
+        raise HTTPException(status_code=404, detail="Not found")
 
-    return send_from_directory(str(base_resolved), asset_path)
+    return FileResponse(asset_resolved)
 
 
-@app.route('/api/templates', methods=['GET'])
+@app.get('/api/templates')
 def list_templates():
     """내장 및 로컬 템플릿 목록 제공"""
     templates = []
@@ -1078,48 +2262,47 @@ def list_templates():
                 'extension': path.suffix.lower()
             })
 
-    return jsonify({'success': True, 'templates': templates})
+    return {'success': True, 'templates': templates}
 
 
-@app.route('/api/template/select', methods=['POST'])
-def select_template():
+@app.post('/api/template/select')
+def select_template(data: Dict[str, Any] = Depends(_get_json)):
     """템플릿 선택 후 HTML/텍스트 반환"""
-    data = request.json or {}
     template_id = (data.get('template_id') or '').strip()
     template_type = (data.get('template_type') or '').strip()
 
     if not template_id or template_type not in {'preset', 'file'}:
-        return jsonify({'success': False, 'error': '템플릿 정보를 확인해주세요.'}), 400
+        return _json_response({'success': False, 'error': '템플릿 정보를 확인해주세요.'}, 400)
 
     if template_type == 'preset':
         if template_id not in DOCUMENT_PRESETS:
-            return jsonify({'success': False, 'error': '템플릿을 찾을 수 없습니다.'}), 404
+            return _json_response({'success': False, 'error': '템플릿을 찾을 수 없습니다.'}, 404)
         template_text = DOCUMENT_PRESETS[template_id]
-        return jsonify({
+        return {
             'success': True,
             'template_name': template_id.replace('_', ' '),
             'template_text': template_text,
             'template_markdown': template_text,
             'template_type': 'preset'
-        })
+        }
 
     candidate = (TEMPLATE_LIBRARY_DIR / template_id).resolve()
     try:
         candidate.relative_to(TEMPLATE_LIBRARY_DIR.resolve())
     except Exception:
-        return jsonify({'success': False, 'error': '잘못된 템플릿 경로입니다.'}), 400
+        return _json_response({'success': False, 'error': '잘못된 템플릿 경로입니다.'}, 400)
 
     if not candidate.exists():
-        return jsonify({'success': False, 'error': '템플릿 파일을 찾을 수 없습니다.'}), 404
+        return _json_response({'success': False, 'error': '템플릿 파일을 찾을 수 없습니다.'}, 404)
 
     safe_id = secure_filename(template_id.replace('/', '_')) or candidate.stem
     try:
         template_text = extract_template_text(candidate)
         template_html = extract_template_html(candidate, template_id=safe_id)
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        return _json_response({'success': False, 'error': str(exc)}, 400)
 
-    return jsonify({
+    return {
         'success': True,
         'template_name': candidate.name,
         'template_text': template_text,
@@ -1127,67 +2310,66 @@ def select_template():
         'template_id': safe_id,
         'template_file': str(candidate),
         'template_type': 'file'
-    })
+    }
 
 
-@app.route('/api/font/upload', methods=['POST'])
-def upload_font():
+@app.post('/api/font/upload')
+def upload_font(font: Optional[UploadFile] = File(None), fontName: Optional[str] = Form(None)):
     """사용자 지정 폰트 업로드"""
     try:
-        font_file = request.files.get('font')
-        if not font_file or not font_file.filename:
-            return jsonify({'success': False, 'error': '업로드할 폰트를 선택해주세요.'}), 400
+        if not font or not font.filename:
+            return _json_response({'success': False, 'error': '업로드할 폰트를 선택해주세요.'}, 400)
 
-        suffix = Path(font_file.filename).suffix.lower()
+        suffix = Path(font.filename).suffix.lower()
         if suffix not in {'.ttf', '.otf'}:
-            return jsonify({'success': False, 'error': 'TTF 또는 OTF 형식만 지원합니다.'}), 400
+            return _json_response({'success': False, 'error': 'TTF 또는 OTF 형식만 지원합니다.'}, 400)
 
-        safe_stem = secure_filename(Path(font_file.filename).stem) or 'font'
+        safe_stem = secure_filename(Path(font.filename).stem) or 'font'
         timestamp = int(time.time() * 1000)
         save_path = FONT_DIR / f"{timestamp}_{safe_stem}{suffix}"
         FONT_DIR.mkdir(parents=True, exist_ok=True)
-        font_file.save(save_path)
+        with save_path.open("wb") as handle:
+            shutil.copyfileobj(font.file, handle)
 
-        display_name = request.form.get('fontName') or Path(font_file.filename).stem
+        display_name = fontName or Path(font.filename).stem
 
-        return jsonify({
+        return {
             'success': True,
             'font_id': save_path.stem,
             'font_name': display_name,
             'font_path': str(save_path)
-        })
+        }
     except Exception as exc:
         print(f"[FONT] Upload failed: {exc}")
-        return jsonify({'success': False, 'error': '폰트 업로드 중 오류가 발생했습니다.'}), 500
+        return _json_response({'success': False, 'error': '폰트 업로드 중 오류가 발생했습니다.'}, 500)
 
 
-@app.route('/api/fonts', methods=['GET'])
+@app.get('/api/fonts')
 def get_fonts():
     try:
         fonts = list_available_fonts()
-        return jsonify({'success': True, 'fonts': fonts})
+        return {'success': True, 'fonts': fonts}
     except Exception as exc:
         print(f"[FONT] Catalog error: {exc}")
-        return jsonify({'success': False, 'error': '폰트 목록을 불러오지 못했습니다.'}), 500
+        return _json_response({'success': False, 'error': '폰트 목록을 불러오지 못했습니다.'}, 500)
 
 
-@app.route('/api/formats', methods=['GET'])
+@app.get('/api/formats')
 def get_available_formats():
-    return jsonify({'success': True, 'formats': EXPORT_FORMATS})
+    return {'success': True, 'formats': EXPORT_FORMATS}
 
-@app.route('/api/interact', methods=['POST'])
-def interact_auto():
+@app.post('/api/interact')
+def interact_auto(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     """자동 의도 파악 및 스트리밍"""
     try:
-        data = request.json
         user_request = (data.get('request') or '').strip()
         document_template = (data.get('template') or '').strip() or None
         chat_history = data.get('history') or []  # 대화 기록 추출
-        user_id = get_user_id_from_request()
-        riro_context_text = _build_riro_context_text(user_id)
+        user_id = get_user_id_from_request(request)
+        riro_context_text = _build_riro_context_text(request, user_id)
         
         if not user_request:
-             return jsonify({'error': '요청 내용을 입력해주세요.'}), 400
+             return _json_response({'error': '요청 내용을 입력해주세요.'}, 400)
 
         def generate():
             # 1. 의도 파악 (템플릿이 있어도 사용자의 요청에 따라 판단)
@@ -1199,81 +2381,46 @@ def interact_auto():
                 return
 
             print(f"[INTENT DETECTED] {intent}")
+
+            use_doc_intake = False
+            if intent == "document":
+                use_doc_intake = _should_run_doc_intake(user_request, document_template, chat_history)
             
             # 2. 모드 정보 전송
-            yield f"data: {json.dumps({'type': 'mode', 'mode': intent})}\n\n"
+            yield f"data: {json.dumps({'type': 'mode', 'mode': 'chat'})}\n\n"
             
             # 3. 해당 모드로 스트리밍 위임
-            if intent == "document":
-                # 문서 생성 시에도 이전 대화 맥락을 context로 주입
-                history_text = ""
-                if chat_history:
-                    # 최근 10개 대화만
-                    recent_history = chat_history[-10:]
-                    history_text = "\n".join([f"[{msg.get('role', 'user')}]: {msg.get('text', '')}" for msg in recent_history])
+            # 채팅 모드만 사용: 문서 생성 스트림 비활성화
+            full_text = ""
 
-                context_data = {'previous_conversation': history_text}
-                if riro_context_text:
-                    context_data['riroschool_assignments'] = riro_context_text
-                if riro_context_text:
-                    context_data['riroschool_assignments'] = riro_context_text
+            # [수정] 템플릿이 있다면 컨텍스트에 추가
+            chat_prompt = user_request
+            if document_template:
+                 chat_prompt = f"다음은 사용자가 업로드한 문서/양식의 내용입니다. 질문에 답변할 때 참고하세요.\n\n[문서 내용 시작]\n{document_template}\n[문서 내용 끝]\n\n사용자 요청: {user_request}"
+            if riro_context_text:
+                chat_prompt = f"{riro_context_text}\n\n{chat_prompt}"
+            if riro_context_text:
+                chat_prompt = f"{riro_context_text}\n\n{chat_prompt}"
 
-                full_text = ""
-                chunk_count = 0
-                try:
-                    stream = agent.content_generator.generate_document_content(
-                        user_request,
-                        context=context_data, # 컨텍스트 전달
-                        stream=True,
-                        document_template=document_template
-                    )
-                    
-                    for chunk in stream:
-                        if chunk:
-                            full_text += chunk
-                            chunk_count += 1
-                            yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
-                    
-                    # 파싱 및 완료 처리
-                    parsed = agent.content_generator._parse_generated_content(full_text)
-                    final_result = {
-                        'title': parsed.get('title', '문서'),
-                        'body': full_text,
-                        'images_needed': parsed.get('images_needed', []),
-                        'tables_needed': parsed.get('tables_needed', [])
-                    }
-                    yield f"data: {json.dumps({'done': True, 'result': final_result})}\n\n"
-                    
-                except Exception as e:
-                    print(f"[DOC STREAM ERROR] {str(e)}")
-                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
-            else:
-                # 채팅 모드: 히스토리 전달
-                full_text = ""
-                
-                # [수정] 템플릿이 있다면 컨텍스트에 추가
-                chat_prompt = user_request
-                if document_template:
-                     chat_prompt = f"다음은 사용자가 업로드한 문서/양식의 내용입니다. 질문에 답변할 때 참고하세요.\n\n[문서 내용 시작]\n{document_template}\n[문서 내용 끝]\n\n사용자 요청: {user_request}"
-                if riro_context_text:
-                    chat_prompt = f"{riro_context_text}\n\n{chat_prompt}"
-                if riro_context_text:
-                    chat_prompt = f"{riro_context_text}\n\n{chat_prompt}"
+            try:
+                system_prompt = DOC_INTAKE_SYSTEM_PROMPT if use_doc_intake else None
+                stream = agent.content_generator.generate_chat_stream(
+                    chat_prompt,
+                    history=chat_history,
+                    system_prompt=system_prompt
+                )
+                for chunk in stream:
+                    if chunk:
+                        full_text += chunk
+                        yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'result': {'body': full_text}})}\n\n"
+            except Exception as e:
+                print(f"[CHAT STREAM ERROR] {str(e)}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-                try:
-                    stream = agent.content_generator.generate_chat_stream(chat_prompt, history=chat_history)
-                    for chunk in stream:
-                        if chunk:
-                            full_text += chunk
-                            yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
-                    yield f"data: {json.dumps({'done': True, 'result': {'body': full_text}})}\n\n"
-                except Exception as e:
-                    print(f"[CHAT STREAM ERROR] {str(e)}")
-                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
-        return Response(
-            stream_with_context(generate()),
-            mimetype='text/event-stream',
+        return StreamingResponse(
+            generate(),
+            media_type='text/event-stream',
             headers={
                 'Cache-Control': 'no-cache',
                 'X-Accel-Buffering': 'no'
@@ -1282,24 +2429,23 @@ def interact_auto():
 
     except Exception as e:
         print(f"[ERROR] interact endpoint failed: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/generate', methods=['POST'])
-def generate_content():
+@app.post('/api/generate')
+def generate_content(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     """AI 콘텐츠 생성"""
     try:
-        data = request.json
         user_request = (data.get('request') or '').strip()
         document_template = (data.get('template') or '').strip() or None
         chat_history = data.get('history') or []
-        user_id = get_user_id_from_request()
-        riro_context_text = _build_riro_context_text(user_id)
+        user_id = get_user_id_from_request(request)
+        riro_context_text = _build_riro_context_text(request, user_id)
 
         if not user_request:
             if document_template:
                 user_request = "제공된 문서 양식의 모든 항목을 알맞은 내용으로 채워 완성된 문서를 작성하세요."
             else:
-                return jsonify({'error': '요청 내용 또는 양식을 입력해주세요.'}), 400
+                return _json_response({'error': '요청 내용 또는 양식을 입력해주세요.'}, 400)
         
         # 문서 생성 컨텍스트 구성
         history_text = ""
@@ -1319,35 +2465,34 @@ def generate_content():
         )
         
         if not result.get('success', True):
-            return jsonify({'error': result.get('error', 'Unknown error')}), 500
+            return _json_response({'error': result.get('error', 'Unknown error')}, 500)
             
-        return jsonify({
+        return {
             'success': True,
             'title': result.get('title', ''),
             'body': result.get('body', ''),
             'images_needed': result.get('images_needed', []),
             'tables_needed': result.get('tables_needed', [])
-        })
+        }
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/generate-stream', methods=['POST'])
-def generate_content_stream():
+@app.post('/api/generate-stream')
+def generate_content_stream(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     """스트리밍 AI 콘텐츠 생성"""
     try:
-        data = request.json
         user_request = (data.get('request') or '').strip()
         document_template = (data.get('template') or '').strip() or None
         chat_history = data.get('history') or []
-        user_id = get_user_id_from_request()
-        riro_context_text = _build_riro_context_text(user_id)
+        user_id = get_user_id_from_request(request)
+        riro_context_text = _build_riro_context_text(request, user_id)
 
         if not user_request:
             if document_template:
                 user_request = "제공된 문서 양식을 기반으로 모든 항목을 충실하게 작성하세요."
             else:
-                return jsonify({'error': '요청 내용 또는 양식을 입력해주세요.'}), 400
+                return _json_response({'error': '요청 내용 또는 양식을 입력해주세요.'}, 400)
         
         history_text = ""
         if chat_history:
@@ -1388,9 +2533,9 @@ def generate_content_stream():
                 print(f"[ERROR] Stream generation failed: {str(e)}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
         
-        return Response(
-            stream_with_context(generate()),
-            mimetype='text/event-stream',
+        return StreamingResponse(
+            generate(),
+            media_type='text/event-stream',
             headers={
                 'Cache-Control': 'no-cache',
                 'X-Accel-Buffering': 'no'
@@ -1399,20 +2544,19 @@ def generate_content_stream():
         
     except Exception as e:
         print(f"[ERROR] API endpoint failed: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/chat-stream', methods=['POST'])
-def chat_stream():
+@app.post('/api/chat-stream')
+def chat_stream(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     """프리픽스 없이 채팅형 응답 스트리밍"""
     try:
-        data = request.json
         user_request = (data.get('request') or '').strip()
         chat_history = data.get('history') or []
-        user_id = get_user_id_from_request()
-        riro_context_text = _build_riro_context_text(user_id)
+        user_id = get_user_id_from_request(request)
+        riro_context_text = _build_riro_context_text(request, user_id)
         
         if not user_request:
-            return jsonify({'error': '요청 내용을 입력해주세요.'}), 400
+            return _json_response({'error': '요청 내용을 입력해주세요.'}, 400)
 
         def generate():
             full_text = ""
@@ -1430,9 +2574,9 @@ def chat_stream():
                 print(f"[CHAT STREAM ERROR] {str(e)}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        return Response(
-            stream_with_context(generate()),
-            mimetype='text/event-stream',
+        return StreamingResponse(
+            generate(),
+            media_type='text/event-stream',
             headers={
                 'Cache-Control': 'no-cache',
                 'X-Accel-Buffering': 'no'
@@ -1440,19 +2584,18 @@ def chat_stream():
         )
     except Exception as e:
         print(f"[ERROR] chat_stream failed: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
 
-@app.route('/api/edit-html', methods=['POST'])
-def edit_html():
+@app.post('/api/edit-html')
+def edit_html(data: Dict[str, Any] = Depends(_get_json)):
     """HTML 템플릿 편집 (스트리밍)"""
     try:
-        data = request.json or {}
         html = (data.get('html') or '').strip()
         instruction = (data.get('instruction') or '').strip()
 
         if not html or not instruction:
-            return jsonify({'error': 'HTML과 수정 요청을 입력해주세요.'}), 400
+            return _json_response({'error': 'HTML과 수정 요청을 입력해주세요.'}, 400)
 
         def generate():
             try:
@@ -1465,9 +2608,9 @@ def edit_html():
                 print(f"[HTML EDIT ERROR] {str(e)}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        return Response(
-            stream_with_context(generate()),
-            mimetype='text/event-stream',
+        return StreamingResponse(
+            generate(),
+            media_type='text/event-stream',
             headers={
                 'Cache-Control': 'no-cache',
                 'X-Accel-Buffering': 'no'
@@ -1475,19 +2618,18 @@ def edit_html():
         )
     except Exception as e:
         print(f"[ERROR] edit_html failed: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
 
-@app.route('/api/edit-fragment', methods=['POST'])
-def edit_fragment():
+@app.post('/api/edit-fragment')
+def edit_fragment(data: Dict[str, Any] = Depends(_get_json)):
     """HTML fragment 편집 (스트리밍)"""
     try:
-        data = request.json or {}
         fragment = (data.get('fragment') or '').strip()
         instruction = (data.get('instruction') or '').strip()
 
         if not fragment or not instruction:
-            return jsonify({'error': 'Fragment와 수정 요청을 입력해주세요.'}), 400
+            return _json_response({'error': 'Fragment와 수정 요청을 입력해주세요.'}, 400)
 
         def generate():
             try:
@@ -1500,9 +2642,9 @@ def edit_fragment():
                 print(f"[FRAGMENT EDIT ERROR] {str(e)}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        return Response(
-            stream_with_context(generate()),
-            mimetype='text/event-stream',
+        return StreamingResponse(
+            generate(),
+            media_type='text/event-stream',
             headers={
                 'Cache-Control': 'no-cache',
                 'X-Accel-Buffering': 'no'
@@ -1510,17 +2652,16 @@ def edit_fragment():
         )
     except Exception as e:
         print(f"[ERROR] edit_fragment failed: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/save', methods=['POST'])
-def save_document():
+@app.post('/api/save')
+def save_document(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     """문서 저장 (이미지 자동 검색 및 삽입 포함)"""
     try:
-        data = request.json
         title = data.get('title', '문서')
         content = data.get('content', '')
         content_type = (data.get('content_type') or 'text').lower()
-        format_type = data.get('format', 'docx')
+        format_type = (data.get('format') or 'docx').lower()
         style_config = normalize_style_config(data.get('style'))
         template_file = (data.get('template_file') or '').strip()
         images_needed = data.get('images_needed', [])  # AI가 제안한 이미지 키워드들
@@ -1536,7 +2677,7 @@ def save_document():
         print(f"[DEBUG] Image URLs from frontend: {len(image_urls)} URLs")
         
         if not content:
-            return jsonify({'error': '내용이 비어있습니다.'}), 400
+            return _json_response({'error': '내용이 비어있습니다.'}, 400)
 
         template_path = None
         if template_file:
@@ -1640,18 +2781,29 @@ def save_document():
         # 파일 저장 (이미지 포함)
         if is_html_content:
             temp_filename = f"{title}_temp.docx"
-            if format_type == 'pdf':
-                temp_docx = docx_handler.create_document_from_html(
-                    html_content=content,
-                    title=title,
-                    style_config=style_config,
-                    filename=temp_filename
-                )
-                file_path = pdf_handler.convert_docx_to_pdf(
-                    temp_docx,
-                    output_filename=f"{title}.pdf",
-                    style_config=style_config
-                )
+            if format_type == 'hwpx_xml':
+                file_path = _save_hwpx_xml(title, content, is_html_content=True)
+            elif format_type == 'pdf':
+                try:
+                    base_url = str(request.base_url)
+                    file_path = pdf_handler.convert_html_to_pdf(
+                        html_content=content,
+                        output_filename=f"{title}.pdf",
+                        base_url=base_url
+                    )
+                except Exception as exc:
+                    print(f"[PDF HTML] Failed, falling back to DOCX conversion: {exc}")
+                    temp_docx = docx_handler.create_document_from_html(
+                        html_content=content,
+                        title=title,
+                        style_config=style_config,
+                        filename=temp_filename
+                    )
+                    file_path = pdf_handler.convert_docx_to_pdf(
+                        temp_docx,
+                        output_filename=f"{title}.pdf",
+                        style_config=style_config
+                    )
             elif format_type == 'hwp':
                 temp_docx = docx_handler.create_document_from_html(
                     html_content=content,
@@ -1706,6 +2858,8 @@ def save_document():
             shutil.copy2(temp_path, hwp_path)
             Path(temp_path).unlink()  # 임시 파일 삭제
             file_path = str(hwp_path)
+        elif format_type == 'hwpx_xml':
+            file_path = _save_hwpx_xml(title, content, is_html_content=False)
         elif format_type == 'docx':
             file_path = docx_handler.create_document(
                 title=title,
@@ -1728,26 +2882,25 @@ def save_document():
                 filename=f"{title}.rtf"
             )
         
-        return jsonify({
+        return {
             'success': True,
             'file_path': file_path,
             'format': format_type,
             'images_count': len(downloaded_images)
-        })
+        }
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/refine', methods=['POST'])
-def refine_content():
+@app.post('/api/refine')
+def refine_content(data: Dict[str, Any] = Depends(_get_json)):
     """콘텐츠 수정/개선"""
     try:
-        data = request.json
         original_content = data.get('content', '')
         refinement_request = data.get('request', '')
         
         if not original_content or not refinement_request:
-            return jsonify({'error': '내용과 수정 요청을 입력해주세요.'}), 400
+            return _json_response({'error': '내용과 수정 요청을 입력해주세요.'}, 400)
         
         # 콘텐츠 수정
         refined = agent.content_generator.refine_content(
@@ -1755,26 +2908,25 @@ def refine_content():
             refinement_request
         )
         
-        return jsonify({
+        return {
             'success': True,
             'content': refined
-        })
+        }
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/refine-stream', methods=['POST'])
-def refine_content_stream():
+@app.post('/api/refine-stream')
+def refine_content_stream(data: Dict[str, Any] = Depends(_get_json)):
     """콘텐츠 수정/개선 (스트리밍)"""
     try:
-        data = request.json
         original_content = data.get('content', '')
         refinement_request = data.get('request', '')
         
         if not original_content or not refinement_request:
             def error_stream():
                 yield f"data: {{\"error\": \"내용과 수정 요청을 입력해주세요.\"}}\n\n"
-            return Response(error_stream(), mimetype='text/event-stream')
+            return StreamingResponse(error_stream(), media_type='text/event-stream')
         
         def generate():
             try:
@@ -1794,21 +2946,20 @@ def refine_content_stream():
                 traceback.print_exc()
                 yield f"data: {{\"error\": {json.dumps(str(e))}}}\n\n"
         
-        return Response(generate(), mimetype='text/event-stream')
+        return StreamingResponse(generate(), media_type='text/event-stream')
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/adjust-format', methods=['POST'])
-def adjust_format():
+@app.post('/api/adjust-format')
+def adjust_format(data: Dict[str, Any] = Depends(_get_json)):
     """서식 조정 (자연어 요청 기반)"""
     try:
-        data = request.json
         content = data.get('content', '')
         format_request = data.get('request', '')
         
         if not content or not format_request:
-            return jsonify({'error': '내용과 서식 조정 요청을 입력해주세요.'}), 400
+            return _json_response({'error': '내용과 서식 조정 요청을 입력해주세요.'}, 400)
         
         print(f"[FORMAT ADJUST] Request: {format_request}")
         print(f"[FORMAT ADJUST] Content length: {len(content)}")
@@ -1818,19 +2969,19 @@ def adjust_format():
         
         print(f"[FORMAT ADJUST] Adjusted length: {len(adjusted)}")
         
-        return jsonify({
+        return {
             'success': True,
             'content': adjusted
-        })
+        }
         
     except Exception as e:
         print(f"[FORMAT ADJUST ERROR] {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/download/<path:filename>')
-def download_file(filename):
+@app.get('/api/download/{filename:path}')
+def download_file(filename: str):
     """파일 다운로드"""
     try:
         print(f"[DOWNLOAD] Requested file: {filename}")
@@ -1840,38 +2991,37 @@ def download_file(filename):
         
         if file_path.exists():
             print(f"[DOWNLOAD] Sending file: {file_path}")
-            return send_file(file_path, as_attachment=True)
+            return FileResponse(file_path, filename=file_path.name)
         else:
             print(f"[DOWNLOAD ERROR] File not found: {file_path}")
-            return jsonify({'error': '파일을 찾을 수 없습니다.'}), 404
+            return _json_response({'error': '파일을 찾을 수 없습니다.'}, 404)
     except Exception as e:
         print(f"[DOWNLOAD ERROR] {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/view-pdf/<path:filename>')
-def view_pdf(filename):
+@app.get('/api/view-pdf/{filename:path}')
+def view_pdf(filename: str):
     """파일 보기 (브라우저에서 열기)"""
     try:
         file_path = Path('output') / filename
         if file_path.exists():
-            return send_file(file_path, mimetype='application/pdf')
+            return FileResponse(file_path, media_type='application/pdf')
         else:
-            return jsonify({'error': '파일을 찾을 수 없습니다.'}), 404
+            return _json_response({'error': '파일을 찾을 수 없습니다.'}, 404)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/search-images', methods=['POST'])
-def search_images():
+@app.post('/api/search-images')
+def search_images(data: Dict[str, Any] = Depends(_get_json)):
     """이미지 검색 API"""
     try:
-        data = request.json
         query = data.get('query', '')
         count = int(data.get('count', 3) or 3)
 
         if not query:
-            return jsonify({'success': False, 'error': '검색 키워드를 입력해주세요.'}), 400
+            return _json_response({'success': False, 'error': '검색 키워드를 입력해주세요.'}, 400)
 
         MAX_RETRY = 3  # 최대 3회 재검색
         attempt = 0
@@ -1911,38 +3061,38 @@ def search_images():
         # Google 이미지 페이지에서 유효한 이미지를 찾지 못한 경우
         if not enriched_images:
             print("[IMAGE SEARCH] Google 이미지 페이지에서 유효한 이미지를 찾지 못했습니다.")
-            return jsonify({
+            return {
                 'success': False,
                 'error': 'Google 이미지에서 해당 키워드의 이미지를 찾지 못했습니다.'
-            }), 200
+            }
 
-        return jsonify({
+        return {
             'success': True,
             'query': query,
             'count': len(enriched_images),
             'images': enriched_images
-        })
+        }
 
     except Exception as e:
         print(f"[ERROR] search_images: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/search-images/test', methods=['GET'])
-def search_images_test():
+@app.get('/api/search-images/test')
+def search_images_test(request: Request):
     """수동 테스트용 이미지 검색 (query 파라미터)"""
     try:
-        query = request.args.get('query') or request.args.get('q') or ''
-        count = int(request.args.get('count') or 3)
+        query = request.query_params.get('query') or request.query_params.get('q') or ''
+        count = int(request.query_params.get('count') or 3)
         count = max(1, min(count, 10))
 
         if not query:
-            return jsonify({
+            return _json_response({
                 'success': False,
                 'error': 'query 파라미터를 입력하세요.',
                 'usage': '/api/search-images/test?query=검색어&count=3'
-            }), 400
+            }, 400)
 
         images = image_searcher.search_images_google(query, count=count)
 
@@ -1962,25 +3112,25 @@ def search_images_test():
                 "data": preview.get("data", "")
             })
 
-        return jsonify({
+        return {
             'success': True,
             'query': query,
             'count': len(enriched_images),
             'images': enriched_images
-        })
+        }
     except Exception as e:
         print(f"[ERROR] search_images_test: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/pdf-to-images/<path:filename>')
-def pdf_to_images(filename):
+@app.get('/api/pdf-to-images/{filename:path}')
+def pdf_to_images(filename: str):
     """파일 PDF를 이미지로 변환하여 JSON으로 반환"""
     try:
         file_path = Path('output') / filename
         if not file_path.exists():
-            return jsonify({'error': '파일을 찾을 수 없습니다.'}), 404
+            return _json_response({'error': '파일을 찾을 수 없습니다.'}, 404)
         
         # PDF를 열고 각 페이지를 이미지로 변환
         pdf_document = fitz.open(str(file_path))
@@ -2004,219 +3154,209 @@ def pdf_to_images(filename):
         
         pdf_document.close()
         
-        return jsonify({
+        return {
             'success': True,
             'pages': len(images),
             'images': images
-        })
+        }
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
 
 # ============================================
 # IP 기반 사용자 API
 # ============================================
 
-@app.route('/api/user-id')
-def get_user_id():
+@app.get('/api/user-id')
+def get_user_id(request: Request):
     """현재 사용자의 IP 기반 ID 반환"""
-    user_id = get_user_id_from_request()
-    return jsonify({
+    user_id = get_user_id_from_request(request)
+    return {
         'success': True,
         'user_id': user_id
-    })
+    }
 
 # ============================================
 # 채팅 세션 API (IP 기반)
 # ============================================
 
-@app.route('/api/chat/sessions', methods=['GET'])
-def list_chat_sessions():
+@app.get('/api/chat/sessions')
+def list_chat_sessions(request: Request):
     try:
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
 
         sessions = db.get_chat_sessions(user_id)
-        return jsonify({
+        return {
             'success': True,
             'sessions': [session.to_dict(include_messages=False) for session in sessions]
-        })
+        }
     except Exception as exc:
         print(f"[CHAT] List error: {exc}")
-        return jsonify({'success': False, 'error': '대화 목록을 불러오지 못했습니다.'}), 500
+        return _json_response({'success': False, 'error': '대화 목록을 불러오지 못했습니다.'}, 500)
 
 
-@app.route('/api/chat/sessions', methods=['POST'])
-def create_chat_session():
+@app.post('/api/chat/sessions')
+def create_chat_session(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     try:
-        data = request.get_json(silent=True) or {}
         title = (data.get('title') or '새로운 대화').strip() or '새로운 대화'
         messages = data.get('messages') or []
         if not isinstance(messages, list):
-            return jsonify({'success': False, 'error': 'messages 형식이 올바르지 않습니다.'}), 400
+            return _json_response({'success': False, 'error': 'messages 형식이 올바르지 않습니다.'}, 400)
 
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
 
         session = db.create_chat_session(user_id, title, messages)
-        return jsonify({'success': True, 'session': session.to_dict()}), 201
+        return _json_response({'success': True, 'session': session.to_dict()}, 201)
     except Exception as exc:
         print(f"[CHAT] Create error: {exc}")
-        return jsonify({'success': False, 'error': '대화 저장에 실패했습니다.'}), 500
+        return _json_response({'success': False, 'error': '대화 저장에 실패했습니다.'}, 500)
 
 
-@app.route('/api/chat/sessions/<session_id>', methods=['GET'])
-def get_chat_session(session_id):
+@app.get('/api/chat/sessions/{session_id}')
+def get_chat_session(session_id: str, request: Request):
     try:
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
 
         session = db.get_chat_session(session_id, user_id)
         if not session:
-            return jsonify({'success': False, 'error': '대화를 찾을 수 없습니다.'}), 404
+            return _json_response({'success': False, 'error': '대화를 찾을 수 없습니다.'}, 404)
 
-        return jsonify({'success': True, 'session': session.to_dict()})
+        return {'success': True, 'session': session.to_dict()}
     except Exception as exc:
         print(f"[CHAT] Get error: {exc}")
-        return jsonify({'success': False, 'error': '대화를 불러오지 못했습니다.'}), 500
+        return _json_response({'success': False, 'error': '대화를 불러오지 못했습니다.'}, 500)
 
 
-@app.route('/api/chat/sessions/<session_id>', methods=['PUT'])
-def update_chat_session(session_id):
+@app.put('/api/chat/sessions/{session_id}')
+def update_chat_session(session_id: str, request: Request, data: Dict[str, Any] = Depends(_get_json)):
     try:
-        data = request.get_json(silent=True) or {}
         title = data.get('title')
         messages = data.get('messages')
 
         if messages is not None and not isinstance(messages, list):
-            return jsonify({'success': False, 'error': 'messages 형식이 올바르지 않습니다.'}), 400
+            return _json_response({'success': False, 'error': 'messages 형식이 올바르지 않습니다.'}, 400)
 
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
 
         session = db.update_chat_session(session_id, user_id, title=title, messages=messages)
         if not session:
-            return jsonify({'success': False, 'error': '대화를 찾을 수 없습니다.'}), 404
+            return _json_response({'success': False, 'error': '대화를 찾을 수 없습니다.'}, 404)
 
-        return jsonify({'success': True, 'session': session.to_dict()})
+        return {'success': True, 'session': session.to_dict()}
     except Exception as exc:
         print(f"[CHAT] Update error: {exc}")
-        return jsonify({'success': False, 'error': '대화 저장에 실패했습니다.'}), 500
+        return _json_response({'success': False, 'error': '대화 저장에 실패했습니다.'}, 500)
 
 
-@app.route('/api/chat/sessions/<session_id>', methods=['DELETE'])
-def delete_chat_session(session_id):
+@app.delete('/api/chat/sessions/{session_id}')
+def delete_chat_session(session_id: str, request: Request):
     try:
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
 
         deleted = db.delete_chat_session(session_id, user_id)
         if deleted:
-            return jsonify({'success': True})
-        return jsonify({'success': False, 'error': '대화를 찾을 수 없거나 삭제 권한이 없습니다.'}), 404
+            return {'success': True}
+        return _json_response({'success': False, 'error': '대화를 찾을 수 없거나 삭제 권한이 없습니다.'}, 404)
     except Exception as exc:
         print(f"[CHAT] Delete error: {exc}")
-        return jsonify({'success': False, 'error': '대화를 삭제하지 못했습니다.'}), 500
+        return _json_response({'success': False, 'error': '대화를 삭제하지 못했습니다.'}, 500)
 
 # ============================================
 # 문서 히스토리 API (IP 기반)
 # ============================================
 
-@app.route('/api/documents', methods=['GET'])
-def get_user_documents():
+@app.get('/api/documents')
+def get_user_documents(request: Request):
     """사용자의 문서 목록 조회 (IP 기반 또는 리로스쿨 ID 기반)"""
     try:
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         # 리로스쿨 로그인 상태라면 리로 ID 사용
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
             
         documents = db.get_user_documents(user_id)
-        return jsonify({
+        return {
             'success': True,
             'documents': [doc.to_dict() for doc in documents]
-        })
+        }
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/documents/<int:doc_id>', methods=['GET'])
-def get_document(doc_id):
+@app.get('/api/documents/{doc_id}')
+def get_document(doc_id: int, request: Request):
     """특정 문서 조회 (IP 기반 또는 리로스쿨 ID 기반)"""
     try:
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
 
         document = db.get_document(doc_id, user_id)
         if document:
-            return jsonify({
+            return {
                 'success': True,
                 'document': document.to_dict()
-            })
+            }
         else:
-            return jsonify({'error': '문서를 찾을 수 없습니다.'}), 404
+            return _json_response({'error': '문서를 찾을 수 없습니다.'}, 404)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/documents', methods=['POST'])
-def save_document_to_history():
+@app.post('/api/documents')
+def save_document_to_history(request: Request, data: Dict[str, Any] = Depends(_get_json)):
     """문서를 히스토리에 저장 (IP 기반 또는 리로스쿨 ID 기반)"""
     try:
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
 
-        data = request.json
         title = data.get('title', '문서')
         content = data.get('content', '')
         
         if not content:
-            return jsonify({'error': '내용이 비어있습니다.'}), 400
+            return _json_response({'error': '내용이 비어있습니다.'}, 400)
         
         document = db.save_document(user_id, title, content)
         
-        return jsonify({
+        return {
             'success': True,
             'document': document.to_dict()
-        })
+        }
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
-@app.route('/api/documents/<int:doc_id>', methods=['DELETE'])
-def delete_document(doc_id):
+@app.delete('/api/documents/{doc_id}')
+def delete_document(doc_id: int, request: Request):
     """문서 삭제 (IP 기반 또는 리로스쿨 ID 기반)"""
     try:
-        user_id = get_user_id_from_request()
+        user_id = get_user_id_from_request(request)
         if user_id in riro_sessions:
             user_id = riro_sessions[user_id]['riro_id']
 
         deleted = db.delete_document(doc_id, user_id)
         
         if deleted:
-            return jsonify({'success': True})
+            return {'success': True}
         else:
-            return jsonify({'error': '문서를 찾을 수 없거나 삭제 권한이 없습니다.'}), 404
+            return _json_response({'error': '문서를 찾을 수 없거나 삭제 권한이 없습니다.'}, 404)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _json_response({'error': str(e)}, 500)
 
 if __name__ == '__main__':
-    print("""
-╭════════════════════════════════════════════════════════════╮
-║                                                            ║
-║   🚀 HWP Agent - 실시간 문서 편집기                             ║
-║   ChatGPT Canvas 스타일의 웹 기반 인터페이스                      ║
-║                                                            ║
-║   📝 브라우저에서 접속: http://localhost:8080                   ║
-║   🔐 Google OAuth 로그인 기능 활성화                          ║
-║                                                            ║
-╰════════════════════════════════════════════════════════════╯
-    """)
+    print(CLI_BANNER)
     debug_mode = _env_flag("HWP_AGENT_DEBUG", True)
     use_reloader = _env_flag("HWP_AGENT_RELOAD", False)
-    app.run(debug=debug_mode, host='0.0.0.0', port=8080, use_reloader=use_reloader)
+    host = os.getenv("HWP_AGENT_HOST", "0.0.0.0")
+    port = int(os.getenv("HWP_AGENT_PORT", "8080"))
+    # CLI: uvicorn app:app --host 0.0.0.0 --port 8080
+    uvicorn.run("app:app", host=host, port=port, reload=use_reloader, log_level="debug" if debug_mode else "info")

@@ -24,6 +24,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
-EXPOSE 5000
+EXPOSE 8080
 
-CMD ["flask", "--app", "app.py", "run", "--host=0.0.0.0", "--port=5000"]
+CMD ["uvicorn", "app:app", "--host=0.0.0.0", "--port=8080"]

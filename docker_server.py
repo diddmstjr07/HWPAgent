@@ -4,7 +4,7 @@ Helper script to start/stop the HWP Agent Docker container in the background.
 
 Usage:
   python docker_server.py start        # build (if needed) and run container
-  python docker_server.py start --rebuild --port 5000
+  python docker_server.py start --rebuild --port 8080
   python docker_server.py stop         # stop and remove container
   python docker_server.py status       # show current state
 """
@@ -124,7 +124,7 @@ def start_container(port: int, rebuild: bool) -> None:
         "--restart",
         "unless-stopped",
         "-p",
-        f"{port}:5000",
+        f"{port}:8080",
     ]
 
     if ENV_FILE.exists():

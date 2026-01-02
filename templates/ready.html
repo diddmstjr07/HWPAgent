@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DOC Agent | Coming Soon</title>
+    
+    <meta name="theme-color" content="#F8FAFC">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+    <style>
+        /* =================================================================
+           DESIGN SYSTEM: SIMPLE & SOPHISTICATED (SLATE MONOCHROME)
+           Matches index.html
+           ================================================================= */
+        :root {
+            --bg-deep: #F8FAFC;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            
+            --accent-primary: #0F172A;
+            --accent-glow: rgba(15, 23, 42, 0.15);
+            --accent-gradient: linear-gradient(135deg, #0F172A 0%, #334155 100%);
+            
+            --glass-surface: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.6);
+            
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Background Decor */
+        body::before {
+            content: ''; position: absolute; top: -10%; right: -10%; width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(203, 213, 225, 0.4) 0%, transparent 70%);
+            pointer-events: none; z-index: 0;
+            animation: float-bg 20s ease-in-out infinite alternate;
+            transition: background 0.3s ease;
+        }
+        body::after {
+            content: ''; position: absolute; bottom: -10%; left: -10%; width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(148, 163, 184, 0.2) 0%, transparent 70%);
+            pointer-events: none; z-index: 0;
+            animation: float-bg 15s ease-in-out infinite alternate-reverse;
+            transition: background 0.3s ease;
+        }
+
+        @keyframes float-bg {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(40px, 40px); }
+        }
+
+        .ready-container {
+            position: relative;
+            z-index: 10;
+            width: min(90vw, 420px);
+            padding: 40px 32px;
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: var(--radius-lg);
+            box-shadow: 
+                0 4px 6px -1px rgba(0, 0, 0, 0.05),
+                0 20px 40px -12px rgba(15, 23, 42, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+            text-align: center;
+            animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .brand-icon {
+            width: 72px; height: 72px;
+            background: linear-gradient(135deg, #ffffff, #F1F5F9);
+            border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2rem;
+            color: var(--accent-primary);
+            box-shadow: 
+                0 10px 25px -10px rgba(15, 23, 42, 0.2),
+                inset 0 2px 4px rgba(255, 255, 255, 1);
+            margin-bottom: 8px;
+            position: relative;
+        }
+        
+        .brand-icon i {
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: pulse-glow 3s infinite ease-in-out;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: #ffffff;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            border-radius: 999px;
+            font-size: 0.95rem; 
+            font-weight: 700;
+            color: var(--text-main);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            box-shadow: 0 4px 10px -4px rgba(0,0,0,0.05);
+            font-variant-numeric: tabular-nums;
+            min-width: 140px;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .status-badge::before {
+            content: ''; width: 8px; height: 8px; background: #10B981; border-radius: 50%;
+            animation: blink 2s infinite;
+        }
+        .status-badge.passed::before {
+            background: #EF4444; 
+            animation: none;
+        }
+
+        h1 {
+            font-family: 'Noto Serif KR', serif;
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--text-main);
+            letter-spacing: -0.02em;
+        }
+
+        p {
+            margin: 0;
+            font-size: 1.05rem;
+            line-height: 1.6;
+            color: var(--text-muted);
+            max-width: 280px;
+        }
+
+        .date-box {
+            margin-top: 12px;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #0F172A, #1E293B);
+            border-radius: 16px;
+            color: white;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 10px 25px -10px rgba(15, 23, 42, 0.4);
+            transition: transform 0.2s ease, background 0.3s ease;
+        }
+        .date-box:hover { transform: translateY(-2px); }
+
+        .date-label {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+            text-align: left;
+        }
+        .date-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .footer-note {
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: #94A3B8;
+        }
+
+        .theme-toggle-btn {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-main);
+            font-size: 1.2rem;
+            cursor: pointer;
+            z-index: 50;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px -2px rgba(0,0,0,0.05);
+        }
+        .theme-toggle-btn:hover {
+            background: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px -4px rgba(0,0,0,0.1);
+        }
+
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(0.95); }
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* =================================================================
+           DARK MODE LOGIC
+           1. System Preference (Default)
+           2. Manual Override [data-theme="dark"]
+           ================================================================= */
+        
+        /* Shared Dark Variables */
+        .dark-vars {
+            --bg-deep: #0B0F17;
+            --text-main: #E2E8F0;
+            --text-muted: #94A3B8;
+            --accent-primary: #E2E8F0;
+        }
+
+        /* Apply via Media Query (System) */
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) {
+                --bg-deep: #0B0F17;
+                --text-main: #E2E8F0;
+                --text-muted: #94A3B8;
+                --accent-primary: #E2E8F0;
+            }
+            body:not([data-theme="light"])::before { background: radial-gradient(circle, rgba(30, 41, 59, 0.3) 0%, transparent 70%); }
+            body:not([data-theme="light"])::after { background: radial-gradient(circle, rgba(15, 23, 42, 0.4) 0%, transparent 70%); }
+            
+            body:not([data-theme="light"]) .ready-container {
+                background: rgba(15, 23, 42, 0.6);
+                border-color: rgba(30, 41, 59, 0.5);
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            }
+            body:not([data-theme="light"]) .brand-icon {
+                background: linear-gradient(135deg, #1E293B, #0F172A);
+                box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.5);
+                color: #fff;
+            }
+            body:not([data-theme="light"]) .brand-icon i { -webkit-text-fill-color: #fff; }
+            body:not([data-theme="light"]) .status-badge {
+                background: rgba(30, 41, 59, 0.5);
+                border-color: rgba(51, 65, 85, 0.5);
+                color: #CBD5E1;
+            }
+            body:not([data-theme="light"]) .date-box {
+                background: linear-gradient(135deg, #E2E8F0, #CBD5E1);
+                color: #0F172A;
+            }
+            body:not([data-theme="light"]) .date-label { color: rgba(15, 23, 42, 0.6); }
+            body:not([data-theme="light"]) .theme-toggle-btn {
+                background: rgba(30, 41, 59, 0.6);
+                border-color: rgba(148, 163, 184, 0.2);
+                color: #E2E8F0;
+            }
+            body:not([data-theme="light"]) .theme-toggle-btn:hover { background: #1E293B; }
+        }
+
+        /* Apply via Data Attribute (Manual Override: Dark) */
+        body[data-theme="dark"] {
+            --bg-deep: #0B0F17;
+            --text-main: #E2E8F0;
+            --text-muted: #94A3B8;
+            --accent-primary: #E2E8F0;
+        }
+        body[data-theme="dark"]::before { background: radial-gradient(circle, rgba(30, 41, 59, 0.3) 0%, transparent 70%); }
+        body[data-theme="dark"]::after { background: radial-gradient(circle, rgba(15, 23, 42, 0.4) 0%, transparent 70%); }
+        
+        body[data-theme="dark"] .ready-container {
+            background: rgba(15, 23, 42, 0.6);
+            border-color: rgba(30, 41, 59, 0.5);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        body[data-theme="dark"] .brand-icon {
+            background: linear-gradient(135deg, #1E293B, #0F172A);
+            box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.5);
+            color: #fff;
+        }
+        body[data-theme="dark"] .brand-icon i { -webkit-text-fill-color: #fff; }
+        body[data-theme="dark"] .status-badge {
+            background: rgba(30, 41, 59, 0.5);
+            border-color: rgba(51, 65, 85, 0.5);
+            color: #CBD5E1;
+        }
+        body[data-theme="dark"] .date-box {
+            background: linear-gradient(135deg, #E2E8F0, #CBD5E1);
+            color: #0F172A;
+        }
+        body[data-theme="dark"] .date-label { color: rgba(15, 23, 42, 0.6); }
+        body[data-theme="dark"] .theme-toggle-btn {
+            background: rgba(30, 41, 59, 0.6);
+            border-color: rgba(148, 163, 184, 0.2);
+            color: #E2E8F0;
+        }
+        body[data-theme="dark"] .theme-toggle-btn:hover { background: #1E293B; }
+
+        /* Force Light Mode Override */
+        body[data-theme="light"] {
+            --bg-deep: #F8FAFC;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            --accent-primary: #0F172A;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ready-container">
+        <button id="themeToggle" class="theme-toggle-btn" aria-label="Toggle Dark Mode">
+            <i class="bi bi-moon-stars"></i>
+        </button>
+
+        <div class="brand-icon">
+            <i class="bi bi-stars"></i>
+        </div>
+        
+        <div id="dDayBadge" class="status-badge">Calculating...</div>
+        
+        <div>
+            <h1>Coming Soon</h1>
+            <p style="margin-top:12px;">DOC Agent 출시를 위한<br>마지막 점검을 진행하고 있습니다.</p>
+        </div>
+
+        <div class="date-box">
+            <div class="date-label">Expected Launch</div>
+            <div id="launchDate" class="date-value">2026. 03. 04</div>
+        </div>
+
+        <div class="footer-note">
+            더 완성된 모습으로 찾아뵙겠습니다.
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // === Theme Logic ===
+            const themeBtn = document.getElementById('themeToggle');
+            const themeIcon = themeBtn.querySelector('i');
+            
+            function updateThemeIcon(isDark) {
+                if (isDark) {
+                    themeIcon.classList.remove('bi-moon-stars');
+                    themeIcon.classList.add('bi-sun');
+                } else {
+                    themeIcon.classList.remove('bi-sun');
+                    themeIcon.classList.add('bi-moon-stars');
+                }
+            }
+
+            // Check saved theme or system preference
+            const savedTheme = localStorage.getItem('docAgentTheme');
+            const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
+                document.body.dataset.theme = 'dark';
+                updateThemeIcon(true);
+            } else {
+                document.body.dataset.theme = 'light';
+                updateThemeIcon(false);
+            }
+
+            themeBtn.addEventListener('click', () => {
+                const isDark = document.body.dataset.theme === 'dark';
+                const newTheme = isDark ? 'light' : 'dark';
+                document.body.dataset.theme = newTheme;
+                localStorage.setItem('docAgentTheme', newTheme);
+                updateThemeIcon(!isDark);
+            });
+
+
+            // === Timer Logic ===
+            const targetDate = new Date('2026-03-04T00:00:00');
+            const badge = document.getElementById('dDayBadge');
+            const dateEl = document.getElementById('launchDate');
+            
+            // Format Display Date
+            dateEl.textContent = '2026. 03. 04';
+
+            function updateTimer() {
+                const now = new Date();
+                const diffTime = targetDate - now;
+
+                if (diffTime <= 0) {
+                    badge.textContent = 'Released';
+                    badge.classList.add('passed');
+                    clearInterval(timerInterval);
+                    return;
+                }
+
+                const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diffTime % (1000 * 60)) / 1000);
+
+                const h = String(hours).padStart(2, '0');
+                const m = String(minutes).padStart(2, '0');
+                const s = String(seconds).padStart(2, '0');
+
+                // Format: D-365 12:30:45
+                badge.textContent = `D-${days}  ${h}:${m}:${s}`;
+            }
+
+            updateTimer(); // Initial call
+            const timerInterval = setInterval(updateTimer, 1000); // Update every second
+        });
+    </script>
+</body>
+</html>

@@ -204,6 +204,12 @@ class GeminiContentGenerator:
         """LM Studio용 페이로드 생성"""
         messages = []
         if gemini_data and 'contents' in gemini_data:
+            system_instruction = gemini_data.get("systemInstruction") or {}
+            system_parts = system_instruction.get("parts") or []
+            if system_parts:
+                system_text = system_parts[0].get("text", "")
+                if system_text:
+                    messages.append({"role": "system", "content": system_text})
             # Gemini 포맷을 OpenAI 포맷으로 변환
             for content in gemini_data['contents']:
                 role = content.get('role', 'user')
@@ -250,7 +256,7 @@ class GeminiContentGenerator:
             print(f"[Intent Classification Failed] {e}")
             return "chat"  # 기본값
 
-    def generate_chat_stream(self, prompt: str, history: list = None):
+    def generate_chat_stream(self, prompt: str, history: list = None, system_prompt: Optional[str] = None):
         """이전 대화 맥락을 포함하여 스트리밍"""
         headers = {
             'Content-Type': 'application/json',
@@ -282,6 +288,10 @@ class GeminiContentGenerator:
                 "topK": 40,
             }
         }
+        if system_prompt:
+            data["systemInstruction"] = {
+                "parts": [{"text": system_prompt}]
+            }
         # [Fix] Pass the constructed data payload to the stream handler
         return self._call_api_stream(prompt, headers, data=data)
     

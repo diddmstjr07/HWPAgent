@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DOC Agent | 404 Not Found</title>
+    
+    <meta name="theme-color" content="#F8FAFC">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+    <script>
+        (() => {
+            const THEME_STORAGE_KEY = 'docAgentTheme';
+            const THEME_COLORS = { light: '#F8FAFC', dark: '#0B0F17' };
+            const stored = localStorage.getItem(THEME_STORAGE_KEY);
+            const hasStored = stored === 'light' || stored === 'dark';
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const resolved = hasStored ? stored : (prefersDark ? 'dark' : 'light');
+            document.documentElement.dataset.theme = resolved;
+            document.documentElement.style.colorScheme = resolved;
+            const meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', THEME_COLORS[resolved]);
+        })();
+    </script>
+
+    <style>
+        :root {
+            --bg-deep: #F8FAFC;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            --accent-primary: #0F172A;
+            --radius-lg: 24px;
+        }
+
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Ambient Background */
+        body::before, body::after {
+            content: ''; position: absolute; border-radius: 50%; pointer-events: none; z-index: 0;
+        }
+        body::before {
+            top: -10%; right: -10%; width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(203, 213, 225, 0.4) 0%, transparent 70%);
+            animation: float 20s infinite alternate;
+        }
+        body::after {
+            bottom: -10%; left: -10%; width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(148, 163, 184, 0.2) 0%, transparent 70%);
+            animation: float 15s infinite alternate-reverse;
+        }
+
+        @keyframes float { 0% { transform: translate(0,0); } 100% { transform: translate(30px, 30px); } }
+
+        .error-container {
+            position: relative; z-index: 10;
+            width: min(90vw, 400px);
+            padding: 48px 32px;
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+            text-align: center;
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
+            animation: pop-in 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .error-code {
+            font-size: 4rem; font-weight: 800; line-height: 1;
+            background: linear-gradient(135deg, #0F172A 0%, #475569 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            opacity: 0.9;
+        }
+
+        .error-message h1 {
+            margin: 0; font-family: 'Noto Serif KR', serif; font-size: 1.6rem; font-weight: 700; color: var(--text-main);
+        }
+        .error-message p {
+            margin: 8px 0 0; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;
+        }
+
+        .btn-home {
+            margin-top: 12px;
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 12px 24px;
+            background: var(--accent-primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 14px;
+            font-weight: 600; font-size: 0.95rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+        }
+        .btn-home:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+        }
+
+        @keyframes pop-in {
+            0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* Dark Mode */
+        html[data-theme="dark"] {
+            --bg-deep: #0B0F17;
+            --text-main: #E2E8F0;
+            --text-muted: #94A3B8;
+            --accent-primary: #E2E8F0;
+        }
+        html[data-theme="dark"] body::before { background: radial-gradient(circle, rgba(30, 41, 59, 0.3) 0%, transparent 70%); }
+        html[data-theme="dark"] body::after { background: radial-gradient(circle, rgba(15, 23, 42, 0.4) 0%, transparent 70%); }
+        html[data-theme="dark"] .error-container {
+            background: rgba(15, 23, 42, 0.6);
+            border-color: rgba(30, 41, 59, 0.5);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        html[data-theme="dark"] .error-code { background: linear-gradient(135deg, #E2E8F0, #94A3B8); -webkit-background-clip: text; }
+        html[data-theme="dark"] .btn-home { background: #E2E8F0; color: #0F172A; }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-code">404</div>
+        <div class="error-message">
+            <h1>페이지를 찾을 수 없어요</h1>
+            <p>요청하신 페이지가 삭제되었거나<br>잘못된 경로로 접근하셨습니다.</p>
+        </div>
+        <a href="/" class="btn-home"><i class="bi bi-house-door-fill"></i> 홈으로 가기</a>
+    </div>
+</body>
+</html>

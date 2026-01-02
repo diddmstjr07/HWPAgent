@@ -84,6 +84,44 @@ class PDFHandler:
             print(f"[PDF] LibreOffice not available: {exc}")
             print("[PDF] Falling back to lightweight PDF builder (rich text + inline images).")
             return self._convert_with_reportlab(docx_path, output_path, style_config or {})
+
+    def convert_html_to_pdf(
+        self,
+        html_content: str,
+        output_filename: str,
+        base_url: Optional[str] = None
+    ) -> str:
+        output_path = self.output_dir / output_filename
+        if not html_content:
+            raise ValueError("HTML content is empty.")
+
+        try:
+            from playwright.sync_api import sync_playwright
+        except Exception as exc:
+            raise RuntimeError("Playwright is not installed.") from exc
+
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.set_content(
+                    html_content,
+                    wait_until="networkidle",
+                    base_url=base_url or None
+                )
+                page.emulate_media(media="screen")
+                page.pdf(
+                    path=str(output_path),
+                    format="A4",
+                    print_background=True,
+                    prefer_css_page_size=True
+                )
+                browser.close()
+            print(f"[PDF] ✅ HTML PDF created: {output_path.name}")
+            return str(output_path)
+        except Exception as exc:
+            print(f"[PDF HTML ERROR] {exc}")
+            raise
     
     def _convert_with_libreoffice(self, docx_path: Path, output_path: Path) -> str:
         """

@@ -1,0 +1,10 @@
+{
+  "appId": "com.hwp.agent",
+  "appName": "HWP Agent",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://agent.diddmstjr.com",
+    "cleartext": false
+  }
+}

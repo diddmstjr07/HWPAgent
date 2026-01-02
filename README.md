@@ -14,7 +14,7 @@
   </p>
   <p>
     <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/python-3.10+-blue.svg"></a>
-    <a href="https://flask.palletsprojects.com/"><img alt="Flask" src="https://img.shields.io/badge/flask-3.x-green.svg"></a>
+    <a href="https://fastapi.tiangolo.com/"><img alt="FastAPI" src="https://img.shields.io/badge/fastapi-0.x-teal.svg"></a>
     <a href="https://ai.google.dev/"><img alt="Gemini API" src="https://img.shields.io/badge/gemini-api-orange.svg"></a>
     <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-TBD-lightgrey.svg"></a>
   </p>
@@ -40,12 +40,12 @@
 
 ## About The Project
 
-HWP Agent는 한국어 문서를 빠르게 작성해야 하는 팀을 위해 만들어진 경량 문서 생성 자동화 도구입니다. 자연어로 요청하면 Gemini 모델이 콘텐츠를 작성하고, LangChain 워크플로와 전용 HWPX 핸들러가 제목·본문·표·이미지 설명을 구성합니다. Flask 기반 REST API와 Web UI, CLI 인터페이스를 모두 제공하여 어디서든 동일한 파이프라인을 재사용할 수 있습니다.
+HWP Agent는 한국어 문서를 빠르게 작성해야 하는 팀을 위해 만들어진 경량 문서 생성 자동화 도구입니다. 자연어로 요청하면 Gemini 모델이 콘텐츠를 작성하고, LangChain 워크플로와 전용 HWPX 핸들러가 제목·본문·표·이미지 설명을 구성합니다. FastAPI 기반 REST API와 Web UI, CLI 인터페이스를 모두 제공하여 어디서든 동일한 파이프라인을 재사용할 수 있습니다.
 
 ## Built With
 
 - Python 3.10+
-- Flask 3.x, Flask-CORS
+- FastAPI, Starlette CORS
 - LangChain, Google Gemini API (`gemini-2.5-flash`)
 - python-docx, custom HWPX builder, LibreOffice CLI
 - BeautifulSoup + Selenium (이미지 검색/다운로드)
@@ -73,8 +73,8 @@ cp .env.example .env  # GOOGLE_API_KEY, SECRET_KEY 등 설정
 # CLI 단발 실행
 python main.py "AI 기반 업무 자동화 제안서를 작성해줘"
 
-# Flask Web UI / API
-flask --app app.py run --host=0.0.0.0 --port=5000
+# FastAPI Web UI / API
+uvicorn app:app --host 0.0.0.0 --port 8080
 ```
 
 ## Usage
@@ -87,7 +87,7 @@ flask --app app.py run --host=0.0.0.0 --port=5000
     --output-dir ./reports/q1
   ```
 - **Interactive**: `python main.py --interactive`
-- **Web UI**: `http://localhost:5000` 접속 후 프롬프트 입력 → 스트리밍으로 결과 확인 → 저장
+- **Web UI**: `http://localhost:8080` 접속 후 프롬프트 입력 → 스트리밍으로 결과 확인 → 저장
 
 ## API Reference
 
@@ -99,7 +99,7 @@ flask --app app.py run --host=0.0.0.0 --port=5000
 
 Example:
 ```bash
-curl -X POST http://localhost:5000/api/generate \
+curl -X POST http://localhost:8080/api/generate \
   -H "Content-Type: application/json" \
   -d '{"request": "스마트워크 도입 백서를 작성해줘"}'
 ```

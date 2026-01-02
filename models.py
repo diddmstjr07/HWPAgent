@@ -2,10 +2,9 @@
 데이터베이스 모델 정의
 """
 from datetime import datetime
-from flask_login import UserMixin
 import json
 
-class User(UserMixin):
+class User:
     """사용자 모델"""
     def __init__(self, id, email, name, picture=None, password_hash=None):
         self.id = id
@@ -13,6 +12,21 @@ class User(UserMixin):
         self.name = name
         self.picture = picture
         self.password_hash = password_hash
+
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_active(self) -> bool:
+        return True
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
+
+    def get_id(self) -> str:
+        return str(self.id)
     
     def to_dict(self):
         return {

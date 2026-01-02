@@ -14,6 +14,7 @@ from datetime import datetime
 import re
 import io
 from htmldocx import HtmlToDocx
+from bs4 import BeautifulSoup
 
 LATEX_SYMBOL_MAP = {
     r'\times': '×',
@@ -170,10 +171,55 @@ class DOCXHandler:
         # Convert HTML to docx.Document object using htmldocx
         document = Document()
         parser = HtmlToDocx()
-        parser.add_html_to_document(html_content, document)
+        try:
+            parser.add_html_to_document(html_content, document)
+        except Exception as exc:
+            print(f"[DOCX HTML] Conversion failed, retrying with sanitized HTML: {exc}")
+            document = Document()
+            try:
+                safe_html = self._sanitize_html_for_docx(html_content)
+                parser = HtmlToDocx()
+                parser.add_html_to_document(safe_html, document)
+            except Exception as fallback_exc:
+                print(f"[DOCX HTML] Sanitized conversion failed, falling back to text: {fallback_exc}")
+                document = Document()
+                lines = self._extract_text_lines_from_html(html_content)
+                if not lines:
+                    document.add_paragraph("")
+                else:
+                    for line in lines:
+                        document.add_paragraph(line)
         
         document.save(output_path)
         return str(output_path)
+
+    def _sanitize_html_for_docx(self, html_content: str) -> str:
+        soup = BeautifulSoup(html_content or "", "html.parser")
+        body = soup.body or soup
+
+        for tag in body.find_all(["script", "style", "meta", "link", "base", "noscript"]):
+            tag.decompose()
+
+        for tag in body.find_all(["svg", "canvas"]):
+            tag.decompose()
+
+        for tag in body.find_all(True):
+            for attr in list(tag.attrs):
+                if attr.lower().startswith("on"):
+                    del tag.attrs[attr]
+
+        content = body.decode_contents()
+        return f"<html><body>{content}</body></html>"
+
+    def _extract_text_lines_from_html(self, html_content: str) -> List[str]:
+        soup = BeautifulSoup(html_content or "", "html.parser")
+        for tag in soup.find_all(["script", "style", "meta", "link", "base", "noscript"]):
+            tag.decompose()
+        for br in soup.find_all("br"):
+            br.replace_with("\n")
+        text = soup.get_text("\n")
+        lines = [line.strip() for line in text.splitlines()]
+        return [line for line in lines if line]
 
     def _create_base_document(self, template_path: Optional[str]) -> Document:
         """템플릿이 있으면 그 파일을 기반으로 문서를 생성"""
