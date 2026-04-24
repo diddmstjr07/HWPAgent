@@ -4,15 +4,21 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
+import { createCanvas } from 'canvas';
 
 declare global {
   // eslint-disable-next-line no-var
   var measureTextWidth: (font: string, text: string) => number;
 }
 
-// Naive polyfill — sufficient for editing/saving.
-// For pixel-accurate rendering, replace with the `canvas` package.
-globalThis.measureTextWidth = (_font: string, text: string): number => text.length * 7;
+// Canvas-backed font metrics for closer page preview layout.
+const measureCanvas = createCanvas(1, 1);
+const measureCtx = measureCanvas.getContext('2d');
+
+globalThis.measureTextWidth = (font: string, text: string): number => {
+  measureCtx.font = font || '12px sans-serif';
+  return measureCtx.measureText(text).width;
+};
 
 // Node-compatible WASM loading. Mirrors scripts/hwp-helper.mjs:
 // path.resolve(scriptDir, '../node_modules/@rhwp/core/rhwp_bg.wasm')

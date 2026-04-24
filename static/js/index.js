@@ -11,8 +11,16 @@ document.addEventListener('DOMContentLoaded', () => {
         AUTO: '/api/interact',
         IMAGE: '/api/search-images',
         TEMPLATE: '/api/template/upload',
-        EDIT_HTML: '/api/edit-html', // NEW: for HTML editing
-        EDIT_FRAGMENT: '/api/edit-fragment',
+        // v2 HWP endpoints (Node 서버 프록시)
+        HWP_UPLOAD: '/api/v2/hwp/sessions',  // POST: file → session_id
+        HWP_RENDER: '/api/v2/hwp/sessions/{sessionId}/pages/{pageIndex}',  // GET: SVG
+        HWP_EDIT: '/api/v2/hwp/sessions/{sessionId}/edit',  // POST: operation
+        HWP_EXPORT: '/api/v2/hwp/sessions/{sessionId}/export',  // GET: download
+        HWP_DELETE: '/api/v2/hwp/sessions/{sessionId}',  // DELETE
+        HWP_HEALTH: '/api/v2/hwp/health',  // GET
+        // Legacy endpoints (deprecated)
+        EDIT_HTML: '/api/edit-html', // DEPRECATED
+        EDIT_FRAGMENT: '/api/edit-fragment', // DEPRECATED
         TEMPLATES: '/api/templates',
         TEMPLATE_SELECT: '/api/template/select'
     };
@@ -1578,59 +1586,107 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAnalysisBadge(true, 'loading', '문서 분석 중...');
 
         const formData = new FormData();
-        formData.append('template', file);
+        const isHwp = file.name.toLowerCase().endsWith('.hwp') || file.name.toLowerCase().endsWith('.hwpx');
+        const endpoint = isHwp ? API_ENDPOINTS.HWP_UPLOAD : API_ENDPOINTS.TEMPLATE;
 
-        try {
-            const { data } = await postFormData(API_ENDPOINTS.TEMPLATE, formData);
-            const payload = data || {};
+        if (isHwp) {
+            formData.append('file', file);
+            try {
+                const { data } = await postFormData(endpoint, formData);
+                const payload = data || {};
 
-            if (payload.success) {
-                // NEW: Use template_html directly
-                state.templateHtml = payload.template_html || (payload.template_text ? parseMarkdown(payload.template_text) : '');
-                state.templateName = payload.template_name;
-                state.templateFilePath = payload.template_file;
-                state.templateId = payload.template_id || '';
-                state.templateSource = 'upload';
-                state.canvasDismissed = false;
-                state.docMode = true;
-                const analysis = applyTemplateAnalysis(state.templateHtml);
-                
-                renderTemplateFrame(state.templateHtml);
-                if (els.docTitle) {
-                    els.docTitle.textContent = payload.template_name;
+                if (payload.success) {
+                    let v2Html = '<div style="display:flex; flex-direction:column; align-items:center; background:#f0f0f0; padding:20px; min-height:100vh; overflow-y:auto;">';
+                    for (let i = 0; i < payload.pageCount; i++) {
+                        v2Html += `<img src="${API_ENDPOINTS.HWP_RENDER.replace('{sessionId}', payload.sessionId).replace('{pageIndex}', i)}" style="width:100%; max-width:800px; margin-bottom:20px; box-shadow:0 2px 10px rgba(0,0,0,0.1); background:white; display:block;" />`;
+                    }
+                    v2Html += '</div>';
+
+                    state.templateHtml = v2Html;
+                    state.templateName = payload.fileName;
+                    state.templateFilePath = '';
+                    state.templateId = payload.sessionId;
+                    state.templateSource = 'upload';
+                    state.canvasDismissed = false;
+                    state.docMode = true;
+                    
+                    renderTemplateFrame(state.templateHtml);
+                    if (els.docTitle) {
+                        els.docTitle.textContent = payload.fileName;
+                    }
+
+                    // UI 업데이트
+                    updateFileBadge(true, payload.fileName);
+                    updateAnalysisBadge(false); 
+                    if (els.attachMenu) els.attachMenu.classList.remove('open');
+
+                    state.chatHistory.push({ role: 'ai', text: `"${payload.fileName}" 템플릿을 불러왔습니다. 이제 문서에 대한 변경을 요청할 수 있습니다.` });
+                    updateUI();
+                    scrollToBottom();
+                } else {
+                    throw new Error(payload.error || '업로드 실패');
                 }
-
-                // UI 업데이트
-                updateFileBadge(true, payload.template_name);
-                
-                // 분석 완료 메시지 없이 바로 숨김 (요청 사항 반영)
-                updateAnalysisBadge(false); 
-                
-                // 메뉴 닫기
-                if (els.attachMenu) els.attachMenu.classList.remove('open');
-
-                // Add message to chat stream
-                const startedFill = analysis && analysis.mode === 'fill'
-                    ? startTemplateFillVerification(analysis)
-                    : false;
-                if (!startedFill) {
-                    const modeMessage = analysis && analysis.mode === 'fill'
-                        ? '양식을 채우기 위한 정보를 입력해주세요.'
-                        : '이제 문서에 대한 변경을 요청할 수 있습니다.';
-                    state.chatHistory.push({ role: 'ai', text: `"${payload.template_name}" 템플릿을 불러왔습니다. ${modeMessage}` });
-                }
-                updateUI();
-                scrollToBottom();
-            } else {
-                throw new Error(payload.error || '업로드 실패');
+            } catch (e) {
+                console.error(e);
+                showToast(`HWP 파일 업로드 실패: ${e.message}`, 'error');
+                clearFileSelection();
+                updateAnalysisBadge(true, 'error', `분석 실패: ${e.message}`);
+                setTimeout(() => updateAnalysisBadge(false), 3000);
             }
-        } catch (e) {
-            console.error(e);
-            showToast(`파일 업로드 실패: ${e.message}`, 'error');
-            clearFileSelection();
-            // Show error on badge and hide after delay (Error message still needed)
-            updateAnalysisBadge(true, 'error', `분석 실패: ${e.message}`);
-            setTimeout(() => updateAnalysisBadge(false), 3000); // Hide after 3 seconds
+        } else {
+            formData.append('template', file);
+            try {
+                const { data } = await postFormData(endpoint, formData);
+                const payload = data || {};
+
+                if (payload.success) {
+                    // NEW: Use template_html directly
+                    state.templateHtml = payload.template_html || (payload.template_text ? parseMarkdown(payload.template_text) : '');
+                    state.templateName = payload.template_name;
+                    state.templateFilePath = payload.template_file;
+                    state.templateId = payload.template_id || '';
+                    state.templateSource = 'upload';
+                    state.canvasDismissed = false;
+                    state.docMode = true;
+                    const analysis = applyTemplateAnalysis(state.templateHtml);
+                    
+                    renderTemplateFrame(state.templateHtml);
+                    if (els.docTitle) {
+                        els.docTitle.textContent = payload.template_name;
+                    }
+
+                    // UI 업데이트
+                    updateFileBadge(true, payload.template_name);
+                    
+                    // 분석 완료 메시지 없이 바로 숨김 (요청 사항 반영)
+                    updateAnalysisBadge(false); 
+                    
+                    // 메뉴 닫기
+                    if (els.attachMenu) els.attachMenu.classList.remove('open');
+
+                    // Add message to chat stream
+                    const startedFill = analysis && analysis.mode === 'fill'
+                        ? startTemplateFillVerification(analysis)
+                        : false;
+                    if (!startedFill) {
+                        const modeMessage = analysis && analysis.mode === 'fill'
+                            ? '양식을 채우기 위한 정보를 입력해주세요.'
+                            : '이제 문서에 대한 변경을 요청할 수 있습니다.';
+                        state.chatHistory.push({ role: 'ai', text: `"${payload.template_name}" 템플릿을 불러왔습니다. ${modeMessage}` });
+                    }
+                    updateUI();
+                    scrollToBottom();
+                } else {
+                    throw new Error(payload.error || '업로드 실패');
+                }
+            } catch (e) {
+                console.error(e);
+                showToast(`파일 업로드 실패: ${e.message}`, 'error');
+                clearFileSelection();
+                // Show error on badge and hide after delay (Error message still needed)
+                updateAnalysisBadge(true, 'error', `분석 실패: ${e.message}`);
+                setTimeout(() => updateAnalysisBadge(false), 3000); // Hide after 3 seconds
+            }
         }
     };
 

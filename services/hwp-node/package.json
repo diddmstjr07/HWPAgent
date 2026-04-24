@@ -17,8 +17,12 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@hono/node-server": "^2.0.0",
     "@rhwp/core": "^0.7.3",
-    "fastify": "^5.8.5"
+    "canvas": "^3.2.3",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.8.5",
+    "hono": "^4.12.15"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

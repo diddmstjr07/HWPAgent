@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HWP 편집기</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Noto Sans KR', system-ui, sans-serif; background: #f0f2f5; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Top bar ── */
+    #topbar {
+      background: #1a1b2e; color: #e2e8f0; padding: 0 1rem;
+      height: 48px; display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;
+    }
+    #topbar h1 { font-size: 1rem; font-weight: 600; flex: 1; letter-spacing: -0.01em; }
+    #topbar label { font-size: 0.75rem; color: #94a3b8; white-space: nowrap; }
+    #apiKeyInput {
+      padding: 0.35rem 0.6rem; border-radius: 5px;
+      border: 1px solid #334155; background: #0f172a; color: #e2e8f0;
+      width: 200px; font-size: 0.8rem; outline: none;
+    }
+    #apiKeyInput:focus { border-color: #4f7ef7; }
+
+    /* ── Upload bar ── */
+    #uploadBar {
+      background: #fff; border-bottom: 1px solid #e2e8f0;
+      padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;
+    }
+    #fileBtn {
+      padding: 0.45rem 0.9rem; background: #4f7ef7; color: white;
+      border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+      white-space: nowrap;
+    }
+    #fileBtn:hover { background: #3a6ce7; }
+    #dropZone {
+      flex: 1; border: 1.5px dashed #cbd5e1; border-radius: 6px;
+      padding: 0.4rem 0.8rem; color: #94a3b8; font-size: 0.8rem; text-align: center;
+      cursor: pointer; transition: all 0.15s;
+    }
+    #dropZone.dragover { border-color: #4f7ef7; background: #eff4ff; color: #4f7ef7; }
+    #statusText { font-size: 0.8rem; color: #64748b; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Error banner ── */
+    #errorBanner {
+      background: #fef2f2; color: #b91c1c; border-bottom: 1px solid #fecaca;
+      padding: 0.4rem 1rem; font-size: 0.8rem; flex-shrink: 0;
+    }
+    .hidden { display: none !important; }
+
+    /* ── Main area ── */
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Viewer panel ── */
+    #viewerPanel { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #d1d5db; min-width: 0; }
+    #svgContainer {
+      flex: 1; overflow: auto; display: flex; justify-content: center;
+      align-items: flex-start; padding: 1.25rem;
+    }
+    #svgContainer svg { box-shadow: 0 2px 12px rgba(0,0,0,0.25); background: white; max-width: 100%; }
+    #svgPlaceholder { align-self: center; color: #6b7280; font-size: 0.9rem; text-align: center; line-height: 1.8; }
+    #pageNav {
+      background: white; border-top: 1px solid #e2e8f0; padding: 0.5rem 1rem;
+      display: flex; align-items: center; gap: 0.75rem; justify-content: center;
+      flex-shrink: 0;
+    }
+    .navBtn {
+      padding: 0.3rem 0.75rem; border: 1px solid #e2e8f0; border-radius: 5px;
+      background: white; cursor: pointer; font-size: 0.85rem;
+    }
+    .navBtn:hover:not(:disabled) { background: #f8fafc; border-color: #4f7ef7; color: #4f7ef7; }
+    .navBtn:disabled { opacity: 0.4; cursor: default; }
+    #pageInfo { font-size: 0.85rem; color: #475569; min-width: 80px; text-align: center; }
+
+    /* ── Edit panel ── */
+    #editPanel {
+      width: 290px; background: white; border-left: 1px solid #e2e8f0;
+      display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;
+    }
+    #editPanel h2 {
+      padding: 0.65rem 1rem; font-size: 0.85rem; font-weight: 600;
+      border-bottom: 1px solid #f1f5f9; background: #fafafa; color: #1e293b;
+    }
+    #opForm { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.55rem; flex: 1; }
+    .field { display: flex; flex-direction: column; gap: 0.2rem; }
+    .field label { font-size: 0.73rem; color: #64748b; font-weight: 500; }
+    .field input, .field select, .field textarea {
+      padding: 0.38rem 0.55rem; border: 1px solid #e2e8f0; border-radius: 5px;
+      font-size: 0.82rem; outline: none; background: #fafafa; color: #0f172a;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: #4f7ef7; background: white; }
+    .field textarea { resize: vertical; min-height: 52px; font-family: inherit; }
+    #applyBtn {
+      margin-top: 0.25rem; padding: 0.55rem; background: #4f7ef7; color: white;
+      border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+    }
+    #applyBtn:hover { background: #3a6ce7; }
+    #applyBtn:disabled { background: #94a3b8; cursor: default; }
+    #exportBtn {
+      margin: 0.5rem 0.75rem 0.75rem; padding: 0.55rem; background: #16a34a; color: white;
+      border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+    }
+    #exportBtn:hover { background: #15803d; }
+    #exportBtn:disabled { background: #94a3b8; cursor: default; }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>📄 HWP 편집기</h1>
+  <label for="apiKeyInput">API Key</label>
+  <input id="apiKeyInput" type="password" placeholder="X-Api-Key (없으면 빈칸)" autocomplete="off">
+</div>
+
+<div id="errorBanner" class="hidden"></div>
+
+<div id="uploadBar">
+  <input id="fileInput" type="file" accept=".hwp" style="display:none">
+  <button id="fileBtn">📂 파일 열기</button>
+  <div id="dropZone">HWP 파일을 여기에 드래그하거나 위 버튼을 사용하세요</div>
+  <span id="statusText"></span>
+</div>
+
+<div id="main">
+  <div id="viewerPanel">
+    <div id="svgContainer">
+      <span id="svgPlaceholder">HWP 파일을 업로드하면<br>페이지가 여기에 표시됩니다</span>
+    </div>
+    <div id="pageNav">
+      <button class="navBtn" id="prevBtn" disabled>◀ 이전</button>
+      <span id="pageInfo">— / —</span>
+      <button class="navBtn" id="nextBtn" disabled>다음 ▶</button>
+    </div>
+  </div>
+
+  <div id="editPanel">
+    <h2>편집 패널</h2>
+    <form id="opForm">
+      <div class="field">
+        <label>Op 종류</label>
+        <select id="opKind">
+          <option value="insert_text">텍스트 삽입 (insert_text)</option>
+          <option value="delete_text">텍스트 삭제 (delete_text)</option>
+          <option value="replace_text">텍스트 교체 (replace_text)</option>
+          <option value="set_para_format">문단 서식 (set_para_format)</option>
+          <option value="search_replace_all">전체 치환 (search_replace_all)</option>
+        </select>
+      </div>
+
+      <div class="field" id="secField">
+        <label>섹션 (sec)</label>
+        <input id="sec" type="number" value="0" min="0">
+      </div>
+      <div class="field" id="paraField">
+        <label>문단 (para)</label>
+        <input id="para" type="number" value="0" min="0">
+      </div>
+      <div class="field" id="offsetField">
+        <label>오프셋 (offset)</label>
+        <input id="offset" type="number" value="0" min="0">
+      </div>
+      <div class="field hidden" id="lengthField">
+        <label>길이 (length)</label>
+        <input id="length" type="number" value="1" min="1">
+      </div>
+      <div class="field" id="textField">
+        <label>텍스트 (text)</label>
+        <textarea id="text" placeholder="삽입할 텍스트"></textarea>
+      </div>
+      <div class="field hidden" id="newTextField">
+        <label>교체 텍스트 (newText)</label>
+        <textarea id="newText" placeholder="교체할 텍스트"></textarea>
+      </div>
+      <div class="field hidden" id="queryField">
+        <label>검색어 (query)</label>
+        <input id="query" type="text" placeholder="찾을 텍스트">
+      </div>
+      <div class="field hidden" id="replacementField">
+        <label>교체어 (replacement)</label>
+        <input id="replacement" type="text" placeholder="바꿀 텍스트">
+      </div>
+      <div class="field hidden" id="alignField">
+        <label>정렬 (align)</label>
+        <select id="align">
+          <option value="Left">Left (왼쪽)</option>
+          <option value="Center">Center (가운데)</option>
+          <option value="Right">Right (오른쪽)</option>
+          <option value="Justify">Justify (양쪽)</option>
+        </select>
+      </div>
+
+      <button type="submit" id="applyBtn" disabled>적용</button>
+    </form>
+    <button id="exportBtn" disabled>⬇ HWP 내보내기</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
