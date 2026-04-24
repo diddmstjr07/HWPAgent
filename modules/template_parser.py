@@ -5,9 +5,9 @@ from html import escape
 import shutil
 import fitz  # PyMuPDF
 from docx import Document
-from .hwp_handler import HWPHandler
 
 SUPPORTED_TEMPLATE_EXTENSIONS = {'.docx', '.hwp', '.hwpx', '.txt', '.md', '.pdf'}
+MIGRATING_HWP_MESSAGE = 'HWP/HWPX 템플릿 파서는 v2 @rhwp/core sidecar로 이전 중입니다.'
 
 
 def extract_template_text(file_path: Path) -> str:
@@ -21,8 +21,7 @@ def extract_template_text(file_path: Path) -> str:
             return _extract_text_from_pdf(file_path)
         
         if suffix in {'.hwp', '.hwpx'}:
-            handler = HWPHandler()
-            return handler.read_hwp(str(file_path))
+            raise ValueError(MIGRATING_HWP_MESSAGE)
         
         if suffix in {'.txt', '.md'}:
             return file_path.read_text(encoding='utf-8', errors='ignore').strip()
@@ -44,8 +43,7 @@ def extract_template_html(file_path: Path, template_id: Optional[str] = None) ->
             return _wrap_text_as_html(text)
 
         if suffix in {'.hwp', '.hwpx'}:
-            handler = HWPHandler()
-            return handler.convert_hwp_to_html(str(file_path), template_id=template_id)
+            raise ValueError(MIGRATING_HWP_MESSAGE)
 
         if suffix in {'.txt', '.md'}:
             text = file_path.read_text(encoding='utf-8', errors='ignore').strip()

@@ -24,6 +24,7 @@ hwp_agent.db
 output/*.hwp
 output/*.hwpx
 electron/node_modules/
+services/hwp-node/node_modules/
 electron/dist/
 vpn/data/
 vpn/clients/
