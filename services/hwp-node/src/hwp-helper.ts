@@ -11,6 +11,7 @@ function normalizeError(e: unknown): Error {
 export interface CharProps {
   fontId?: number;
   fontIds?: number[];
+  fontName?: string;
   fontSize?: number;
   bold?: boolean;
   italic?: boolean;
@@ -42,6 +43,30 @@ export class HwpDocWrapper {
     }
   }
 
+  deleteText(sec: number, para: number, offset: number, count: number): void {
+    try {
+      this.raw.deleteText(sec, para, offset, count);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  replaceText(sec: number, para: number, offset: number, length: number, newText: string): void {
+    try {
+      this.raw.replaceText(sec, para, offset, length, newText);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  splitParagraph(sec: number, para: number, offset: number): void {
+    try {
+      this.raw.splitParagraph(sec, para, offset);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
   setCharFormat(sec: number, para: number, start: number, end: number, props: CharProps): void {
     try {
       this.raw.applyCharFormat(sec, para, start, end, JSON.stringify(props));
@@ -53,6 +78,53 @@ export class HwpDocWrapper {
   setParaFormat(sec: number, para: number, props: ParaProps): void {
     try {
       this.raw.applyParaFormat(sec, para, JSON.stringify(props));
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  findOrCreateFontId(name: string): number {
+    try {
+      return this.raw.findOrCreateFontId(name);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getFieldList(): string {
+    try {
+      return this.raw.getFieldList();
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  searchText(
+    query: string,
+    fromSec: number,
+    fromPara: number,
+    fromChar: number,
+    forward: boolean,
+    caseSensitive: boolean,
+  ): string {
+    try {
+      return this.raw.searchText(query, fromSec, fromPara, fromChar, forward, caseSensitive);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  setFormValue(sec: number, para: number, ctrlIdx: number, valueJson: string): void {
+    try {
+      this.raw.setFormValue(sec, para, ctrlIdx, valueJson);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  setFieldValueByName(name: string, value: string): void {
+    try {
+      this.raw.setFieldValueByName(name, value);
     } catch (e) {
       throw normalizeError(e);
     }
