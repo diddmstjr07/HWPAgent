@@ -138,6 +138,22 @@ export class HwpDocWrapper {
     }
   }
 
+  getCharPropertiesAt(sec: number, para: number, offset: number): string {
+    try {
+      return this.raw.getCharPropertiesAt(sec, para, offset);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getParaPropertiesAt(sec: number, para: number): string {
+    try {
+      return this.raw.getParaPropertiesAt(sec, para);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
   getSectionCount(): number {
     return this.raw.getSectionCount();
   }
