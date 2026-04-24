@@ -16,3 +16,10 @@ pipeline to a FastAPI + Node `@rhwp/core` sidecar architecture.
 ## Step Discipline
 
 Each migration step must stop for approval before continuing to the next step.
+
+## STEP 3: Node sidecar HTTP server
+
+- services/hwp-node/src/ scaffolded with Fastify
+- /health and /version endpoints verified
+- TypeScript build produces dist/
+- Python server integration deferred to STEP 7

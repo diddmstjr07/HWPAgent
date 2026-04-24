@@ -68,6 +68,11 @@ pip install -r requirements.txt
 cp .env.example .env  # GOOGLE_API_KEY, SECRET_KEY 등 설정
 ```
 
+환경 변수:
+- `GOOGLE_API_KEY`: Gemini API key
+- `SECRET_KEY`: FastAPI session secret
+- `HWP_NODE_URL`: HWP sidecar URL, default `http://localhost:3100`
+
 ### Run
 ```bash
 # CLI 단발 실행
