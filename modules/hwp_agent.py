@@ -6,22 +6,13 @@ from langchain.agents import Tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from .gemini_generator import GeminiContentGenerator
+from legacy.modules.hwp_handler import HWPHandler
 from .image_searcher import ImageSearcher
 
 import os
 from pathlib import Path
 import requests
 import re
-
-
-class LegacyHWPHandlerUnavailable:
-    """Placeholder while hwp5-based HWP handling is isolated under legacy/."""
-
-    def __init__(self, output_dir: str = "output"):
-        self.output_dir = Path(output_dir)
-
-    def __getattr__(self, name: str):
-        raise RuntimeError("Legacy HWP handling is migrating to v2 @rhwp/core sidecar.")
 
 
 class HWPAgent:
@@ -32,7 +23,7 @@ class HWPAgent:
         self.output_dir.mkdir(exist_ok=True)
 
         self.content_generator = GeminiContentGenerator()
-        self.hwp_handler = LegacyHWPHandlerUnavailable(output_dir=output_dir)
+        self.hwp_handler = HWPHandler(output_dir=output_dir)
         self.searcher = ImageSearcher()
 
         self.tools = self._create_hwpx_tools()
@@ -47,8 +38,6 @@ class HWPAgent:
             ),
             Tool(
                 name="create_hwpx_document",
-                # TODO(migration-v2): dead reference until @rhwp/core sidecar
-                # document creation/export replaces the legacy handler.
                 func=self._create_hwpx_tools,
                 description="HWPX 형식 문서를 생성합니다."
             ),
@@ -165,8 +154,6 @@ class HWPAgent:
             # ---------------------------------------------------
             print("📄 HWPX 문서 생성 중...")
 
-            # TODO(migration-v2): create_hwpx_document is a dead legacy reference.
-            # Route-level HWP/HWPX flows are stubbed while the sidecar is introduced.
             output_path = self.hwp_handler.create_hwpx_document(
                 title=title,
                 content=enhanced_body,
