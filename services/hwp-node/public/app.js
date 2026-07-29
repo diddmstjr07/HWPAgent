@@ -1,27 +1,36 @@
 'use strict';
 
-// ── Global state ──
-let sessionId = null;
-let pageCount = 0;
+// ── State ──
+let sessionId  = null;
+let pageCount  = 0;
 let currentPage = 0;
-let apiKey = localStorage.getItem('hwp_api_key') ?? '';
+let apiKey     = localStorage.getItem('hwp_api_key') ?? '';
+let activeOp   = 'insert_text';
+let toastTimer = null;
 
-// ── DOM refs ──
-const apiKeyInput = document.getElementById('apiKeyInput');
-const fileInput   = document.getElementById('fileInput');
-const fileBtn     = document.getElementById('fileBtn');
-const dropZone    = document.getElementById('dropZone');
-const statusText  = document.getElementById('statusText');
-const errorBanner = document.getElementById('errorBanner');
-const svgContainer= document.getElementById('svgContainer');
-const svgPlaceholder = document.getElementById('svgPlaceholder');
-const pageInfo    = document.getElementById('pageInfo');
-const prevBtn     = document.getElementById('prevBtn');
-const nextBtn     = document.getElementById('nextBtn');
-const opForm      = document.getElementById('opForm');
-const opKind      = document.getElementById('opKind');
-const applyBtn    = document.getElementById('applyBtn');
-const exportBtn   = document.getElementById('exportBtn');
+// ── DOM ──
+const $  = (id) => document.getElementById(id);
+const apiKeyInput   = $('apiKeyInput');
+const fileInput     = $('fileInput');
+const topUploadBtn  = $('topUploadBtn');
+const topExportBtn  = $('topExportBtn');
+const dropZone      = $('dropZone');
+const dzOpenBtn     = $('dzOpenBtn');
+const emptyState    = $('emptyState');
+const viewerWrapper = $('viewerWrapper');
+const sidebar       = $('sidebar');
+const svgScroll     = $('svgScroll');
+const svgSkeleton   = $('svgSkeleton');
+const pageInfo      = $('pageInfo');
+const prevBtn       = $('prevBtn');
+const nextBtn       = $('nextBtn');
+const opForm        = $('opForm');
+const applyBtn      = $('applyBtn');
+const fileBadge     = $('fileBadge');
+const fileBadgeName = $('fileBadgeName');
+const sidePageCount = $('sidePageCount');
+const sideFileName  = $('sideFileName');
+const toast         = $('toast');
 
 // ── Init ──
 apiKeyInput.value = apiKey;
@@ -30,205 +39,234 @@ apiKeyInput.addEventListener('input', () => {
   localStorage.setItem('hwp_api_key', apiKey);
 });
 
-fileBtn.addEventListener('click', () => fileInput.click());
+topUploadBtn.addEventListener('click',   () => fileInput.click());
+dzOpenBtn.addEventListener('click',      () => fileInput.click());
 fileInput.addEventListener('change', (e) => {
-  const file = e.target.files?.[0];
-  if (file) uploadFile(file);
+  const f = e.target.files?.[0];
+  if (f) uploadFile(f);
   fileInput.value = '';
 });
 
+// Drag & drop on whole empty state
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropZone.classList.remove('dragover');
-  const file = e.dataTransfer?.files?.[0];
-  if (file) uploadFile(file);
+  const f = e.dataTransfer?.files?.[0];
+  if (f) uploadFile(f);
 });
 
+// Page nav
 prevBtn.addEventListener('click', () => changePage(-1));
 nextBtn.addEventListener('click', () => changePage(1));
-exportBtn.addEventListener('click', exportHwp);
-opKind.addEventListener('change', updateFormFields);
+
+// Export
+topExportBtn.addEventListener('click', exportHwp);
+
+// Op tabs
+document.querySelectorAll('.op-tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.op-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    activeOp = btn.dataset.op;
+    updateFormFields();
+  });
+});
+
+// Form submit
 opForm.addEventListener('submit', (e) => { e.preventDefault(); submitOp(); });
 
+// ── Toast ──
+function showToast(msg, isError = false, duration = 4500) {
+  toast.textContent = msg;
+  toast.classList.toggle('error', isError);
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), duration);
+}
+
 // ── API helpers ──
-function headers(extra = {}) {
-  const h = { ...extra };
-  if (apiKey) h['X-Api-Key'] = apiKey;
-  return h;
+function authHeaders(extra = {}) {
+  return apiKey ? { 'X-Api-Key': apiKey, ...extra } : { ...extra };
 }
 
-function showError(msg, duration = 6000) {
-  errorBanner.textContent = msg;
-  errorBanner.classList.remove('hidden');
-  clearTimeout(showError._timer);
-  showError._timer = setTimeout(() => errorBanner.classList.add('hidden'), duration);
-}
-
-function setStatus(msg) {
-  statusText.textContent = msg;
-}
-
-// ── Core API functions ──
+// ── Core ──
 async function uploadFile(file) {
-  setStatus(`업로드 중…`);
   const form = new FormData();
   form.append('file', file);
+  showLoading();
   try {
-    const res = await fetch('/sessions', { method: 'POST', headers: headers(), body: form });
+    const res = await fetch('/sessions', { method: 'POST', headers: authHeaders(), body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      showError(`업로드 실패 (${res.status}): ${err.error ?? res.statusText}`);
-      setStatus('');
+      showToast(`업로드 실패 (${res.status}): ${err.error ?? res.statusText}`, true);
+      hideLoading();
       return;
     }
     const data = await res.json();
-    sessionId = data.sessionId;
-    pageCount = data.pageCount;
+    sessionId  = data.sessionId;
+    pageCount  = data.pageCount;
     currentPage = 0;
-    setStatus(`${file.name} · ${pageCount}페이지`);
+
+    // Update UI
+    fileBadgeName.textContent = file.name;
+    fileBadge.classList.add('loaded');
+    sideFileName.textContent  = file.name;
+    sidePageCount.textContent = String(pageCount);
+    topExportBtn.disabled = false;
     applyBtn.disabled = false;
-    exportBtn.disabled = false;
+
+    // Show viewer
+    emptyState.classList.add('hidden');
+    viewerWrapper.classList.remove('hidden');
+    sidebar.classList.remove('hidden');
+
     updatePageNav();
     await renderPage(0);
+    showToast(`📄 ${file.name} 열림 — ${pageCount}페이지`);
   } catch (e) {
-    showError(`오류: ${e.message}`);
-    setStatus('');
+    showToast(`오류: ${e.message}`, true);
+    hideLoading();
   }
 }
 
 async function renderPage(index) {
   if (!sessionId) return;
+  showLoading();
   try {
-    const res = await fetch(`/sessions/${sessionId}/pages/${index}`, { headers: headers() });
+    const res = await fetch(`/sessions/${sessionId}/pages/${index}`, { headers: authHeaders() });
     if (!res.ok) {
-      showError(`렌더 실패 (${res.status}): ${res.statusText}`);
+      showToast(`렌더 실패 (${res.status})`, true);
+      hideLoading();
       return;
     }
     const svg = await res.text();
-    // Replace placeholder with SVG
-    svgPlaceholder.classList.add('hidden');
-    svgContainer.innerHTML = svg;
+    // Clear existing SVG and inject new one
+    svgScroll.querySelectorAll('svg').forEach(el => el.remove());
+    svgScroll.insertAdjacentHTML('beforeend', svg);
     currentPage = index;
     updatePageNav();
   } catch (e) {
-    showError(`렌더 오류: ${e.message}`);
+    showToast(`렌더 오류: ${e.message}`, true);
+  } finally {
+    hideLoading();
   }
 }
 
 async function applyOp(payload) {
-  if (!sessionId) { showError('먼저 HWP 파일을 업로드하세요'); return; }
+  if (!sessionId) { showToast('먼저 HWP 파일을 업로드하세요', true); return; }
+  applyBtn.classList.add('loading');
+  applyBtn.disabled = true;
   try {
     const res = await fetch(`/sessions/${sessionId}/ops`, {
       method: 'POST',
-      headers: headers({ 'Content-Type': 'application/json' }),
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      showError(`Op 실패 (${res.status}): ${err.error ?? res.statusText}`);
+      showToast(`Op 실패: ${err.error ?? res.statusText}`, true);
       return;
     }
     const data = await res.json();
     const affected = data.affectedPages ?? [];
-    // Re-render current page if affected (or if we can't tell)
     if (affected.length === 0 || affected.includes(currentPage)) {
       await renderPage(currentPage);
     }
+    showToast('✓ 적용됨');
   } catch (e) {
-    showError(`Op 오류: ${e.message}`);
+    showToast(`Op 오류: ${e.message}`, true);
+  } finally {
+    applyBtn.classList.remove('loading');
+    applyBtn.disabled = false;
   }
 }
 
 async function exportHwp() {
   if (!sessionId) return;
   try {
-    const res = await fetch(`/sessions/${sessionId}/export`, { headers: headers() });
-    if (!res.ok) {
-      showError(`내보내기 실패 (${res.status}): ${res.statusText}`);
-      return;
-    }
+    const res = await fetch(`/sessions/${sessionId}/export`, { headers: authHeaders() });
+    if (!res.ok) { showToast(`내보내기 실패 (${res.status})`, true); return; }
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
     a.href = url;
-    // Try to get filename from Content-Disposition
     const cd = res.headers.get('content-disposition') ?? '';
-    const match = cd.match(/filename="([^"]+)"/);
-    a.download = match ? match[1] : 'export.hwp';
+    const m  = cd.match(/filename="([^"]+)"/);
+    a.download = m ? m[1] : 'export.hwp';
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    showToast('⬇ 다운로드 시작');
   } catch (e) {
-    showError(`내보내기 오류: ${e.message}`);
+    showToast(`내보내기 오류: ${e.message}`, true);
   }
 }
 
 // ── UI helpers ──
+function showLoading() { svgSkeleton.classList.remove('hidden'); }
+function hideLoading()  { svgSkeleton.classList.add('hidden'); }
+
 function updatePageNav() {
-  const valid = sessionId && pageCount > 0;
-  pageInfo.textContent = valid ? `${currentPage + 1} / ${pageCount}` : '— / —';
-  prevBtn.disabled = !valid || currentPage <= 0;
-  nextBtn.disabled = !valid || currentPage >= pageCount - 1;
+  const ok = sessionId && pageCount > 0;
+  pageInfo.textContent = ok ? `${currentPage + 1} / ${pageCount}` : '— / —';
+  prevBtn.disabled = !ok || currentPage <= 0;
+  nextBtn.disabled = !ok || currentPage >= pageCount - 1;
 }
 
 function changePage(delta) {
-  const next = currentPage + delta;
-  if (next >= 0 && next < pageCount) renderPage(next);
+  const n = currentPage + delta;
+  if (n >= 0 && n < pageCount) renderPage(n);
 }
 
 function updateFormFields() {
-  const kind = opKind.value;
-  const show = (...ids) => ids.forEach(id => document.getElementById(id).classList.remove('hidden'));
-  const hide = (...ids) => ids.forEach(id => document.getElementById(id).classList.add('hidden'));
+  const show = (...ids) => ids.forEach(id => $(id)?.classList.remove('hidden'));
+  const hide = (...ids) => ids.forEach(id => $(id)?.classList.add('hidden'));
 
-  // Reset all optional fields
+  // Default: show sec/para row + offset + textField
+  show('secParaRow', 'offsetField', 'textField');
   hide('lengthField', 'newTextField', 'queryField', 'replacementField', 'alignField');
-  show('secField', 'paraField', 'offsetField', 'textField');
 
-  if (kind === 'delete_text') {
+  if (activeOp === 'delete_text') {
     hide('textField');
     show('lengthField');
-  } else if (kind === 'replace_text') {
+  } else if (activeOp === 'replace_text') {
     hide('textField');
     show('lengthField', 'newTextField');
-  } else if (kind === 'set_para_format') {
+  } else if (activeOp === 'set_para_format') {
     hide('offsetField', 'textField');
     show('alignField');
-  } else if (kind === 'search_replace_all') {
-    hide('secField', 'paraField', 'offsetField', 'textField');
+  } else if (activeOp === 'search_replace_all') {
+    hide('secParaRow', 'offsetField', 'textField');
     show('queryField', 'replacementField');
   }
 }
 
 function submitOp() {
-  if (!sessionId) { showError('먼저 HWP 파일을 업로드하세요'); return; }
-  const kind = opKind.value;
-  const sec  = Number(document.getElementById('sec').value);
-  const para = Number(document.getElementById('para').value);
-
+  if (!sessionId) { showToast('먼저 HWP 파일을 업로드하세요', true); return; }
+  const sec  = Number($('sec')?.value ?? 0);
+  const para = Number($('para')?.value ?? 0);
   let payload;
 
-  if (kind === 'insert_text') {
-    payload = { kind, sec, para, offset: Number(document.getElementById('offset').value), text: document.getElementById('text').value };
-  } else if (kind === 'delete_text') {
-    payload = { kind, sec, para, offset: Number(document.getElementById('offset').value), length: Number(document.getElementById('length').value) };
-  } else if (kind === 'replace_text') {
-    payload = { kind, sec, para, offset: Number(document.getElementById('offset').value), length: Number(document.getElementById('length').value), newText: document.getElementById('newText').value };
-  } else if (kind === 'set_para_format') {
-    payload = { kind, sec, para, props: { align: document.getElementById('align').value } };
-  } else if (kind === 'search_replace_all') {
-    payload = { kind, query: document.getElementById('query').value, replacement: document.getElementById('replacement').value };
+  if (activeOp === 'insert_text') {
+    payload = { kind: activeOp, sec, para, offset: Number($('offset').value), text: $('text').value };
+  } else if (activeOp === 'delete_text') {
+    payload = { kind: activeOp, sec, para, offset: Number($('offset').value), length: Number($('length').value) };
+  } else if (activeOp === 'replace_text') {
+    payload = { kind: activeOp, sec, para, offset: Number($('offset').value), length: Number($('length').value), newText: $('newText').value };
+  } else if (activeOp === 'set_para_format') {
+    payload = { kind: activeOp, sec, para, props: { align: $('align').value } };
+  } else if (activeOp === 'search_replace_all') {
+    payload = { kind: activeOp, query: $('query').value, replacement: $('replacement').value };
   } else {
-    showError(`알 수 없는 op 종류: ${kind}`);
     return;
   }
 
   applyOp(payload);
 }
 
-// ── Initial field state ──
+// ── Boot ──
 updateFormFields();
 updatePageNav();

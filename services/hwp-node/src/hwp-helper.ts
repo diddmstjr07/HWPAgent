@@ -8,6 +8,27 @@ function normalizeError(e: unknown): Error {
   return new Error(String(e));
 }
 
+function normalizeRawArg(value: unknown): unknown {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.__base64 === 'string') {
+      return Uint8Array.from(Buffer.from(obj.__base64, 'base64'));
+    }
+  }
+  return value;
+}
+
+function serializeRawResult(value: unknown): unknown {
+  if (value instanceof Uint8Array) {
+    return {
+      type: 'Uint8Array',
+      byteLength: value.byteLength,
+      base64: Buffer.from(value).toString('base64'),
+    };
+  }
+  return value;
+}
+
 export interface CharProps {
   fontId?: number;
   fontIds?: number[];
@@ -34,6 +55,26 @@ export interface ParaProps {
 
 export class HwpDocWrapper {
   constructor(public raw: HwpDocument) {}
+
+  listRawFunctions(): Array<{ name: string; arity: number }> {
+    const proto = Object.getPrototypeOf(this.raw) as Record<string, unknown>;
+    return Object.getOwnPropertyNames(proto)
+      .filter((name) => name !== 'constructor' && typeof proto[name] === 'function')
+      .sort()
+      .map((name) => ({ name, arity: (proto[name] as Function).length }));
+  }
+
+  callRawFunction(method: string, args: unknown[]): unknown {
+    if (method === 'free') {
+      throw new Error('free is not callable through the agent tool gateway');
+    }
+    const fn = (this.raw as unknown as Record<string, unknown>)[method];
+    if (typeof fn !== 'function') {
+      throw new Error(`Unknown HWP function: ${method}`);
+    }
+    const normalizedArgs = args.map(normalizeRawArg);
+    return serializeRawResult((fn as (...innerArgs: unknown[]) => unknown).apply(this.raw, normalizedArgs));
+  }
 
   insertText(sec: number, para: number, offset: number, text: string): void {
     try {
@@ -67,6 +108,140 @@ export class HwpDocWrapper {
     }
   }
 
+  createTable(sec: number, para: number, offset: number, rows: number, cols: number): string {
+    try {
+      return this.raw.createTable(sec, para, offset, rows, cols);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  insertPicture(
+    sec: number,
+    para: number,
+    offset: number,
+    imageData: Uint8Array,
+    width: number,
+    height: number,
+    naturalWidthPx: number,
+    naturalHeightPx: number,
+    extension: string,
+    description: string,
+  ): string {
+    try {
+      return this.raw.insertPicture(
+        sec, para, offset, imageData, width, height,
+        naturalWidthPx, naturalHeightPx, extension, description,
+      );
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  insertTextInCell(
+    sec: number,
+    parentPara: number,
+    controlIdx: number,
+    cellIdx: number,
+    cellPara: number,
+    offset: number,
+    text: string,
+  ): string {
+    try {
+      return this.raw.insertTextInCell(sec, parentPara, controlIdx, cellIdx, cellPara, offset, text);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  deleteTextInCell(
+    sec: number,
+    parentPara: number,
+    controlIdx: number,
+    cellIdx: number,
+    cellPara: number,
+    offset: number,
+    count: number,
+  ): string {
+    try {
+      return this.raw.deleteTextInCell(sec, parentPara, controlIdx, cellIdx, cellPara, offset, count);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getTextInCell(sec: number, parentPara: number, controlIdx: number, cellIdx: number, cellPara: number, offset: number, count: number): string {
+    try {
+      return this.raw.getTextInCell(sec, parentPara, controlIdx, cellIdx, cellPara, offset, count);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getTableDimensions(sec: number, parentPara: number, controlIdx: number): string {
+    try {
+      return this.raw.getTableDimensions(sec, parentPara, controlIdx);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getTableProperties(sec: number, parentPara: number, controlIdx: number): string {
+    try {
+      return this.raw.getTableProperties(sec, parentPara, controlIdx);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  setTableProperties(sec: number, parentPara: number, controlIdx: number, props: Record<string, unknown>): string {
+    try {
+      return this.raw.setTableProperties(sec, parentPara, controlIdx, JSON.stringify(props));
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  setCellProperties(sec: number, parentPara: number, controlIdx: number, cellIdx: number, props: Record<string, unknown>): string {
+    try {
+      return this.raw.setCellProperties(sec, parentPara, controlIdx, cellIdx, JSON.stringify(props));
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  insertTableRow(sec: number, parentPara: number, controlIdx: number, rowIdx: number, below: boolean): string {
+    try {
+      return this.raw.insertTableRow(sec, parentPara, controlIdx, rowIdx, below);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  insertTableColumn(sec: number, parentPara: number, controlIdx: number, colIdx: number, right: boolean): string {
+    try {
+      return this.raw.insertTableColumn(sec, parentPara, controlIdx, colIdx, right);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  deleteTableRow(sec: number, parentPara: number, controlIdx: number, rowIdx: number): string {
+    try {
+      return this.raw.deleteTableRow(sec, parentPara, controlIdx, rowIdx);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  deleteTableColumn(sec: number, parentPara: number, controlIdx: number, colIdx: number): string {
+    try {
+      return this.raw.deleteTableColumn(sec, parentPara, controlIdx, colIdx);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
   setCharFormat(sec: number, para: number, start: number, end: number, props: CharProps): void {
     try {
       this.raw.applyCharFormat(sec, para, start, end, JSON.stringify(props));
@@ -78,6 +253,38 @@ export class HwpDocWrapper {
   setParaFormat(sec: number, para: number, props: ParaProps): void {
     try {
       this.raw.applyParaFormat(sec, para, JSON.stringify(props));
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  setCharFormatInCell(
+    sec: number,
+    parentPara: number,
+    controlIdx: number,
+    cellIdx: number,
+    cellPara: number,
+    start: number,
+    end: number,
+    props: CharProps,
+  ): void {
+    try {
+      this.raw.applyCharFormatInCell(sec, parentPara, controlIdx, cellIdx, cellPara, start, end, JSON.stringify(props));
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  setParaFormatInCell(
+    sec: number,
+    parentPara: number,
+    controlIdx: number,
+    cellIdx: number,
+    cellPara: number,
+    props: ParaProps,
+  ): void {
+    try {
+      this.raw.applyParaFormatInCell(sec, parentPara, controlIdx, cellIdx, cellPara, JSON.stringify(props));
     } catch (e) {
       throw normalizeError(e);
     }
@@ -154,6 +361,79 @@ export class HwpDocWrapper {
     }
   }
 
+  getPageInfo(pageIndex: number): string {
+    try {
+      return this.raw.getPageInfo(pageIndex);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  hitTest(pageIndex: number, x: number, y: number): string {
+    try {
+      return this.raw.hitTest(pageIndex, x, y);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getCursorRect(sec: number, para: number, offset: number): string {
+    try {
+      return this.raw.getCursorRect(sec, para, offset);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getCursorRectInCell(
+    sec: number,
+    parentPara: number,
+    controlIdx: number,
+    cellIdx: number,
+    cellPara: number,
+    offset: number,
+  ): string {
+    try {
+      return this.raw.getCursorRectInCell(sec, parentPara, controlIdx, cellIdx, cellPara, offset);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getSelectionRects(sec: number, startPara: number, startOffset: number, endPara: number, endOffset: number): string {
+    try {
+      return this.raw.getSelectionRects(sec, startPara, startOffset, endPara, endOffset);
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  getSelectionRectsInCell(
+    sec: number,
+    parentPara: number,
+    controlIdx: number,
+    cellIdx: number,
+    startCellPara: number,
+    startOffset: number,
+    endCellPara: number,
+    endOffset: number,
+  ): string {
+    try {
+      return this.raw.getSelectionRectsInCell(
+        sec,
+        parentPara,
+        controlIdx,
+        cellIdx,
+        startCellPara,
+        startOffset,
+        endCellPara,
+        endOffset,
+      );
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
   getSectionCount(): number {
     return this.raw.getSectionCount();
   }
@@ -162,8 +442,33 @@ export class HwpDocWrapper {
     return this.raw.getParagraphCount(sec);
   }
 
+  getValidationWarnings(): unknown {
+    try {
+      const fn = (this.raw as unknown as { getValidationWarnings?: () => unknown }).getValidationWarnings;
+      return typeof fn === 'function' ? fn.call(this.raw) : { count: 0, summary: [] };
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  reflowLinesegs(): number {
+    try {
+      const fn = (this.raw as unknown as { reflowLinesegs?: () => unknown }).reflowLinesegs;
+      if (typeof fn !== 'function') return 0;
+      const count = fn.call(this.raw);
+      return Number.isFinite(Number(count)) ? Number(count) : 0;
+    } catch (e) {
+      throw normalizeError(e);
+    }
+  }
+
+  normalizeForExport(): number {
+    return this.reflowLinesegs();
+  }
+
   async save(filePath: string): Promise<void> {
     try {
+      this.normalizeForExport();
       const bytes = this.raw.exportHwp();
       await writeFile(filePath, Buffer.from(bytes));
     } catch (e) {
@@ -173,6 +478,7 @@ export class HwpDocWrapper {
 
   exportBytes(): Uint8Array {
     try {
+      this.normalizeForExport();
       return this.raw.exportHwp();
     } catch (e) {
       throw normalizeError(e);
@@ -189,5 +495,13 @@ export async function openHwp(filePath: string): Promise<HwpDocWrapper> {
 export async function openHwpFromBytes(bytes: Uint8Array | Buffer): Promise<HwpDocWrapper> {
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const raw = new HwpDocument(u8);
+  return new HwpDocWrapper(raw);
+}
+
+export function createBlankHwpDocument(): HwpDocWrapper {
+  const raw = HwpDocument.createEmpty();
+  raw.createBlankDocument();
+  raw.convertToEditable();
+  raw.setFileName('새 문서.hwp');
   return new HwpDocWrapper(raw);
 }

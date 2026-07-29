@@ -249,6 +249,48 @@ describe('ROUND-TRIP REGRESSION: search_replace_all (replaces rhwp.replaceAll)',
   });
 });
 
+describe('ROUND-TRIP: reference component cloning persists in exported HWP', () => {
+  it('paste_reference_component attachment header is rejected before unsafe export', async () => {
+    const doc = await openHwp(`${SAMPLES}/text.hwp`);
+    applyOp(doc, { kind: 'split_paragraph', sec: 0, para: 0, offset: 0 });
+
+    expect(() =>
+      applyOp(doc, {
+        kind: 'paste_reference_component',
+        component: 'attachment_header_bar',
+        sec: 0,
+        para: 0,
+        offset: 0,
+        replacements: [
+          { cellIdx: 0, text: '붙임 9' },
+          { cellIdx: 2, text: '다운로드 검증 제목' },
+        ],
+      }),
+    ).toThrow(/corrupts exported page geometry/);
+  });
+
+  it('paste_reference_component contact box is rejected before unsafe export', async () => {
+    const doc = await openHwp(`${SAMPLES}/text.hwp`);
+    applyOp(doc, { kind: 'split_paragraph', sec: 0, para: 0, offset: 0 });
+
+    expect(() =>
+      applyOp(doc, {
+        kind: 'paste_reference_component',
+        component: 'contact_box',
+        sec: 0,
+        para: 0,
+        offset: 0,
+        replacements: [
+          { cellIdx: 0, text: '담당 부서' },
+          { cellIdx: 1, text: 'AI정책과' },
+          { cellIdx: 6, text: '책임자' },
+          { cellIdx: 7, text: '과장 홍길동' },
+        ],
+      }),
+    ).toThrow(/corrupts exported page geometry/);
+  });
+});
+
 describe('ROUND-TRIP: composite editing scenario', () => {
   it('sequence of 8 ops survives round-trip', async () => {
     const doc = await openHwp(`${SAMPLES}/text.hwp`);
