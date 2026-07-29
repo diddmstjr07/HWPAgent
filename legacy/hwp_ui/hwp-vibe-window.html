@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HWP Vibe Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>
+    :root {
+      --text: #111827;
+      --muted: #6B7280;
+      --line: rgba(255,255,255,.62);
+      --glass: rgba(255,255,255,.58);
+      --glass-strong: rgba(255,255,255,.78);
+      --blue: #2563EB;
+      --shadow: 0 28px 90px -48px rgba(15,23,42,.78);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, 'Noto Sans KR', system-ui, sans-serif;
+      color: var(--text);
+      background:
+        linear-gradient(90deg, rgba(148,163,184,.10) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(148,163,184,.10) 1px, transparent 1px),
+        linear-gradient(145deg, #F8FAFC, #E5E7EB);
+      background-size: 32px 32px, 32px 32px, auto;
+      overflow: hidden;
+    }
+    .window-shell {
+      height: 100%;
+      padding: 14px;
+      display: grid;
+      grid-template-rows: 54px 1fr;
+      gap: 12px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,.50);
+      backdrop-filter: blur(28px) saturate(1.2);
+      -webkit-backdrop-filter: blur(28px) saturate(1.2);
+      box-shadow: 0 10px 30px -24px rgba(15,23,42,.55);
+    }
+    .traffic {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    }
+    .dot.red { background: #FF5F57; }
+    .dot.yellow { background: #FFBD2E; }
+    .dot.green { background: #28C840; }
+    .window-title {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+      max-width: 46vw;
+      font-size: 13px;
+      font-weight: 800;
+      color: #1F2937;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .window-title i { color: var(--blue); }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mini-btn {
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid rgba(203,213,225,.7);
+      border-radius: 12px;
+      background: rgba(255,255,255,.56);
+      color: #111827;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    #editorRoot {
+      min-height: 0;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .vibe-shell {
+      height: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+      gap: 12px;
+    }
+    .vibe-preview,
+    .vibe-side {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      background: var(--glass);
+      backdrop-filter: blur(30px) saturate(1.18);
+      -webkit-backdrop-filter: blur(30px) saturate(1.18);
+    }
+    .vibe-preview { border-radius: 24px 16px 16px 24px; overflow: hidden; }
+    .vibe-side { border-radius: 16px 24px 24px 16px; overflow: hidden; }
+    .vibe-preview-toolbar {
+      height: 58px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(226,232,240,.7);
+      background: rgba(255,255,255,.42);
+    }
+    .vibe-eyebrow {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--blue);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .vibe-title {
+      margin-top: 2px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #111827;
+    }
+    .vibe-actions { display: flex; gap: 8px; align-items: center; }
+    .vibe-icon-btn,
+    .vibe-primary-btn {
+      height: 34px;
+      border: 1px solid rgba(203,213,225,.72);
+      border-radius: 12px;
+      background: rgba(255,255,255,.60);
+      color: #111827;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .vibe-icon-btn { width: 34px; }
+    .vibe-primary-btn {
+      padding: 0 12px;
+      background: rgba(17,24,39,.92);
+      border-color: rgba(17,24,39,.94);
+      color: white;
+    }
+    .vibe-pages {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 22px;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(59,130,246,.13), transparent 25%),
+        rgba(241,245,249,.46);
+    }
+    .vibe-page {
+      width: min(100%, 880px);
+      margin: 0 auto 20px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: white;
+      box-shadow: 0 24px 52px -36px rgba(15,23,42,.9);
+    }
+    .vibe-page img { width: 100%; display: block; }
+    .vibe-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+      padding: 9px;
+      border-bottom: 1px solid rgba(226,232,240,.7);
+      background: rgba(255,255,255,.35);
+    }
+    .vibe-tabs button {
+      height: 34px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .vibe-tabs button.active {
+      color: #111827;
+      background: rgba(255,255,255,.76);
+      box-shadow: 0 10px 26px -22px rgba(15,23,42,.65);
+    }
+    .vibe-panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .vibe-panel.hidden { display: none; }
+    .vibe-messages {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .vibe-message {
+      max-width: 94%;
+      padding: 10px 12px;
+      border-radius: 15px;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+    .vibe-message.user {
+      align-self: flex-end;
+      background: rgba(17,24,39,.94);
+      color: white;
+    }
+    .vibe-message.ai {
+      align-self: flex-start;
+      background: rgba(255,255,255,.70);
+      border: 1px solid rgba(226,232,240,.72);
+    }
+    .vibe-message.ai.streaming::after {
+      content: '▋';
+      display: inline-block;
+      margin-left: 2px;
+      color: var(--blue);
+      animation: vibe-cursor 0.9s steps(1) infinite;
+      vertical-align: text-bottom;
+      font-size: 0.9em;
+    }
+    @keyframes vibe-cursor {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+    .vibe-tool {
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      gap: 8px;
+      padding: 9px 10px;
+      border: 1px solid rgba(226,232,240,.72);
+      border-radius: 13px;
+      background: rgba(255,255,255,.58);
+      font-size: 12px;
+    }
+	    .vibe-tool i { color: var(--blue); }
+	    .vibe-tool.done i { color: #059669; }
+	    .vibe-tool.error i { color: #DC2626; }
+	    .vibe-tool strong { display: block; color: #111827; margin-bottom: 2px; }
+	    .vibe-tool span { color: var(--muted); word-break: break-word; }
+	    .vibe-status-note {
+	      display: grid;
+	      grid-template-columns: 18px 1fr;
+	      gap: 7px;
+	      align-items: start;
+	      padding: 8px 10px;
+	      border: 1px solid rgba(191,219,254,.82);
+	      border-radius: 11px;
+	      background: rgba(239,246,255,.76);
+	      color: #1D4ED8;
+	      font-size: 12px;
+	      line-height: 1.45;
+	    }
+	    .vibe-status-note i { color: #2563EB; }
+	    .vibe-thinking {
+	      display: inline-grid;
+	      grid-template-columns: 18px auto 6px 6px 6px;
+	      gap: 7px;
+	      align-items: center;
+	      align-self: flex-start;
+	      padding: 9px 11px;
+	      border: 1px solid rgba(203,213,225,.78);
+	      border-radius: 999px;
+	      background: rgba(255,255,255,.68);
+	      color: #475569;
+	      font-size: 12px;
+	      box-shadow: 0 10px 28px -24px rgba(15,23,42,.65);
+	    }
+	    .vibe-thinking i { color: var(--blue); }
+	    .vibe-thinking b {
+	      width: 5px;
+	      height: 5px;
+	      border-radius: 50%;
+	      background: #2563EB;
+	      opacity: .35;
+	      animation: vibe-thinking-dot 1.05s ease-in-out infinite;
+	    }
+	    .vibe-thinking b:nth-of-type(2) { animation-delay: .16s; }
+	    .vibe-thinking b:nth-of-type(3) { animation-delay: .32s; }
+	    @keyframes vibe-thinking-dot {
+	      0%, 80%, 100% { transform: translateY(0); opacity: .35; }
+	      40% { transform: translateY(-4px); opacity: 1; }
+	    }
+	    .vibe-chat-form {
+      display: grid;
+      grid-template-columns: 1fr 42px;
+      gap: 8px;
+      padding: 12px;
+      border-top: 1px solid rgba(226,232,240,.7);
+      background: rgba(255,255,255,.35);
+      flex-shrink: 0;
+    }
+    .vibe-chat-form textarea,
+    .vibe-op-card input,
+    .vibe-field-row input {
+      width: 100%;
+      border: 1px solid rgba(203,213,225,.8);
+      border-radius: 13px;
+      padding: 10px;
+      background: rgba(255,255,255,.72);
+      color: #111827;
+      font: inherit;
+      resize: none;
+    }
+    .vibe-chat-form button,
+    .vibe-op-card button {
+      border: 0;
+      border-radius: 13px;
+      background: var(--blue);
+      color: white;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .vibe-field-list,
+    .vibe-op-card { padding: 14px; }
+    .vibe-empty {
+      border: 1px dashed rgba(148,163,184,.75);
+      border-radius: 14px;
+      padding: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      background: rgba(255,255,255,.46);
+    }
+    .vibe-field-row {
+      display: grid;
+      gap: 8px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(226,232,240,.68);
+    }
+    .vibe-field-row strong { display: block; font-size: 13px; }
+    .vibe-field-row span { color: var(--muted); font-size: 12px; }
+    .vibe-op-card { display: grid; gap: 9px; }
+    .vibe-op-card label { font-size: 12px; font-weight: 800; color: #374151; }
+    .vibe-op-card button { height: 38px; margin-top: 4px; }
+
+    /* HWP Canvas Redesign */
+    .vibe-shell {
+      grid-template-columns: minmax(0, 1fr) clamp(380px, 30vw, 480px);
+      gap: 14px;
+    }
+    .vibe-preview,
+    .vibe-side {
+      border-color: rgba(203,213,225,.86);
+      background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,252,.92));
+      box-shadow: 0 24px 60px -44px rgba(15,23,42,.72);
+    }
+    .vibe-preview-toolbar {
+      height: auto;
+      min-height: 76px;
+      padding: 14px 16px;
+      background: linear-gradient(180deg, #FFFFFF, #F8FAFC);
+    }
+    .vibe-file-meta {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      min-width: 0;
+    }
+    .vibe-file-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: #EEF2FF;
+      color: var(--blue);
+      border: 1px solid #DBEAFE;
+      font-size: 20px;
+    }
+    .vibe-file-copy { min-width: 0; }
+    .vibe-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .vibe-meta-row span,
+    .vibe-agent-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #F1F5F9;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .vibe-canvas-stage {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      background:
+        linear-gradient(90deg, rgba(148,163,184,.08) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(148,163,184,.08) 1px, transparent 1px),
+        #EEF3F8;
+      background-size: 28px 28px, 28px 28px, auto;
+    }
+    .vibe-pages {
+      width: 100%;
+      background: transparent;
+      padding: clamp(18px, 2.2vw, 34px);
+    }
+    .vibe-page {
+      border: 1px solid rgba(203,213,225,.72);
+      box-shadow: 0 30px 70px -42px rgba(15,23,42,.86);
+    }
+    .vibe-web-page {
+      width: min(100%, 860px);
+      min-height: 1120px;
+      margin: 0 auto 22px;
+      overflow: visible;
+      background: #FFFFFF;
+      color: #111827;
+    }
+    .vibe-page-ruler {
+      height: 34px;
+      padding: 0 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #EEF2F7;
+      color: #94A3B8;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .vibe-page-body {
+      min-height: 1086px;
+      padding: 54px 62px 70px;
+      font-family: "Noto Serif KR", "Nanum Myeongjo", serif;
+      font-size: 15px;
+      line-height: 1.8;
+    }
+    .vibe-paragraph {
+      min-height: 28px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      outline: none;
+      transition: background .14s ease, box-shadow .14s ease;
+    }
+    .vibe-paragraph:hover,
+    .vibe-web-table td:hover { background: rgba(219,234,254,.34); }
+    .vibe-paragraph:focus,
+    .vibe-web-table td:focus {
+      background: #EFF6FF;
+      box-shadow: 0 0 0 2px rgba(37,99,235,.16);
+    }
+    .vibe-paragraph.is-empty::before {
+      content: attr(data-placeholder);
+      color: #CBD5E1;
+    }
+    .vibe-paragraph.is-dirty,
+    .vibe-web-table td.is-dirty { box-shadow: inset 3px 0 0 #F59E0B; }
+    .vibe-paragraph.is-saving,
+    .vibe-web-table td.is-saving { opacity: .72; }
+    .vibe-paragraph.is-saved,
+    .vibe-web-table td.is-saved { box-shadow: inset 3px 0 0 #10B981; }
+    .vibe-paragraph.is-error,
+    .vibe-web-table td.is-error { box-shadow: inset 3px 0 0 #EF4444; }
+    .vibe-web-table-wrap {
+      margin: 12px 0 18px;
+      overflow-x: auto;
+    }
+    .vibe-web-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-family: "Noto Sans KR", sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .vibe-web-table td {
+      min-height: 34px;
+      padding: 8px 10px;
+      border: 1px solid #CBD5E1;
+      vertical-align: top;
+      outline: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+      transition: background .14s ease, box-shadow .14s ease;
+    }
+    .vibe-editor-loading,
+    .vibe-editor-empty,
+    .vibe-editor-error {
+      width: min(100%, 860px);
+      margin: 0 auto;
+      padding: 22px;
+      border: 1px dashed #CBD5E1;
+      border-radius: 12px;
+      background: #FFFFFF;
+      color: #64748B;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+    }
+    .vibe-assistant-head {
+      min-height: 74px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid #E3EAF3;
+      background: linear-gradient(180deg, #FFFFFF, #F8FAFC);
+      flex-shrink: 0;
+    }
+    .vibe-assistant-title {
+      margin-top: 2px;
+      font-size: 16px;
+      font-weight: 900;
+      color: #0F172A;
+    }
+    .vibe-agent-pill {
+      background: #ECFDF5;
+      color: #047857;
+      flex-shrink: 0;
+    }
+    .vibe-agent-pill i {
+      font-size: 8px;
+      color: #10B981;
+    }
+    .vibe-tabs {
+      padding: 8px;
+      background: #F8FAFC;
+    }
+    .vibe-tabs button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid transparent;
+    }
+    .vibe-tabs button.active {
+      background: #FFFFFF;
+      border-color: #E2E8F0;
+      box-shadow: 0 8px 18px -16px rgba(15,23,42,.75);
+    }
+    .vibe-messages,
+    .vibe-prompt-strip,
+    .vibe-chat-form {
+      background: #F8FAFC;
+    }
+    .vibe-prompt-strip {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px 0;
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .vibe-prompt-strip button {
+      height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid #DCE5F1;
+      background: #FFFFFF;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .vibe-prompt-strip button:hover {
+      color: #1D4ED8;
+      border-color: #BFDBFE;
+      background: #EFF6FF;
+    }
+    .vibe-chat-form {
+      grid-template-columns: minmax(0, 1fr) 44px;
+      padding: 12px;
+    }
+    .vibe-chat-form textarea {
+      min-height: 72px;
+      background: #FFFFFF;
+      border-color: #DCE5F1;
+      border-radius: 14px;
+    }
+    .vibe-chat-form button {
+      height: 44px;
+      align-self: end;
+      border-radius: 14px;
+      background: var(--blue);
+      box-shadow: 0 12px 22px -16px rgba(37,99,235,.9);
+    }
+
+    @media (max-width: 900px) {
+      .window-shell { padding: 8px; }
+      .vibe-shell {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(220px, 42%) minmax(0, 1fr);
+        overflow: hidden;
+      }
+      .vibe-preview,
+      .vibe-side {
+        min-height: 0;
+        border-radius: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="window-shell">
+    <header class="topbar">
+      <div class="traffic" aria-hidden="true">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="window-title"><i class="bi bi-file-earmark-richtext"></i><span id="windowTitle">HWP Vibe Editor</span></div>
+      <div class="top-actions">
+        <button class="mini-btn" id="btnFocusChat">Chat</button>
+      </div>
+    </header>
+    <main id="editorRoot"></main>
+  </div>
+
+  <script src="/static/js/vibe-editor.js?v=37"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const sessionId = params.get('sessionId');
+    const pageCount = Number(params.get('pageCount') || 1);
+    const fileName = params.get('fileName') || 'document.hwp';
+    document.title = `${fileName} - HWP Vibe Editor`;
+    document.getElementById('windowTitle').textContent = fileName;
+
+    const endpoints = {
+      render: '/api/v2/hwp/sessions/{sessionId}/pages/{pageIndex}',
+      edit: '/api/v2/hwp/sessions/{sessionId}/edit',
+      export: '/api/v2/hwp/sessions/{sessionId}/export',
+      import: '/api/v2/hwp/sessions/{sessionId}/import',
+      structure: '/api/v2/hwp/sessions/{sessionId}/structure',
+      document: '/api/v2/hwp/sessions/{sessionId}/document',
+      chat: '/api/v2/hwp/sessions/{sessionId}/chat',
+      pageInfo: '/api/v2/hwp/sessions/{sessionId}/page-info',
+      hitTest: '/api/v2/hwp/sessions/{sessionId}/hit-test',
+      cursorRect: '/api/v2/hwp/sessions/{sessionId}/cursor-rect',
+      selectionRects: '/api/v2/hwp/sessions/{sessionId}/selection-rects'
+    };
+
+    if (!sessionId) {
+      document.getElementById('editorRoot').innerHTML = '<div style="padding:24px">세션 정보가 없습니다.</div>';
+    } else {
+      window.vibeEditor = window.VibeEditor.mount({
+        mount: document.getElementById('editorRoot'),
+        sessionId,
+        pageCount,
+        fileName,
+        endpoints
+      });
+    }
+
+    document.getElementById('btnFocusChat').addEventListener('click', () => {
+      document.querySelector('[data-tab="chat"]')?.click();
+      document.querySelector('.vibe-chat-form textarea')?.focus();
+    });
+  </script>
+</body>
+</html>

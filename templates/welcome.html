@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOC Agent | 시작하기</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+    <style>
+        :root {
+            --bg:    #F8FAFC;
+            --card:  #FFFFFF;
+            --text:  #0F172A;
+            --muted: #64748B;
+            --faint: #94A3B8;
+            --line:  #E2E8F0;
+            --ink:   #0F172A;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { margin: 0; height: 100%; }
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: 'S-Core Dream', 'Inter', 'Noto Sans KR', sans-serif;
+            font-size: 15px; line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        button { font-family: inherit; }
+        :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+        .stage {
+            min-height: 100dvh; display: flex; flex-direction: column;
+            max-width: 680px; margin: 0 auto; padding: 28px 24px 32px;
+        }
+
+        /* 세로 중앙에 두면 첫 질문이 화면 한참 아래에서 시작한다.
+           진행 막대 바로 아래에서 시작하되 숨 쉴 틈만 둔다. */
+        #root {
+            flex: 1; display: flex; flex-direction: column;
+            justify-content: flex-start; padding-top: clamp(20px, 7vh, 76px);
+        }
+
+        /* ---------- 진행: 4개의 축이 채워진다 ---------- */
+        .rail { display: flex; gap: 7px; flex: 0 0 auto; }
+        .rail span {
+            height: 3px; flex: 1; border-radius: 2px; background: var(--line);
+            transition: background-color 0.45s ease;
+        }
+        .rail span.on { background: var(--ink); }
+
+        /* ---------- 지나간 대화: 작고 흐리게 위로 ---------- */
+        .past { display: flex; flex-direction: column; gap: 16px; margin: 32px 0 0; }
+        .past-item { animation: settle 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+        .past-q {
+            font-size: 0.82rem; color: var(--faint); font-weight: 500;
+            margin-bottom: 3px; word-break: keep-all;
+        }
+        .past-a {
+            font-size: 0.95rem; color: var(--muted); word-break: keep-all;
+            padding-left: 12px; border-left: 2px solid var(--line);
+        }
+        @keyframes settle {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: none; }
+        }
+
+        /* ---------- 현재 질문: 이 화면의 주인공 ---------- */
+        .now { margin: 30px 0 22px; }
+        .kicker {
+            font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+            text-transform: uppercase; color: var(--faint); margin-bottom: 12px;
+            animation: rise 0.4s ease both;
+        }
+        .ask {
+            font-family: 'Noto Serif KR', serif;
+            font-size: 1.62rem; font-weight: 700; line-height: 1.48;
+            letter-spacing: -0.015em; margin: 0; word-break: keep-all;
+            min-height: 1.48em;
+        }
+        .hint {
+            margin: 12px 0 0; font-size: 0.88rem; color: var(--muted);
+            word-break: keep-all; animation: rise 0.4s 0.12s ease both;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: none; }
+        }
+
+        /* 커서: 타이핑 중에만 */
+        .caret::after {
+            content: '';
+            display: inline-block; width: 3px; height: 1.05em;
+            background: var(--ink); vertical-align: -0.12em; margin-left: 3px;
+            animation: blink 1.05s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* ---------- 입력 ---------- */
+        .reply { margin-top: 6px; animation: rise 0.4s 0.2s ease both; }
+        .reply textarea {
+            width: 100%; font-family: inherit; font-size: 1rem; line-height: 1.65;
+            padding: 15px 17px; border: 1px solid var(--line); border-radius: 15px;
+            background: var(--card); color: var(--text); resize: none;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .reply textarea:focus {
+            outline: none; border-color: var(--ink);
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+        }
+        .reply textarea::placeholder { color: #CBD5E1; }
+        .reply textarea:disabled { background: #F1F5F9; }
+
+        .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+        .meta { font-size: 0.8rem; color: var(--faint); }
+        .meta.error { color: #B45309; font-weight: 500; }
+
+        .btn {
+            display: inline-block;
+            font-size: 0.9rem; font-weight: 600; border-radius: 12px; padding: 11px 20px;
+            cursor: pointer; border: 1px solid var(--ink); background: var(--ink); color: #fff;
+            text-decoration: none; /* 링크로도 쓰인다 */
+            transition: box-shadow 0.18s ease, opacity 0.18s ease;
+        }
+        .btn:hover:not(:disabled) { box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn.ghost { background: transparent; color: var(--muted); border-color: transparent; padding: 11px 12px; }
+        .btn.ghost:hover:not(:disabled) { color: var(--text); box-shadow: none; }
+
+        /* ---------- 마무리: 4개의 답이 하나로 모인다 ---------- */
+        .done { animation: rise 0.5s ease both; }
+        .done h1 {
+            font-family: 'Noto Serif KR', serif; font-size: 1.62rem; font-weight: 700;
+            margin: 0 0 8px; letter-spacing: -0.015em; word-break: keep-all;
+        }
+        .done .lead { margin: 0 0 24px; color: var(--muted); word-break: keep-all; }
+
+        .card {
+            background: var(--card); border: 1px solid var(--line);
+            border-radius: 18px; padding: 22px; margin-bottom: 20px;
+        }
+        .field { margin-bottom: 18px; animation: assemble 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+        .field:last-child { margin-bottom: 0; }
+        .field .lbl {
+            font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+            text-transform: uppercase; color: var(--faint); margin-bottom: 7px;
+        }
+        .field .val { font-size: 1rem; word-break: keep-all; }
+        @keyframes assemble {
+            from { opacity: 0; transform: translateY(12px) scale(0.985); }
+            to   { opacity: 1; transform: none; }
+        }
+
+        .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+        .chip {
+            font-size: 0.86rem; padding: 6px 12px; border-radius: 9px;
+            background: #F1F5F9; border: 1px solid var(--line); color: #334155;
+        }
+        .chip.empty { color: var(--faint); border-style: dashed; background: transparent; }
+
+        .thinking { display: inline-flex; gap: 5px; align-items: center; color: var(--faint); font-size: 0.88rem; }
+        .thinking i {
+            width: 5px; height: 5px; border-radius: 50%; background: currentColor;
+            animation: pulse 1.25s ease-in-out infinite;
+        }
+        .thinking i:nth-child(2) { animation-delay: 0.16s; }
+        .thinking i:nth-child(3) { animation-delay: 0.32s; }
+        @keyframes pulse { 0%, 60%, 100% { opacity: 0.28; } 30% { opacity: 1; } }
+
+        @media (max-width: 520px) {
+            .stage { padding: 20px 18px 26px; }
+            .ask { font-size: 1.34rem; }
+            .done h1 { font-size: 1.34rem; }
+            /* 좁은 화면에선 키보드 안내가 무의미하므로 숨긴다. 단, 오류는 계속 보여야 한다. */
+            .row { justify-content: flex-end; }
+            .meta:not(.error) { display: none; }
+            .row > div { display: flex; gap: 6px; align-items: center; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="/static/css/score-dream.css">
+</head>
+<body>
+    <main class="stage">
+        <div class="rail" id="rail" aria-hidden="true"></div>
+        <div id="root"></div>
+    </main>
+
+    <script src="/static/js/welcome.js?v=3"></script>
+</body>
+</html>

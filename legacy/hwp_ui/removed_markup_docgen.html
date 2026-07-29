@@ -1,0 +1,76 @@
+<!-- 2026-07-29 제거: 레거시 문서 편집 UI(인라인 편집 말풍선·편집 커버·캔버스 오버레이)
+     원래 위치: templates/index.html -->
+    <div id="inlineEditBubble" class="inline-edit-bubble hidden">
+        <div class="inline-edit-row">
+            <input type="text" id="inlineEditInput" class="inline-edit-input" placeholder="어떻게 수정할까요?">
+            <button type="button" id="inlineEditSubmit" class="inline-edit-submit">적용</button>
+        </div>
+    </div>
+    <div id="editCover" class="edit-cover hidden"></div>
+    <div id="canvasOverlay" class="canvas-overlay hidden">
+        <div class="canvas-panel">
+            <div id="canvasResizeHandle" class="canvas-resize-handle" role="separator" aria-orientation="vertical" aria-label="Canvas 폭 조절" tabindex="0"></div>
+            <div class="canvas-header">
+                <div class="canvas-title">Canvas</div>
+                <button type="button" id="btnCanvasClose" class="canvas-close" aria-label="닫기">×</button>
+            </div>
+            <div id="canvasBody" class="canvas-body"></div>
+        </div>
+    </div>
+
+
+
+<!-- 템플릿 선택 모달 · 다운로드(HWP/PDF/HWPX XML) 모달 -->
+    <div id="modalTemplate" class="modal-wrap">
+        <div class="modal-box template-modal">
+            <button class="btn-close-icon" id="closeTemplateModal"><i class="bi bi-x-lg"></i></button>
+            <div class="template-modal-header">
+                <h3>양식 선택</h3>
+                <p>업로드가 없다면 미리 준비된 양식으로 바로 시작하세요.</p>
+                <div class="template-search">
+                    <i class="bi bi-search"></i>
+                    <input type="text" id="templateSearch" placeholder="양식 검색">
+                </div>
+            </div>
+            <div id="templateList" class="template-grid"></div>
+            <div id="templateEmpty" class="template-empty hidden">사용 가능한 템플릿이 없습니다.</div>
+        </div>
+    </div>
+
+    <div id="modalDownload" class="modal-wrap">
+        <div class="modal-box download-modal">
+            <button class="btn-close-icon" id="closeDownloadModal"><i class="bi bi-x-lg"></i></button>
+            <div class="download-modal-header">
+                <h3>다운로드 옵션</h3>
+                <p id="downloadHint">한글에서 열려면 HWP를 선택하세요.</p>
+            </div>
+            <div class="download-options">
+                <label class="download-option">
+                    <input type="radio" name="downloadFormat" value="hwp" checked>
+                    <div class="download-option-body">
+                        <div class="download-option-title">HWP</div>
+                        <div class="download-option-desc">한글에서 바로 열 수 있는 HWP로 저장합니다.</div>
+                    </div>
+                </label>
+                <label class="download-option">
+                    <input type="radio" name="downloadFormat" value="pdf">
+                    <div class="download-option-body">
+                        <div class="download-option-title">PDF</div>
+                        <div class="download-option-desc">HTML 문서를 PDF로 변환합니다.</div>
+                    </div>
+                </label>
+                <label class="download-option">
+                    <input type="radio" name="downloadFormat" value="hwpx_xml">
+                    <div class="download-option-body">
+                        <div class="download-option-title">HWPX XML (텍스트)</div>
+                        <div class="download-option-desc">HTML을 XML 태그로 변환한 텍스트 파일입니다.</div>
+                    </div>
+                </label>
+            </div>
+            <div class="download-actions">
+                <button class="btn-secondary" id="btnDownloadCancel">취소</button>
+                <button class="btn-primary-3d" id="btnDownloadConfirm">다운로드</button>
+            </div>
+        </div>
+    </div>
+

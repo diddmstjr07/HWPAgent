@@ -111,9 +111,20 @@ document.addEventListener('DOMContentLoaded', () => {
         riroId: document.getElementById('riroId'),
         riroPw: document.getElementById('riroPw'),
         btnLoginAction: document.getElementById('btnLoginAction'),
+        riroSchoolLabel: document.getElementById('riroSchoolLabel'),
+        riroStatus: document.getElementById('riroStatus'),
+        riroFindId: document.getElementById('riroFindId'),
+        riroFindPw: document.getElementById('riroFindPw'),
+        riroTabStudent: document.getElementById('riroTabStudent'),
+        riroTabParent: document.getElementById('riroTabParent'),
+        riroAuthNotice: document.getElementById('riroAuthNotice'),
+        riroTab1Img: document.getElementById('riroTab1Img'),
+        riroTab2Img: document.getElementById('riroTab2Img'),
+        riroNoneSignup: document.getElementById('riroNoneSignup'),
 
         // Auth Inputs
         authName: document.getElementById('authName'),
+        authStudentNumber: document.getElementById('authStudentNumber'),
         authEmail: document.getElementById('authEmail'),
         authPassword: document.getElementById('authPassword'),
         btnAuthLogin: document.getElementById('btnAuthLogin'),
@@ -4167,12 +4178,14 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSendButtonState(loading);
     };
 
+    // 알림은 화면 상단 중앙 한 곳에서만 뜬다(.app-toast). 저장·복사·오류가 모두 같은 자리다.
+    let toastTimer = null;
     const showToast = (msg, type='info') => {
         if (!els.toast) return;
         els.toast.textContent = msg;
-        els.toast.className = 'toast show ' + type; // CSS 가정
-        els.toast.style.opacity = '1';
-        setTimeout(() => { els.toast.style.opacity = '0'; }, 3000);
+        els.toast.className = `app-toast show${type && type !== 'info' ? ` ${type}` : ''}`;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { els.toast.classList.remove('show'); }, 3000);
     };
 
     // ============================================================
@@ -4240,7 +4253,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (els.profileLogout) {
             els.profileLogout.style.display = state.user ? 'flex' : 'none';
         }
-
         if (els.btnAuthToggle) {
             els.btnAuthToggle.innerHTML = state.user
                 ? '<i class="bi bi-box-arrow-right"></i>'
@@ -4276,10 +4288,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const setAuthStatus = (msg, type='muted') => {
         if (!els.authStatus) return;
+        // 카드가 흰 배경이라 밝은 계열 대신 /login과 같은 대비의 색을 쓴다
         const colors = {
-            error: '#f87171',
+            error: '#EF4444',
             success: '#10B981',
-            muted: '#94A3B8'
+            muted: '#64748B'
         };
         els.authStatus.textContent = msg;
         els.authStatus.style.color = colors[type] || colors.muted;
@@ -4366,6 +4379,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const readAuthForm = () => ({
         name: els.authName?.value.trim() || '',
+        student_number: els.authStudentNumber?.value.trim() || '',
         email: els.authEmail?.value.trim(),
         password: els.authPassword?.value || ''
     });
@@ -4401,9 +4415,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handleAuthRegister = async () => {
-        const { name, email, password } = readAuthForm();
-        if (!email || !password) {
-            setAuthStatus('이메일과 비밀번호를 입력하세요.', 'error');
+        const { name, student_number, email, password } = readAuthForm();
+        if (!name || !email || !password || !/^[1-3][1-9](?:0[1-9]|[1-9]\d)$/.test(student_number)) {
+            setAuthStatus('이름, 학번 4자리, 이메일과 비밀번호를 입력하세요. 예: 2412', 'error');
             return;
         }
         setAuthLoading(true);
@@ -4412,7 +4426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password })
+                body: JSON.stringify({ name, student_number, email, password })
             });
             const data = await res.json();
             if (!data.success) throw new Error(data.error || '회원가입 실패');
@@ -4437,6 +4451,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('Logout failed', e);
         }
         state.user = null;
+        clearRiroCache();
         renderUserProfile();
         showToast('로그아웃되었습니다.', 'success');
     };
@@ -4530,6 +4545,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3.5. RiroSchool Logic
     // ============================================================
 
+    const RIRO_EVENTS_STORAGE_KEY = 'riro_events';
+    const RIRO_LOGIN_STORAGE_KEY = 'riro_logged_in';
+    const RIRO_META_STORAGE_KEY = 'riro_events_meta';
+    const getCurrentAcademicYear = () => {
+        const now = new Date();
+        return now.getMonth() >= 2 ? now.getFullYear() : now.getFullYear() - 1;
+    };
+    const clearRiroCache = () => {
+        localStorage.removeItem(RIRO_EVENTS_STORAGE_KEY);
+        localStorage.removeItem(RIRO_LOGIN_STORAGE_KEY);
+        localStorage.removeItem(RIRO_META_STORAGE_KEY);
+        state.riroEvents = [];
+        state.riroLoggedIn = false;
+    };
+
     const normalizeRiroEvents = (raw) => {
         if (!raw) return [];
         let events = [];
@@ -4558,22 +4588,39 @@ document.addEventListener('DOMContentLoaded', () => {
         return events;
     };
 
-    const saveRiroEvents = (events, forceLoggedIn = false) => {
+    const saveRiroEvents = (events, forceLoggedIn = false, metadata = null) => {
         state.riroEvents = events;
         state.riroLoggedIn = forceLoggedIn || events.length > 0 || state.riroLoggedIn;
-        localStorage.setItem('riro_events', JSON.stringify(events));
-        localStorage.setItem('riro_logged_in', state.riroLoggedIn ? 'true' : 'false');
+        localStorage.setItem(RIRO_EVENTS_STORAGE_KEY, JSON.stringify(events));
+        localStorage.setItem(RIRO_LOGIN_STORAGE_KEY, state.riroLoggedIn ? 'true' : 'false');
+        if (metadata) {
+            localStorage.setItem(RIRO_META_STORAGE_KEY, JSON.stringify(metadata));
+        }
     };
 
     const loadRiroFromStorage = () => {
         try {
-            const stored = localStorage.getItem('riro_events');
+            const stored = localStorage.getItem(RIRO_EVENTS_STORAGE_KEY);
+            const storedMeta = localStorage.getItem(RIRO_META_STORAGE_KEY);
+            const metadata = storedMeta ? JSON.parse(storedMeta) : null;
+            const isCurrentAcademicYear = metadata
+                && Number(metadata.academic_year) === getCurrentAcademicYear();
+            const isCurrentUser = metadata
+                && metadata.user_id
+                && state.user
+                && metadata.user_id === state.user.id;
+
+            if (!isCurrentAcademicYear || !isCurrentUser) {
+                clearRiroCache();
+                return;
+            }
+
             const parsed = stored ? JSON.parse(stored) : [];
-            const wasLogged = localStorage.getItem('riro_logged_in') === 'true';
-            saveRiroEvents(normalizeRiroEvents(parsed), wasLogged);
+            const wasLogged = localStorage.getItem(RIRO_LOGIN_STORAGE_KEY) === 'true';
+            saveRiroEvents(normalizeRiroEvents(parsed), wasLogged, metadata);
         } catch (e) {
             console.warn('Failed to load Riro events from storage', e);
-            saveRiroEvents([]);
+            clearRiroCache();
         }
     };
 
@@ -4591,93 +4638,231 @@ document.addEventListener('DOMContentLoaded', () => {
         ].join('\n');
     };
 
+    let calendarInstance = null;
+    let calendarRenderToken = 0;
+
     const renderCalendar = () => {
         const calendarEl = document.getElementById('calendarView');
         if (!calendarEl || typeof FullCalendar === 'undefined') return;
 
-        const cached = localStorage.getItem('riro_events');
+        const countEl = document.getElementById('calendarEventCount');
+        const renderToken = ++calendarRenderToken;
+
+        if (calendarInstance) {
+            calendarInstance.destroy();
+            calendarInstance = null;
+        }
+
+        const cached = localStorage.getItem(RIRO_EVENTS_STORAGE_KEY);
         const fallback = cached ? normalizeRiroEvents(JSON.parse(cached)) : [];
         const events = (state.riroEvents && state.riroEvents.length > 0)
             ? state.riroEvents
             : fallback;
 
         if (!events.length) {
-            calendarEl.innerHTML = '<div style="padding:12px; color:#64748B;">리로스쿨에서 불러온 일정이 없습니다.</div>';
+            if (countEl) countEl.textContent = '0개 일정';
+            calendarEl.removeAttribute('aria-busy');
+            calendarEl.innerHTML = `
+                <div class="calendar-state calendar-empty" role="status">
+                    <div class="calendar-state-content">
+                        <span class="calendar-state-icon" aria-hidden="true"><i class="bi bi-calendar2"></i></span>
+                        <h4>아직 등록된 일정이 없어요</h4>
+                        <p>리로스쿨을 연동하면 수행평가와 학교 공지가 여기에 자동으로 정리됩니다.</p>
+                        <button class="calendar-empty-action" id="calendarConnectRiro" type="button">
+                            <i class="bi bi-arrow-repeat" aria-hidden="true"></i>리로스쿨 연동
+                        </button>
+                    </div>
+                </div>`;
+            document.getElementById('calendarConnectRiro')?.addEventListener('click', () => {
+                if (els.modalCalendar) {
+                    els.modalCalendar.classList.remove('show');
+                    els.modalCalendar.style.display = 'none';
+                }
+                document.getElementById('btnOpenLogin')?.click();
+            });
             return;
         }
 
-        calendarEl.innerHTML = '';
+        if (countEl) countEl.textContent = `${events.length}개 일정`;
+        calendarEl.setAttribute('aria-busy', 'true');
+        calendarEl.innerHTML = '<div class="calendar-skeleton" role="status" aria-label="캘린더를 불러오는 중"></div>';
 
-        // FullCalendar 포맷으로 변환
-        const fcEvents = events.map(evt => {
-            let color = '#3788d8'; // 기본 파란색
-            if (evt.type === 'assignment') color = '#e11d48'; // 과제: 빨간색
-            if (evt.type === 'notice') color = '#059669'; // 공지: 초록색
-            
-            return {
-                title: `[${evt.type === 'assignment' ? '과제' : '공지'}] ${evt.title}`,
-                start: evt.date, // YYYY-MM-DD
-                backgroundColor: color,
-                borderColor: color,
-                extendedProps: {
-                    original: evt
-                }
-            };
-        });
+        requestAnimationFrame(() => {
+            if (renderToken !== calendarRenderToken) return;
 
-        const calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'dayGridMonth',
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,listMonth'
-            },
-            events: fcEvents,
-            height: 'auto',
-            locale: 'ko',
-            eventClick: function(info) {
-                const props = info.event.extendedProps.original;
-                const guideText = props.guide || props.guide_text || props.description || '';
-                const chatNote = `📌 **${props.title}** (${props.date || '날짜 미정'})\n${guideText || '제출 안내가 없습니다.'}`;
-                state.chatHistory.push({ role: 'ai', text: chatNote });
-                state.docMode = false;
-                updateUI();
-                showToast('채팅에 수행평가 정보를 추가했어요.', 'success');
-                if (els.modalCalendar) {
-                    els.modalCalendar.classList.remove('show');
-                    setTimeout(() => { els.modalCalendar.style.display = 'none'; }, 200);
-                }
+            try {
+                calendarEl.innerHTML = '';
+
+                const fcEvents = events.map(evt => {
+                    const eventType = evt.type === 'assignment'
+                        ? 'assignment'
+                        : evt.type === 'notice' ? 'notice' : 'default';
+
+                    return {
+                        title: evt.title,
+                        start: evt.date,
+                        allDay: true,
+                        backgroundColor: 'transparent',
+                        borderColor: 'transparent',
+                        textColor: 'inherit',
+                        classNames: [`calendar-event--${eventType}`],
+                        extendedProps: {
+                            original: evt,
+                            categoryLabel: eventType === 'assignment' ? '수행평가' : eventType === 'notice' ? '학교 공지' : '일정'
+                        }
+                    };
+                });
+
+                calendarInstance = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    headerToolbar: {
+                        left: 'title',
+                        center: '',
+                        right: 'prev,next today dayGridMonth,listMonth'
+                    },
+                    buttonText: {
+                        today: '오늘',
+                        month: '월',
+                        list: '목록'
+                    },
+                    views: {
+                        dayGridMonth: { dayMaxEvents: true },
+                        listMonth: { noEventsContent: '이 달에는 등록된 일정이 없습니다.' }
+                    },
+                    events: fcEvents,
+                    height: '100%',
+                    fixedWeekCount: false,
+                    dayCellContent: (info) => String(info.date.getDate()),
+                    moreLinkContent: (info) => `+${info.num}`,
+                    locale: 'ko',
+                    eventDidMount: (info) => {
+                        const props = info.event.extendedProps;
+                        const label = `${props.categoryLabel}: ${info.event.title}`;
+                        info.el.setAttribute('aria-label', label);
+                        info.el.setAttribute('title', label);
+                    }
+                });
+                calendarInstance.render();
+            } catch (error) {
+                console.error('Failed to render calendar', error);
+                calendarEl.innerHTML = `
+                    <div class="calendar-state calendar-error" role="alert">
+                        <div class="calendar-state-content">
+                            <span class="calendar-state-icon" aria-hidden="true"><i class="bi bi-exclamation-circle"></i></span>
+                            <h4>캘린더를 표시하지 못했어요</h4>
+                            <p>잠시 후 다시 시도해 주세요.</p>
+                            <button class="calendar-empty-action" id="calendarRetry" type="button">다시 시도</button>
+                        </div>
+                    </div>`;
+                document.getElementById('calendarRetry')?.addEventListener('click', renderCalendar);
+            } finally {
+                calendarEl.removeAttribute('aria-busy');
             }
         });
-        calendar.render();
+    };
+
+    // 리로스쿨은 학교마다 하위 도메인이 다르다(okgwa.riroschool.kr).
+    // 서버는 하위 도메인 조각만 받으므로 주소를 통째로 붙여넣어도 조각만 남긴다.
+    const normalizeRiroSchool = (raw) => (raw || '')
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/\.riroschool\.kr.*$/, '')
+        .replace(/\/.*$/, '')
+        .replace(/[^a-z0-9-]/g, '');
+
+    const setRiroStatus = (msg = '', type = 'error') => {
+        if (!els.riroStatus) return;
+        els.riroStatus.className = type === 'success' ? 'signin_error success' : 'signin_error';
+        els.riroStatus.textContent = '';
+        if (!msg) return;
+        // 메시지에 서버 문구가 섞이므로 텍스트 노드로만 붙인다.
+        const icon = document.createElement('i');
+        icon.className = type === 'success' ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-circle-fill';
+        icon.setAttribute('aria-hidden', 'true');
+        els.riroStatus.append(icon, msg);
+    };
+
+    // 인사말의 학교 이름은 학교 주소 입력에서 바로 나온다.
+    // 원본은 학교별 도메인이라 학교명이 하드코딩돼 있지만 우리는 입력을 따라간다.
+    const syncRiroSchool = () => {
+        const slug = normalizeRiroSchool(els.riroSchool?.value);
+        if (els.riroSchoolLabel) els.riroSchoolLabel.textContent = slug || '우리 학교';
+        return slug;
+    };
+
+    // 서버는 앱 계정 세션이 없으면 리로 로그인을 401로 막는다.
+    // 폼을 열 때 미리 알려주지 않으면 아이디·비번이 맞는데 안 된다고 느끼게 된다.
+    const syncRiroAuthNotice = (force = false) => {
+        const needsLogin = force || !state.user;
+        els.riroAuthNotice?.classList.toggle('show', needsLogin);
+        if (els.btnLoginAction) els.btnLoginAction.disabled = needsLogin;
+        const link = document.getElementById('riroAuthNoticeLink');
+        if (link) link.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+        return needsLogin;
+    };
+
+    const openRiroModal = () => {
+        if (!els.modalLogin) return;
+        setRiroStatus('');
+        syncRiroAuthNotice();
+        els.modalLogin.style.display = 'flex';
+        setTimeout(() => els.modalLogin.classList.add('show'), 10);
     };
 
     const handleRiroLogin = async () => {
-        const school = els.riroSchool?.value.trim();
-        const username = els.riroId?.value.trim();
-        const password = els.riroPw?.value.trim();
-        
-        if (!school || !username || !password) {
-            showToast('학교, 아이디, 비밀번호를 모두 입력해주세요.', 'error');
+        if (syncRiroAuthNotice()) {
+            setRiroStatus('DOC Agent 계정으로 먼저 로그인하세요.');
             return;
         }
-        
+
+        const rawSchool = (els.riroSchool?.value || '').trim();
+        const school = syncRiroSchool();
+        const username = els.riroId?.value.trim();
+        const password = els.riroPw?.value.trim();
+
+        // 리로 로그인 폼처럼 어느 칸이 비었는지 짚어주고 그 칸으로 커서를 보낸다.
+        if (!school) {
+            // 학교 이름을 한글로 적으면 하위 도메인이 안 나온다. 그 경우를 따로 짚어준다.
+            setRiroStatus(rawSchool
+                ? '학교 이름 대신 리로스쿨 주소를 영문으로 입력하세요. 예: okgwa'
+                : '학교 주소를 입력하세요. 예: okgwa');
+            els.riroSchool?.focus();
+            return;
+        }
+        if (!username) {
+            setRiroStatus('아이디를 다시 확인하세요.');
+            els.riroId?.focus();
+            return;
+        }
+        if (!password) {
+            setRiroStatus('비밀번호를 다시 확인하세요.');
+            els.riroPw?.focus();
+            return;
+        }
+
+        setRiroStatus('');
         const btn = els.btnLoginAction;
         const originalText = btn.textContent;
         btn.textContent = '로그인 중...';
         btn.disabled = true;
-        
+
         try {
             const response = await fetch('/api/riroschool/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ school, username, password, grade: '1', year: '2025' })
+                body: JSON.stringify({ school, username, password })
             });
             const data = await response.json();
             
             if (data.success) {
                 const normalizedEvents = normalizeRiroEvents(data.events || data.events_by_date);
-                saveRiroEvents(normalizedEvents, true);
+                saveRiroEvents(normalizedEvents, true, {
+                    academic_year: Number(data.academic_year || data.year),
+                    grade: Number(data.grade),
+                    user_id: state.user?.id || null,
+                    fetched_at: new Date().toISOString()
+                });
                 showToast('리로스쿨 연동 성공!', 'success');
                 
                 if (normalizedEvents.length) {
@@ -4706,14 +4891,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Close login modal
                 if (els.modalLogin) {
+                    setRiroStatus('');
+                    if (els.riroPw) els.riroPw.value = '';
                     els.modalLogin.classList.remove('show');
                     setTimeout(() => els.modalLogin.style.display='none', 300);
                 }
             } else {
+                if (data.code === 'STUDENT_NUMBER_REQUIRED') {
+                    window.location.href = data.setup_url || '/student-number/update';
+                    return;
+                }
+                // 세션이 끊겨 401이면 리로 계정 문제가 아니므로 안내 배너를 띄운다.
+                if (response.status === 401) {
+                    state.user = null;
+                    syncRiroAuthNotice(true);
+                    renderUserProfile();
+                }
                 throw new Error(data.error || '로그인 실패');
             }
         } catch (e) {
-            showToast(e.message, 'error');
+            // 리로 로그인 폼처럼 실패하면 비밀번호만 비우고 아이디는 남겨둔다.
+            setRiroStatus(e.message);
+            if (els.riroPw) els.riroPw.value = '';
+            els.riroPw?.focus();
         } finally {
             btn.textContent = originalText;
             btn.disabled = false;
@@ -4730,6 +4930,14 @@ document.addEventListener('DOMContentLoaded', () => {
         state.currentSessionId = null;
         state.chatHistory = [];
         state.docMode = false;
+        // 설계·실험 채팅(guide.js)이 이미 화면을 그렸으면 건드리지 않는다.
+        // 이 파일(223KB)은 파싱이 늦어서 guide.js보다 나중에 초기화되는데,
+        // 여기서 스트림을 비우면 /welcome을 마치고 온 학생이 빈 채팅을 보게 된다
+        // (실제로 그랬다). guide.js의 메시지는 .message-row로 구분된다.
+        if (els.chatStream && els.chatStream.querySelector('.message-row')) {
+            loadChatSessions();
+            return;
+        }
         clearChatStream();
         updateUI();
         loadChatSessions();
@@ -4868,7 +5076,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Refresh list to show active state
                 loadChatSessions();
-                
+                // 사이드바 HISTORY(history.js)도 지금 열린 대화를 따라와야 한다.
+                window.dispatchEvent(new CustomEvent('history:refresh'));
+
                 // Mobile: Close sidebar
                 toggleSidebar(false);
             }
@@ -4923,7 +5133,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Failed to save chat session', e);
         }
+        // 새 대화가 생기거나 제목이 바뀌면 사이드바 HISTORY도 다시 그린다.
+        window.dispatchEvent(new CustomEvent('history:refresh'));
     };
+
+    // 폴더가 없는 일반 대화는 이쪽이 연다. HISTORY(history.js)에서 눌렀을 때 쓴다.
+    window.loadChatSession = loadChatSession;
 
     // ============================================================
     // 4. 이벤트 리스너 바인딩
@@ -4932,7 +5147,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 입력창 엔터 & 클릭
     if (els.userRequest) {
         els.userRequest.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            // 한글 조합 중의 Enter는 글자를 확정하는 키다. 전송으로 받으면
+            // 마지막 글자를 확정하는 순간 빈 요청이 한 번 더 나간다.
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                 e.preventDefault();
                 handleGenerate();
             }
@@ -4946,6 +5163,60 @@ document.addEventListener('DOMContentLoaded', () => {
     if (els.btnSend) els.btnSend.addEventListener('click', handleGenerate);
     updateSendButtonState();
     if (els.btnLoginAction) els.btnLoginAction.addEventListener('click', handleRiroLogin);
+
+    // 리로 로그인 폼과 같은 입력 동작: 앞뒤 공백은 받지 않고, 엔터로 다음 칸까지 이어간다.
+    [els.riroSchool, els.riroId, els.riroPw].forEach((input, idx, all) => {
+        if (!input) return;
+        input.addEventListener('input', () => {
+            const trimmed = input.value.replace(/^\s+|\s+$/g, '');
+            if (trimmed !== input.value) input.value = trimmed;
+            setRiroStatus('');
+            if (input === els.riroSchool) syncRiroSchool();
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const next = all.slice(idx + 1).find(Boolean);
+            if (next && !next.value) next.focus();
+            else handleRiroLogin();
+        });
+    });
+    // 학교 주소를 붙여넣은 뒤 칸을 벗어나면 하위 도메인 조각만 남긴다.
+    if (els.riroSchool) {
+        els.riroSchool.addEventListener('blur', () => {
+            const slug = syncRiroSchool();
+            if (slug) els.riroSchool.value = slug;
+        });
+    }
+    // 아이디/비밀번호 찾기 — 원본과 같은 user.php?action=find_* 로 이동하되,
+    // 학교별 도메인이 필요하므로 학교 주소가 없으면 그 칸으로 보낸다.
+    [[els.riroFindId, 'find_id'], [els.riroFindPw, 'find_pw']].forEach(([btn, action]) => {
+        btn?.addEventListener('click', () => {
+            const slug = syncRiroSchool();
+            if (!slug) {
+                setRiroStatus('학교 주소를 먼저 입력하세요.');
+                els.riroSchool?.focus();
+                return;
+            }
+            window.open(`https://${slug}.riroschool.kr/user.php?action=${action}`, '_blank', 'noopener');
+        });
+    });
+
+    // 학생·교사 / 학부모 탭 — 원본 User1()/User2()와 같은 전환.
+    // (연동 크롤러는 학생 로그인 흐름만 타므로 학부모 탭은 원본과 같은 안내만 띄운다)
+    const RIRO_CHECK_ON = '/static/images/riro/check_regular.svg';
+    const RIRO_CHECK_OFF = '/static/images/riro/non_check_regular.svg';
+    const setRiroUserType = (isParent) => {
+        if (els.riroTab1Img) els.riroTab1Img.src = isParent ? RIRO_CHECK_OFF : RIRO_CHECK_ON;
+        if (els.riroTab2Img) els.riroTab2Img.src = isParent ? RIRO_CHECK_ON : RIRO_CHECK_OFF;
+        els.riroTabStudent?.classList.toggle('on', !isParent);
+        els.riroTabParent?.classList.toggle('on', isParent);
+        if (els.riroId) els.riroId.placeholder = isParent ? '통합 아이디(이메일)' : '학교 아이디 또는 통합 아이디(이메일)';
+        els.riroNoneSignup?.classList.toggle('show', isParent);
+    };
+    els.riroTabStudent?.addEventListener('click', () => setRiroUserType(false));
+    els.riroTabParent?.addEventListener('click', () => setRiroUserType(true));
+    syncRiroSchool();
     if (els.btnAuthLogin) els.btnAuthLogin.addEventListener('click', handleAuthLogin);
     if (els.btnAuthRegister) els.btnAuthRegister.addEventListener('click', handleAuthRegister);
     if (els.btnOpenAuth) {
@@ -5270,9 +5541,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         renderCalendar();
                     }, 10);
                 }
-            } else if (els.modalLogin) {
-                els.modalLogin.style.display = 'flex';
-                setTimeout(() => els.modalLogin.classList.add('show'), 10);
+            } else {
+                openRiroModal();
             }
             els.attachMenu?.classList.remove('open');
         });
@@ -5318,7 +5588,12 @@ document.addEventListener('DOMContentLoaded', () => {
             close.addEventListener('click', () => { modal.classList.remove('show'); setTimeout(()=>modal.style.display='none', 300); });
         }
     };
-    setupModal('btnOpenLogin', 'modalLogin', 'closeLogin');
+    // 리로 모달은 열 때 앱 계정 상태를 먼저 확인해야 해서 전용 핸들러를 쓴다.
+    document.getElementById('btnOpenLogin')?.addEventListener('click', openRiroModal);
+    document.getElementById('closeLogin')?.addEventListener('click', () => {
+        els.modalLogin?.classList.remove('show');
+        setTimeout(() => { if (els.modalLogin) els.modalLogin.style.display = 'none'; }, 300);
+    });
     
     // 캘린더 모달은 별도 처리 (렌더링 필요)
     const btnCalendar = document.getElementById('btnOpenCalendar');
@@ -5350,8 +5625,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderUserProfile();
     updateAuthLinks();
     fetchAuthMe().then(() => {
+        loadRiroFromStorage();
         restoreSessionFromLocalStorage();
     });
-    loadRiroFromStorage();
     // updateUI(); // Initial UI update is now handled by restoreSessionFromLocalStorage or its fallback
 });

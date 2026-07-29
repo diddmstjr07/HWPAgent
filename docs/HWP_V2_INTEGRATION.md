@@ -37,7 +37,7 @@
 **services/hwp-node/.env** (필요하면 생성):
 ```bash
 NODE_ENV=development
-PORT=3000
+PORT=3100
 API_KEY=dev-api-key
 ```
 
@@ -46,7 +46,7 @@ API_KEY=dev-api-key
 **프로젝트 루트 .env**:
 ```bash
 # HWP Node 서버 설정
-HWP_NODE_URL=http://localhost:3000
+HWP_NODE_URL=http://localhost:3100
 HWP_NODE_API_KEY=dev-api-key
 
 # Gemini API (문서 생성용)
@@ -88,7 +88,7 @@ http://localhost:8000
 ### 1. Node 서버 상태 확인
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3100/health
 # 응답: {"ok": true, "service": "hwp-node"}
 ```
 
@@ -207,7 +207,7 @@ async function downloadHWP(sessionId) {
 
 1. Node 서버가 실행 중인지 확인:
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3100/health
 ```
 
 2. 방화벽 확인 (포트 3000 허용)

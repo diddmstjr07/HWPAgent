@@ -1,0 +1,66 @@
+/* S-Core Dream 전역 적용 (본문/일반 폰트에만).
+   세리프(Noto Serif KR)와 monospace는 별칭 대상이 아니므로 원래 폰트를 유지한다.
+   되돌리려면 각 템플릿의 이 파일 <link> 한 줄만 제거하면 된다. */
+@font-face{font-family:'S-Core Dream';font-style:normal;font-weight:300;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');}
+@font-face{font-family:'S-Core Dream';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');}
+@font-face{font-family:'S-Core Dream';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');}
+@font-face{font-family:'S-Core Dream';font-style:normal;font-weight:600;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');}
+@font-face{font-family:'S-Core Dream';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');}
+@font-face{font-family:'S-Core Dream';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');}
+@font-face{font-family:'S-Core Dream';font-style:normal;font-weight:900;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:300;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:900;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:300;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:600;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:900;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:300;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:600;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:900;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');}
+@font-face{font-family:'Google Sans';font-style:normal;font-weight:300;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');}
+@font-face{font-family:'Google Sans';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');}
+@font-face{font-family:'Google Sans';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');}
+@font-face{font-family:'Google Sans';font-style:normal;font-weight:600;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');}
+@font-face{font-family:'Google Sans';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');}
+@font-face{font-family:'Google Sans';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');}
+@font-face{font-family:'Google Sans';font-style:normal;font-weight:900;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');}
+@font-face{font-family:'NanumSquareRound';font-style:normal;font-weight:300;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');}
+@font-face{font-family:'NanumSquareRound';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');}
+@font-face{font-family:'NanumSquareRound';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');}
+@font-face{font-family:'NanumSquareRound';font-style:normal;font-weight:600;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');}
+@font-face{font-family:'NanumSquareRound';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');}
+@font-face{font-family:'NanumSquareRound';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');}
+@font-face{font-family:'NanumSquareRound';font-style:normal;font-weight:900;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');}
+@font-face{font-family:'Malgun Gothic';font-style:normal;font-weight:300;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');}
+@font-face{font-family:'Malgun Gothic';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');}
+@font-face{font-family:'Malgun Gothic';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');}
+@font-face{font-family:'Malgun Gothic';font-style:normal;font-weight:600;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');}
+@font-face{font-family:'Malgun Gothic';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');}
+@font-face{font-family:'Malgun Gothic';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');}
+@font-face{font-family:'Malgun Gothic';font-style:normal;font-weight:900;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');}
+@font-face{font-family:'맑은 고딕';font-style:normal;font-weight:300;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');}
+@font-face{font-family:'맑은 고딕';font-style:normal;font-weight:400;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');}
+@font-face{font-family:'맑은 고딕';font-style:normal;font-weight:500;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');}
+@font-face{font-family:'맑은 고딕';font-style:normal;font-weight:600;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');}
+@font-face{font-family:'맑은 고딕';font-style:normal;font-weight:700;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');}
+@font-face{font-family:'맑은 고딕';font-style:normal;font-weight:800;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');}
+@font-face{font-family:'맑은 고딕';font-style:normal;font-weight:900;font-display:swap;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');}
+
+/* -apple-system 등 시스템폰트가 앞선 스택도 덮도록 body 기본 폰트를 지정 */
+body{font-family:'S-Core Dream','Apple SD Gothic Neo','Malgun Gothic',sans-serif;}
+
+/* 버튼·입력창은 폰트를 상속하지 않아 UA 기본(Arial)로 떨어진다. 본문 폰트를 잇게 한다.
+   .btn 등 자체 font-family를 가진 요소는 더 높은 특정성으로 그대로 유지된다. */
+button, input, select, textarea, optgroup { font-family: inherit; }

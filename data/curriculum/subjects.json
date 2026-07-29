@@ -1,0 +1,5496 @@
+{
+  "meta": {
+    "generated_at": "2026-07-24T13:58:38.767728+00:00",
+    "curriculum": "2022 개정 교육과정",
+    "composition": "2022-33 원고시 + 2024-3 일부개정(사회·음악·교양)",
+    "volumes": {
+      "5": "국어",
+      "6": "도덕",
+      "7": "사회",
+      "8": "수학",
+      "9": "과학",
+      "10": "기술·가정/정보",
+      "11": "체육",
+      "12": "음악",
+      "13": "미술",
+      "14": "영어",
+      "16": "제2외국어",
+      "17": "한문",
+      "19": "교양",
+      "20": "과학 계열 선택",
+      "21": "체육 계열 선택",
+      "22": "예술 계열 선택"
+    },
+    "standard_count": 3124,
+    "subject_count": 231
+  },
+  "subjects": [
+    {
+      "subject_uid": "5:10공국1",
+      "code_prefix": "10공국1",
+      "subject": "공통국어1",
+      "subject_type": "공통",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기⋅말하기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "문법"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문학"
+        },
+        {
+          "area_no": "06",
+          "area_name": "매체"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "5:10공국2",
+      "code_prefix": "10공국2",
+      "subject": "공통국어2",
+      "subject_type": "공통",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기⋅말하기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "문법"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문학"
+        },
+        {
+          "area_no": "06",
+          "area_name": "매체"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "5:12독작",
+      "code_prefix": "12독작",
+      "subject": "독서와 작문",
+      "subject_type": "일반선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "평생 독자 및 평생 필자로서의 주도성과 책임감을 가지고 문어 의사소통을 실천하고, 이를"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "5:12독토",
+      "code_prefix": "12독토",
+      "subject": "독서 토론과 글쓰기",
+      "subject_type": "융합선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "책을 바탕으로 삶을 탐구하고 성찰하며 자신과 공동체의 문제를 적극적으로 해결한다."
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "5:12매의",
+      "code_prefix": "12매의",
+      "subject": "매체 의사소통",
+      "subject_type": "융합선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "실제 삶에서 경험하는 매체 의사소통 현상에 주도적이고 협력적인 태도로 참여하여 바람직한"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "5:12문영",
+      "code_prefix": "12문영",
+      "subject": "문학과 영상",
+      "subject_type": "진로선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "문학과 영상을 통해 자신을 성찰하고 세계와 소통하는 태도를 기르며 관련 분야의 학업과"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "5:12문학",
+      "code_prefix": "12문학",
+      "subject": "문학",
+      "subject_type": "일반선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "문학을 통해 자아를 성찰하고 타자를 이해하며 공동체의 문제에 공감하고 참여하는 태도를"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "5:12언탐",
+      "code_prefix": "12언탐",
+      "subject": "언어생활 탐구",
+      "subject_type": "융합선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "언어의 힘과 가치를 이해하고 바람직한 언어문화 실천에 능동적으로 참여한다."
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "5:12주탐",
+      "code_prefix": "12주탐",
+      "subject": "주제 탐구 독서",
+      "subject_type": "진로선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "주제를 탐구하는 독서를 통해 학업과 진로를 적극적으로 탐색하며 자신의 삶을 성찰하고"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "5:12직의",
+      "code_prefix": "12직의",
+      "subject": "직무 의사소통",
+      "subject_type": "진로선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "직무 환경 변화에 대응하여 지속적으로 자기를 계발하고 직무 공동체의 성장을 촉진하며"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "5:12화언",
+      "code_prefix": "12화언",
+      "subject": "화법과 언어",
+      "subject_type": "일반선택",
+      "curriculum_area": "국어",
+      "volume": 5,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "화법과 언어에 대한 성찰을 통하여 자신의 국어생활을 개선하고 바람직한 의사소통 문화"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "6:12윤사",
+      "code_prefix": "12윤사",
+      "subject": "윤리와 사상",
+      "subject_type": "진로선택",
+      "curriculum_area": "도덕",
+      "volume": 6,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "동양 윤리사상"
+        },
+        {
+          "area_no": "02",
+          "area_name": "한국 윤리사상"
+        },
+        {
+          "area_no": "03",
+          "area_name": "서양 윤리사상"
+        },
+        {
+          "area_no": "04",
+          "area_name": "사회사상"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "6:12윤탐",
+      "code_prefix": "12윤탐",
+      "subject": "윤리문제 탐구",
+      "subject_type": "융합선택",
+      "curriculum_area": "도덕",
+      "volume": 6,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "윤리문제 탐구의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "시민의 삶과 윤리적 탐구"
+        },
+        {
+          "area_no": "03",
+          "area_name": "인공지능 시대의 삶과 윤리적 탐구"
+        },
+        {
+          "area_no": "04",
+          "area_name": "생태적 삶과 윤리적 탐구"
+        },
+        {
+          "area_no": "05",
+          "area_name": "윤리문제 탐구의 적용"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "6:12인윤",
+      "code_prefix": "12인윤",
+      "subject": "인문학과 윤리",
+      "subject_type": "진로선택",
+      "curriculum_area": "도덕",
+      "volume": 6,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "성찰 대상으로서 나"
+        },
+        {
+          "area_no": "02",
+          "area_name": "타인과 관계 맺기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "자유와 평등"
+        },
+        {
+          "area_no": "04",
+          "area_name": "다양성과 포용성"
+        },
+        {
+          "area_no": "05",
+          "area_name": "공존과 지속가능성"
+        },
+        {
+          "area_no": "06",
+          "area_name": "삶의 의미에 대한 물음"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "6:12현윤",
+      "code_prefix": "12현윤",
+      "subject": "현대사회와 윤리",
+      "subject_type": "일반선택",
+      "curriculum_area": "도덕",
+      "volume": 6,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "현대 생활과 윤리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "생명윤리와 생태윤리"
+        },
+        {
+          "area_no": "03",
+          "area_name": "과학과 디지털 학습 환경 윤리"
+        },
+        {
+          "area_no": "04",
+          "area_name": "민주시민과 윤리"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화와 경제생활의 윤리"
+        },
+        {
+          "area_no": "06",
+          "area_name": "평화와 공존의 윤리"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "7:10통사1",
+      "code_prefix": "10통사1",
+      "subject": "통합사회1",
+      "subject_type": "공통",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "통합적 관점"
+        },
+        {
+          "area_no": "02",
+          "area_name": "인간, 사회, 환경과 행복"
+        },
+        {
+          "area_no": "03",
+          "area_name": "자연환경과 인간"
+        },
+        {
+          "area_no": "04",
+          "area_name": "문화와 다양성"
+        },
+        {
+          "area_no": "05",
+          "area_name": "생활공간과 사회"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "7:10통사2",
+      "code_prefix": "10통사2",
+      "subject": "통합사회2",
+      "subject_type": "공통",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "인권보장과 헌법"
+        },
+        {
+          "area_no": "02",
+          "area_name": "사회정의와 불평등"
+        },
+        {
+          "area_no": "03",
+          "area_name": "시장경제와 지속가능발전"
+        },
+        {
+          "area_no": "04",
+          "area_name": "세계화와 평화"
+        },
+        {
+          "area_no": "05",
+          "area_name": "미래와 지속가능한 삶"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "7:10한사1",
+      "code_prefix": "10한사1",
+      "subject": "한국사1",
+      "subject_type": "공통",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "근대 이전 한국사의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "근대 이전 한국사의 탐구"
+        },
+        {
+          "area_no": "03",
+          "area_name": "근대 국가 수립의 노력"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "7:10한사2",
+      "code_prefix": "10한사2",
+      "subject": "한국사2",
+      "subject_type": "공통",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "일제 식민 통치와 민족운동"
+        },
+        {
+          "area_no": "02",
+          "area_name": "대한민국의 발전"
+        },
+        {
+          "area_no": "03",
+          "area_name": "오늘날의 대한민국"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "7:12경제",
+      "code_prefix": "12경제",
+      "subject": "경제",
+      "subject_type": "진로선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "경제학과 경제 문제"
+        },
+        {
+          "area_no": "02",
+          "area_name": "미시 경제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "거시 경제"
+        },
+        {
+          "area_no": "04",
+          "area_name": "국제 경제"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "7:12국관",
+      "code_prefix": "12국관",
+      "subject": "국제 관계의 이해",
+      "subject_type": "진로선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "국제 관계의 특징"
+        },
+        {
+          "area_no": "02",
+          "area_name": "균형 발전과 상생"
+        },
+        {
+          "area_no": "03",
+          "area_name": "평화와 안전의 보장"
+        },
+        {
+          "area_no": "04",
+          "area_name": "국제 분쟁의 해결"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "7:12금융",
+      "code_prefix": "12금융",
+      "subject": "금융과 경제생활",
+      "subject_type": "융합선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "행복하고 안전한 금융 생활"
+        },
+        {
+          "area_no": "02",
+          "area_name": "수입과 지출"
+        },
+        {
+          "area_no": "03",
+          "area_name": "저축과 투자"
+        },
+        {
+          "area_no": "04",
+          "area_name": "신용과 위험 관리"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "7:12기지",
+      "code_prefix": "12기지",
+      "subject": "기후변화와 지속가능한 세계",
+      "subject_type": "융합선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "인간과 기후변화"
+        },
+        {
+          "area_no": "02",
+          "area_name": "기후정의와 지역문제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "지속가능한 세계를 위한 생태전환"
+        },
+        {
+          "area_no": "04",
+          "area_name": "공존의 세계와 생태시민"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "7:12도탐",
+      "code_prefix": "12도탐",
+      "subject": "도시의 미래 탐구",
+      "subject_type": "진로선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "삶의 공간, 도시"
+        },
+        {
+          "area_no": "02",
+          "area_name": "변화하는 도시"
+        },
+        {
+          "area_no": "03",
+          "area_name": "도시 문제와 공간 정의"
+        },
+        {
+          "area_no": "04",
+          "area_name": "도시의 미래"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "7:12동역",
+      "code_prefix": "12동역",
+      "subject": "동아시아 역사 기행",
+      "subject_type": "진로선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "동아시아로 떠나는 역사 기행"
+        },
+        {
+          "area_no": "02",
+          "area_name": "교류와 갈등의 현장에서 만난 역사"
+        },
+        {
+          "area_no": "03",
+          "area_name": "침략과 저항의 현장에서 만난 역사"
+        },
+        {
+          "area_no": "04",
+          "area_name": "평화와 공존의 현장에서 만난 역사"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "7:12법사",
+      "code_prefix": "12법사",
+      "subject": "법과 사회",
+      "subject_type": "진로선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "개인 생활과 법"
+        },
+        {
+          "area_no": "02",
+          "area_name": "국가 생활과 법"
+        },
+        {
+          "area_no": "03",
+          "area_name": "사회생활과 법"
+        },
+        {
+          "area_no": "04",
+          "area_name": "학교생활과 법"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "7:12사문",
+      "code_prefix": "12사문",
+      "subject": "사회와 문화",
+      "subject_type": "일반선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "사회현상의 이해와 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "사회 구조와 사회 변동"
+        },
+        {
+          "area_no": "03",
+          "area_name": "일상 문화와 문화 변동"
+        },
+        {
+          "area_no": "04",
+          "area_name": "사회 불평등과 사회 복지"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "7:12사탐",
+      "code_prefix": "12사탐",
+      "subject": "사회문제 탐구",
+      "subject_type": "융합선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "사회문제의 이해와 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "일상생활과 사회문제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "변화하는 세계와 사회문제"
+        },
+        {
+          "area_no": "04",
+          "area_name": "사회문제 사례 연구"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "7:12세사",
+      "code_prefix": "12세사",
+      "subject": "세계사",
+      "subject_type": "일반선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "지역 세계의 형성"
+        },
+        {
+          "area_no": "02",
+          "area_name": "교역망의 확대"
+        },
+        {
+          "area_no": "03",
+          "area_name": "국민 국가의 형성"
+        },
+        {
+          "area_no": "04",
+          "area_name": "현대 세계의 과제"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "7:12세지",
+      "code_prefix": "12세지",
+      "subject": "세계시민과 지리",
+      "subject_type": "일반선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "세계시민, 세계화와 지역 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "모자이크 세계, 세계의 다양한 자연환경과 문화"
+        },
+        {
+          "area_no": "03",
+          "area_name": "네트워크 세계, 세계의 인구와 경제 공간"
+        },
+        {
+          "area_no": "04",
+          "area_name": "지속가능한 세계, 세계의 환경 문제와 평화"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "7:12여지",
+      "code_prefix": "12여지",
+      "subject": "여행지리",
+      "subject_type": "융합선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "행복하고 안전한 여행"
+        },
+        {
+          "area_no": "02",
+          "area_name": "문화와 자연을 찾아가는 여행"
+        },
+        {
+          "area_no": "03",
+          "area_name": "성찰과 공존을 위한 여행"
+        },
+        {
+          "area_no": "04",
+          "area_name": "미래 사회와 여행"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "7:12역현",
+      "code_prefix": "12역현",
+      "subject": "역사로 탐구하는 현대 세계",
+      "subject_type": "융합선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "현대 세계와 역사 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "냉전과 열전"
+        },
+        {
+          "area_no": "03",
+          "area_name": "성장의 풍요와 생태환경"
+        },
+        {
+          "area_no": "04",
+          "area_name": "분쟁과 갈등, 화해의 역사"
+        },
+        {
+          "area_no": "05",
+          "area_name": "도전받는 현대 세계"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "7:12정치",
+      "code_prefix": "12정치",
+      "subject": "정치",
+      "subject_type": "진로선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "시민 생활과 정치"
+        },
+        {
+          "area_no": "02",
+          "area_name": "정치과정과 참여"
+        },
+        {
+          "area_no": "03",
+          "area_name": "민주 국가의 정부 형태"
+        },
+        {
+          "area_no": "04",
+          "area_name": "국제 사회와 정치"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "7:12한탐",
+      "code_prefix": "12한탐",
+      "subject": "한국지리 탐구",
+      "subject_type": "진로선택",
+      "curriculum_area": "사회",
+      "volume": 7,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "공간정보와 지리 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "생활 속 지리 탐구"
+        },
+        {
+          "area_no": "03",
+          "area_name": "국토의 변화와 균형 발전 탐구"
+        },
+        {
+          "area_no": "04",
+          "area_name": "환경과 지속가능성 탐구"
+        },
+        {
+          "area_no": "05",
+          "area_name": "동아시아 갈등과 공존 탐구"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "8:10공수1",
+      "code_prefix": "10공수1",
+      "subject": "공통수학1",
+      "subject_type": "공통",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "다항식"
+        },
+        {
+          "area_no": "02",
+          "area_name": "방정식과 부등식"
+        },
+        {
+          "area_no": "03",
+          "area_name": "경우의 수"
+        },
+        {
+          "area_no": "04",
+          "area_name": "행렬"
+        }
+      ],
+      "standard_count": 19
+    },
+    {
+      "subject_uid": "8:10공수2",
+      "code_prefix": "10공수2",
+      "subject": "공통수학2",
+      "subject_type": "공통",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "도형의 방정식"
+        },
+        {
+          "area_no": "02",
+          "area_name": "집합과 명제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "함수와 그래프"
+        }
+      ],
+      "standard_count": 20
+    },
+    {
+      "subject_uid": "8:10기수1",
+      "code_prefix": "10기수1",
+      "subject": "기본수학1",
+      "subject_type": "공통",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "다항식"
+        },
+        {
+          "area_no": "02",
+          "area_name": "방정식과 부등식"
+        },
+        {
+          "area_no": "03",
+          "area_name": "경우의 수"
+        },
+        {
+          "area_no": "04",
+          "area_name": "행렬"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "8:10기수2",
+      "code_prefix": "10기수2",
+      "subject": "기본수학2",
+      "subject_type": "공통",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "도형의 방정식"
+        },
+        {
+          "area_no": "02",
+          "area_name": "집합과 명제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "함수와 그래프"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "8:12경수",
+      "code_prefix": "12경수",
+      "subject": "경제 수학",
+      "subject_type": "진로선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "수와 경제"
+        },
+        {
+          "area_no": "02",
+          "area_name": "함수와 경제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "행렬과 경제"
+        },
+        {
+          "area_no": "04",
+          "area_name": "미분과 경제"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "8:12기하",
+      "code_prefix": "12기하",
+      "subject": "기하",
+      "subject_type": "진로선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이차곡선"
+        },
+        {
+          "area_no": "02",
+          "area_name": "공간도형과 공간좌표"
+        },
+        {
+          "area_no": "03",
+          "area_name": "벡터"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "8:12대수",
+      "code_prefix": "12대수",
+      "subject": "대수",
+      "subject_type": "일반선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "지수함수와 로그함수"
+        },
+        {
+          "area_no": "02",
+          "area_name": "삼각함수"
+        },
+        {
+          "area_no": "03",
+          "area_name": "수열"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "8:12미적Ⅰ",
+      "code_prefix": "12미적Ⅰ",
+      "subject": "미적분Ⅰ",
+      "subject_type": "일반선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "함수의 극한과 연속"
+        },
+        {
+          "area_no": "02",
+          "area_name": "미분"
+        },
+        {
+          "area_no": "03",
+          "area_name": "적분"
+        }
+      ],
+      "standard_count": 20
+    },
+    {
+      "subject_uid": "8:12미적Ⅱ",
+      "code_prefix": "12미적Ⅱ",
+      "subject": "미적분Ⅱ",
+      "subject_type": "진로선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "수열의 극한"
+        },
+        {
+          "area_no": "02",
+          "area_name": "미분법"
+        },
+        {
+          "area_no": "03",
+          "area_name": "적분법"
+        }
+      ],
+      "standard_count": 23
+    },
+    {
+      "subject_uid": "8:12수과",
+      "code_prefix": "12수과",
+      "subject": "수학과제 탐구",
+      "subject_type": "융합선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "과제 탐구의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "과제 탐구의 방법과 절차"
+        },
+        {
+          "area_no": "03",
+          "area_name": "과제 탐구의 실행 및 평가"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "8:12수문",
+      "code_prefix": "12수문",
+      "subject": "수학과 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "예술과 수학"
+        },
+        {
+          "area_no": "02",
+          "area_name": "생활과 수학"
+        },
+        {
+          "area_no": "03",
+          "area_name": "사회와 수학"
+        },
+        {
+          "area_no": "04",
+          "area_name": "환경과 수학"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "8:12실통",
+      "code_prefix": "12실통",
+      "subject": "실용 통계",
+      "subject_type": "융합선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "통계와 통계적 문제"
+        },
+        {
+          "area_no": "02",
+          "area_name": "자료의 수집과 정리"
+        },
+        {
+          "area_no": "03",
+          "area_name": "자료의 분석"
+        },
+        {
+          "area_no": "04",
+          "area_name": "통계적 탐구"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "8:12인수",
+      "code_prefix": "12인수",
+      "subject": "인공지능 수학",
+      "subject_type": "진로선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "인공지능과 빅데이터"
+        },
+        {
+          "area_no": "02",
+          "area_name": "텍스트 데이터 처리"
+        },
+        {
+          "area_no": "03",
+          "area_name": "이미지 데이터 처리"
+        },
+        {
+          "area_no": "04",
+          "area_name": "예측과 최적화"
+        },
+        {
+          "area_no": "05",
+          "area_name": "인공지능과 수학 탐구"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "8:12직수",
+      "code_prefix": "12직수",
+      "subject": "직무 수학",
+      "subject_type": "진로선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "수와 연산"
+        },
+        {
+          "area_no": "02",
+          "area_name": "변화와 관계"
+        },
+        {
+          "area_no": "03",
+          "area_name": "도형과 측정"
+        },
+        {
+          "area_no": "04",
+          "area_name": "자료와 가능성"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "8:12확통",
+      "code_prefix": "12확통",
+      "subject": "확률과 통계",
+      "subject_type": "일반선택",
+      "curriculum_area": "수학",
+      "volume": 8,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "경우의 수"
+        },
+        {
+          "area_no": "02",
+          "area_name": "확률"
+        },
+        {
+          "area_no": "03",
+          "area_name": "통계"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "9:10과탐1",
+      "code_prefix": "10과탐1",
+      "subject": "과학탐구실험1",
+      "subject_type": "공통",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "과학의 본성과 역사 속의 과학 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "과학 탐구의 과정과 절차"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "9:10과탐2",
+      "code_prefix": "10과탐2",
+      "subject": "과학탐구실험2",
+      "subject_type": "공통",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "생활 속의 과학 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "미래 사회와 첨단 과학 탐구"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "9:10통과1",
+      "code_prefix": "10통과1",
+      "subject": "통합과학1",
+      "subject_type": "공통",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "과학의 기초"
+        },
+        {
+          "area_no": "02",
+          "area_name": "물질과 규칙성"
+        },
+        {
+          "area_no": "03",
+          "area_name": "시스템과 상호작용"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "9:10통과2",
+      "code_prefix": "10통과2",
+      "subject": "통합과학2",
+      "subject_type": "공통",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "변화와 다양성"
+        },
+        {
+          "area_no": "02",
+          "area_name": "환경과 에너지"
+        },
+        {
+          "area_no": "03",
+          "area_name": "과학과 미래 사회"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "9:12과사",
+      "code_prefix": "12과사",
+      "subject": "과학의 역사와 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "과학과 문명의 탄생과 통합"
+        },
+        {
+          "area_no": "02",
+          "area_name": "변화하는 과학과 세계"
+        },
+        {
+          "area_no": "03",
+          "area_name": "과학과 인류의 미래"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "9:12기환",
+      "code_prefix": "12기환",
+      "subject": "기후변화와 환경생태",
+      "subject_type": "융합선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "기후와 환경생태의 특성"
+        },
+        {
+          "area_no": "02",
+          "area_name": "기후위기와 환경생태 변화"
+        },
+        {
+          "area_no": "03",
+          "area_name": "기후위기에 대응하는 우리의 노력"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "9:12물리",
+      "code_prefix": "12물리",
+      "subject": "물리학",
+      "subject_type": "일반선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "힘과 에너지"
+        },
+        {
+          "area_no": "02",
+          "area_name": "전기와 자기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "빛과 물질"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "9:12물에",
+      "code_prefix": "12물에",
+      "subject": "물질과 에너지",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "물질의 세 가지 상태"
+        },
+        {
+          "area_no": "02",
+          "area_name": "용액의 성질"
+        },
+        {
+          "area_no": "03",
+          "area_name": "화학 변화의 자발성"
+        },
+        {
+          "area_no": "04",
+          "area_name": "반응 속도"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "9:12반응",
+      "code_prefix": "12반응",
+      "subject": "화학 반응의 세계",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "산 염기 평형"
+        },
+        {
+          "area_no": "02",
+          "area_name": "산화⋅환원 반응"
+        },
+        {
+          "area_no": "03",
+          "area_name": "탄소 화합물과 반응"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "9:12생과",
+      "code_prefix": "12생과",
+      "subject": "생명과학",
+      "subject_type": "일반선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "생명 시스템의 구성"
+        },
+        {
+          "area_no": "02",
+          "area_name": "항상성과 몸의 조절"
+        },
+        {
+          "area_no": "03",
+          "area_name": "생명의 연속성과 다양성"
+        }
+      ],
+      "standard_count": 19
+    },
+    {
+      "subject_uid": "9:12세포",
+      "code_prefix": "12세포",
+      "subject": "세포와 물질대사",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "세포"
+        },
+        {
+          "area_no": "02",
+          "area_name": "물질대사와 에너지"
+        },
+        {
+          "area_no": "03",
+          "area_name": "세포호흡과 광합성"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "9:12역학",
+      "code_prefix": "12역학",
+      "subject": "역학과 에너지",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "시공간과 운동"
+        },
+        {
+          "area_no": "02",
+          "area_name": "열과 에너지"
+        },
+        {
+          "area_no": "03",
+          "area_name": "탄성파와 소리"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "9:12유전",
+      "code_prefix": "12유전",
+      "subject": "생물의 유전",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "유전자와 유전물질"
+        },
+        {
+          "area_no": "02",
+          "area_name": "유전자의 발현"
+        },
+        {
+          "area_no": "03",
+          "area_name": "생명공학기술"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "9:12융탐",
+      "code_prefix": "12융탐",
+      "subject": "융합과학 탐구",
+      "subject_type": "융합선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "융합과학 탐구의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "융합과학 탐구의 과정"
+        },
+        {
+          "area_no": "03",
+          "area_name": "융합과학 탐구의 전망"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "9:12전자",
+      "code_prefix": "12전자",
+      "subject": "전자기와 양자",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "전자기적 상호작용"
+        },
+        {
+          "area_no": "02",
+          "area_name": "빛과 정보 통신"
+        },
+        {
+          "area_no": "03",
+          "area_name": "양자와 미시세계"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "9:12지구",
+      "code_prefix": "12지구",
+      "subject": "지구과학",
+      "subject_type": "일반선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "대기와 해양의 상호작용"
+        },
+        {
+          "area_no": "02",
+          "area_name": "지구의 역사와 한반도의 암석"
+        },
+        {
+          "area_no": "03",
+          "area_name": "태양계 천체와 별과 우주의 진화"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "9:12지시",
+      "code_prefix": "12지시",
+      "subject": "지구시스템과학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "지구 탄생과 생동하는 지구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "해수의 운동"
+        },
+        {
+          "area_no": "03",
+          "area_name": "강수 과정과 대기의 운동"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "9:12행우",
+      "code_prefix": "12행우",
+      "subject": "행성우주과학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "우주탐사와 행성계"
+        },
+        {
+          "area_no": "02",
+          "area_name": "태양과 별의 관측"
+        },
+        {
+          "area_no": "03",
+          "area_name": "은하와 우주"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "9:12화학",
+      "code_prefix": "12화학",
+      "subject": "화학",
+      "subject_type": "일반선택",
+      "curriculum_area": "과학",
+      "volume": 9,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "화학의 언어"
+        },
+        {
+          "area_no": "02",
+          "area_name": "물질의 구조와 성질"
+        },
+        {
+          "area_no": "03",
+          "area_name": "화학 평형"
+        },
+        {
+          "area_no": "04",
+          "area_name": "역동적인 화학 반응"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "10:12기가",
+      "code_prefix": "12기가",
+      "subject": "기술⋅가정",
+      "subject_type": "일반선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "생활문화와 디지털 환경"
+        },
+        {
+          "area_no": "02",
+          "area_name": "소비자와 생활복지"
+        },
+        {
+          "area_no": "03",
+          "area_name": "인간과 성장하는 관계"
+        },
+        {
+          "area_no": "04",
+          "area_name": "공학의 기초"
+        },
+        {
+          "area_no": "05",
+          "area_name": "미래를 여는 공학 혁신"
+        },
+        {
+          "area_no": "06",
+          "area_name": "지속가능한 융합 공학"
+        }
+      ],
+      "standard_count": 30
+    },
+    {
+      "subject_uid": "10:12데과",
+      "code_prefix": "12데과",
+      "subject": "데이터 과학",
+      "subject_type": "진로선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "데이터 과학의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "데이터 준비와 분석"
+        },
+        {
+          "area_no": "03",
+          "area_name": "데이터 모델링과 평가"
+        },
+        {
+          "area_no": "04",
+          "area_name": "데이터 과학 프로젝트"
+        }
+      ],
+      "standard_count": 19
+    },
+    {
+      "subject_uid": "10:12로봇",
+      "code_prefix": "12로봇",
+      "subject": "로봇과 공학세계",
+      "subject_type": "진로선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "로봇의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "공학세계의 탐색과 로봇의 활용"
+        },
+        {
+          "area_no": "03",
+          "area_name": "로봇공학 프로젝트"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "10:12생활",
+      "code_prefix": "12생활",
+      "subject": "생활과학 탐구",
+      "subject_type": "융합선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "인간행동과 생활과학"
+        },
+        {
+          "area_no": "02",
+          "area_name": "생활환경과 생활과학"
+        },
+        {
+          "area_no": "03",
+          "area_name": "생활과학과 진로"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "10:12소생",
+      "code_prefix": "12소생",
+      "subject": "소프트웨어와 생활",
+      "subject_type": "융합선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "세상을 변화시키는 소프트웨어"
+        },
+        {
+          "area_no": "02",
+          "area_name": "창작을 지원하는 소프트웨어"
+        },
+        {
+          "area_no": "03",
+          "area_name": "현상을 분석하는 소프트웨어"
+        },
+        {
+          "area_no": "04",
+          "area_name": "모의 실험하는 소프트웨어"
+        },
+        {
+          "area_no": "05",
+          "area_name": "가치를 창출하는 소프트웨어"
+        }
+      ],
+      "standard_count": 19
+    },
+    {
+      "subject_uid": "10:12아동",
+      "code_prefix": "12아동",
+      "subject": "아동발달과 부모",
+      "subject_type": "융합선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "부모됨의 준비"
+        },
+        {
+          "area_no": "02",
+          "area_name": "아동발달과 돌봄"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "10:12인기",
+      "code_prefix": "12인기",
+      "subject": "인공지능 기초",
+      "subject_type": "진로선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "인공지능의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "인공지능과 학습"
+        },
+        {
+          "area_no": "03",
+          "area_name": "인공지능의 사회적 영향"
+        },
+        {
+          "area_no": "04",
+          "area_name": "인공지능 프로젝트"
+        }
+      ],
+      "standard_count": 19
+    },
+    {
+      "subject_uid": "10:12자립",
+      "code_prefix": "12자립",
+      "subject": "생애 설계와 자립",
+      "subject_type": "융합선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "사회⋅정서적 자립"
+        },
+        {
+          "area_no": "02",
+          "area_name": "경제적 자립"
+        },
+        {
+          "area_no": "03",
+          "area_name": "일상생활 자립"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "10:12정",
+      "code_prefix": "12정",
+      "subject": "정보",
+      "subject_type": "일반선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "컴퓨팅 시스템"
+        },
+        {
+          "area_no": "02",
+          "area_name": "데이터"
+        },
+        {
+          "area_no": "03",
+          "area_name": "알고리즘과 프로그래밍"
+        },
+        {
+          "area_no": "04",
+          "area_name": "인공지능"
+        },
+        {
+          "area_no": "05",
+          "area_name": "디지털 문화"
+        }
+      ],
+      "standard_count": 23
+    },
+    {
+      "subject_uid": "10:12지재",
+      "code_prefix": "12지재",
+      "subject": "지식 재산 일반",
+      "subject_type": "융합선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "지식재산의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "지식재산권의 보호와 활용"
+        },
+        {
+          "area_no": "03",
+          "area_name": "지식재산권 창출 프로젝트"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "10:12창공",
+      "code_prefix": "12창공",
+      "subject": "창의 공학 설계",
+      "subject_type": "융합선택",
+      "curriculum_area": "기술·가정/정보",
+      "volume": 10,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "창의 공학 설계의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "창의 공학 설계 프로젝트"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "11:12스과",
+      "code_prefix": "12스과",
+      "subject": "스포츠 과학",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육",
+      "volume": 11,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠와 사회과학"
+        },
+        {
+          "area_no": "02",
+          "area_name": "스포츠와 자연과학"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "11:12스문",
+      "code_prefix": "12스문",
+      "subject": "스포츠 문화",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육",
+      "volume": 11,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠 인문 문화"
+        },
+        {
+          "area_no": "02",
+          "area_name": "스포츠 경기 문화"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "11:12스생1",
+      "code_prefix": "12스생1",
+      "subject": "스포츠 생활1",
+      "subject_type": "융합선택",
+      "curriculum_area": "체육",
+      "volume": 11,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "영역형 스포츠"
+        },
+        {
+          "area_no": "02",
+          "area_name": "생활⋅자연환경형 스포츠"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "11:12스생2",
+      "code_prefix": "12스생2",
+      "subject": "스포츠 생활2",
+      "subject_type": "융합선택",
+      "curriculum_area": "체육",
+      "volume": 11,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "네트형 스포츠"
+        },
+        {
+          "area_no": "02",
+          "area_name": "필드형 스포츠"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "11:12운건",
+      "code_prefix": "12운건",
+      "subject": "운동과 건강",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육",
+      "volume": 11,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "건강 운동"
+        },
+        {
+          "area_no": "02",
+          "area_name": "체력 운동"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "11:12체육1",
+      "code_prefix": "12체육1",
+      "subject": "체육1",
+      "subject_type": "일반선택",
+      "curriculum_area": "체육",
+      "volume": 11,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "건강 관리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "전략형 스포츠"
+        },
+        {
+          "area_no": "03",
+          "area_name": "생태형 스포츠"
+        }
+      ],
+      "standard_count": 9
+    },
+    {
+      "subject_uid": "11:12체육2",
+      "code_prefix": "12체육2",
+      "subject": "체육2",
+      "subject_type": "일반선택",
+      "curriculum_area": "체육",
+      "volume": 11,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "체력 증진"
+        },
+        {
+          "area_no": "02",
+          "area_name": "기술형 스포츠"
+        },
+        {
+          "area_no": "03",
+          "area_name": "표현 활동"
+        }
+      ],
+      "standard_count": 9
+    },
+    {
+      "subject_uid": "12:12감비",
+      "code_prefix": "12감비",
+      "subject": "음악 감상과 비평",
+      "subject_type": "진로선택",
+      "curriculum_area": "음악",
+      "volume": 12,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "감상과 반응"
+        },
+        {
+          "area_no": "02",
+          "area_name": "비평과 활용"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "12:12연창",
+      "code_prefix": "12연창",
+      "subject": "음악 연주와 창작",
+      "subject_type": "진로선택",
+      "curriculum_area": "음악",
+      "volume": 12,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "표현과 창작"
+        },
+        {
+          "area_no": "02",
+          "area_name": "실천과 소통"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "12:12음",
+      "code_prefix": "12음",
+      "subject": "음악",
+      "subject_type": "일반선택",
+      "curriculum_area": "음악",
+      "volume": 12,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "연주"
+        },
+        {
+          "area_no": "02",
+          "area_name": "감상"
+        },
+        {
+          "area_no": "03",
+          "area_name": "창작"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "12:12음미",
+      "code_prefix": "12음미",
+      "subject": "음악과 미디어",
+      "subject_type": "융합선택",
+      "curriculum_area": "음악",
+      "volume": 12,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "미디어 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "실용적 연계"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "13:12미",
+      "code_prefix": "12미",
+      "subject": "미술",
+      "subject_type": "일반선택",
+      "curriculum_area": "미술",
+      "volume": 13,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "미적 체험"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        },
+        {
+          "area_no": "03",
+          "area_name": "감상"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "13:12미감",
+      "code_prefix": "12미감",
+      "subject": "미술 감상과 비평",
+      "subject_type": "진로선택",
+      "curriculum_area": "미술",
+      "volume": 13,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "미술 감상"
+        },
+        {
+          "area_no": "02",
+          "area_name": "미술 비평"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "13:12미매",
+      "code_prefix": "12미매",
+      "subject": "미술과 매체",
+      "subject_type": "융합선택",
+      "curriculum_area": "미술",
+      "volume": 13,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "매체의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "매체의 활용"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "13:12미창",
+      "code_prefix": "12미창",
+      "subject": "미술 창작",
+      "subject_type": "진로선택",
+      "curriculum_area": "미술",
+      "volume": 13,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "설계와 창작"
+        },
+        {
+          "area_no": "02",
+          "area_name": "창작의 확장"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "14:10공영1",
+      "code_prefix": "10공영1",
+      "subject": "공통영어1",
+      "subject_type": "공통",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "14:10공영2",
+      "code_prefix": "10공영2",
+      "subject": "공통영어2",
+      "subject_type": "공통",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "14:10기영1",
+      "code_prefix": "10기영1",
+      "subject": "기본영어1",
+      "subject_type": "공통",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "14:10기영2",
+      "code_prefix": "10기영2",
+      "subject": "기본영어2",
+      "subject_type": "공통",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "1",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "14:12미영",
+      "code_prefix": "12미영",
+      "subject": "미디어 영어",
+      "subject_type": "융합선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "14:12세영",
+      "code_prefix": "12세영",
+      "subject": "세계 문화와 영어",
+      "subject_type": "융합선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "14:12실영",
+      "code_prefix": "12실영",
+      "subject": "실생활 영어 회화",
+      "subject_type": "융합선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [],
+      "standard_count": 9
+    },
+    {
+      "subject_uid": "14:12심독",
+      "code_prefix": "12심독",
+      "subject": "심화 영어 독해와 작문",
+      "subject_type": "진로선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "독해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "작문"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "14:12심영",
+      "code_prefix": "12심영",
+      "subject": "심화 영어",
+      "subject_type": "진로선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "14:12영Ⅰ",
+      "code_prefix": "12영Ⅰ",
+      "subject": "영어 I",
+      "subject_type": "일반선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "14:12영Ⅱ",
+      "code_prefix": "12영Ⅱ",
+      "subject": "영어 Ⅱ",
+      "subject_type": "일반선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "14:12영독",
+      "code_prefix": "12영독",
+      "subject": "영어 독해와 작문",
+      "subject_type": "일반선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "독해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "작문"
+        }
+      ],
+      "standard_count": 17
+    },
+    {
+      "subject_uid": "14:12영문",
+      "code_prefix": "12영문",
+      "subject": "영미 문학 읽기",
+      "subject_type": "진로선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "14:12영발",
+      "code_prefix": "12영발",
+      "subject": "영어 발표와 토론",
+      "subject_type": "진로선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "발표"
+        },
+        {
+          "area_no": "02",
+          "area_name": "토론"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "14:12직영",
+      "code_prefix": "12직영",
+      "subject": "직무 영어",
+      "subject_type": "진로선택",
+      "curriculum_area": "영어",
+      "volume": 14,
+      "grade_band": "2-3",
+      "areas": [],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "16:12독문",
+      "code_prefix": "12독문",
+      "subject": "독일어권 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "독일어권 문화에서 관심 있는 분야의 정보를 다양한 매체를 통해 조사하고 자신의 삶과"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "16:12독어",
+      "code_prefix": "12독어",
+      "subject": "독일어",
+      "subject_type": "일반선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "16:12독회",
+      "code_prefix": "12독회",
+      "subject": "독일어 회화",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "상대방의 말을 경청하며 적극적인 자세로 의사소통 활동에 참여한다."
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "16:12러문",
+      "code_prefix": "12러문",
+      "subject": "러시아 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "러시아 문화를 직간접적으로 체험하고, 상호문화적 관점에서 이를 이해한다."
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "16:12러어",
+      "code_prefix": "12러어",
+      "subject": "러시아어",
+      "subject_type": "일반선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 19
+    },
+    {
+      "subject_uid": "16:12러회",
+      "code_prefix": "12러회",
+      "subject": "러시아어 회화",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "일상생활에서 자주 접하는 주제에 대해 자신의 의견을 말하거나 정보를 교환한다."
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "16:12베문",
+      "code_prefix": "12베문",
+      "subject": "베트남 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "다양한 매체를 활용하여 베트남 문화 중 관심 분야의 정보를 조사하고 이를 진로와 관련"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "16:12베어",
+      "code_prefix": "12베어",
+      "subject": "베트남어",
+      "subject_type": "일반선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 21
+    },
+    {
+      "subject_uid": "16:12베회",
+      "code_prefix": "12베회",
+      "subject": "베트남어 회화",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "상대의 말을 경청하며 적극적인 자세로 의사소통 활동에 참여한다."
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "16:12스문",
+      "code_prefix": "12스문",
+      "subject": "스페인어권 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스페인어권 문화에 대한 이해를 바탕으로 타 문화에 대한 포용성과 문화적 감수성을 갖춘"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "16:12스어",
+      "code_prefix": "12스어",
+      "subject": "스페인어",
+      "subject_type": "일반선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 22
+    },
+    {
+      "subject_uid": "16:12스회",
+      "code_prefix": "12스회",
+      "subject": "스페인어 회화",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스페인어로 의사소통하려는 적극적인 태도를 갖는다."
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "16:12심독",
+      "code_prefix": "12심독",
+      "subject": "심화 독일어",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "16:12심러",
+      "code_prefix": "12심러",
+      "subject": "심화 러시아어",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 19
+    },
+    {
+      "subject_uid": "16:12심베",
+      "code_prefix": "12심베",
+      "subject": "심화 베트남어",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 20
+    },
+    {
+      "subject_uid": "16:12심스",
+      "code_prefix": "12심스",
+      "subject": "심화 스페인어",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 21
+    },
+    {
+      "subject_uid": "16:12심아",
+      "code_prefix": "12심아",
+      "subject": "심화 아랍어",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 25
+    },
+    {
+      "subject_uid": "16:12심일",
+      "code_prefix": "12심일",
+      "subject": "심화 일본어",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 22
+    },
+    {
+      "subject_uid": "16:12심중",
+      "code_prefix": "12심중",
+      "subject": "심화 중국어",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 22
+    },
+    {
+      "subject_uid": "16:12심프",
+      "code_prefix": "12심프",
+      "subject": "심화 프랑스어",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 20
+    },
+    {
+      "subject_uid": "16:12아문",
+      "code_prefix": "12아문",
+      "subject": "아랍 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "아랍 문화와 일상생활에 대한 이해를 바탕으로 타 문화에 대한 포용성과 문화적 감수성을"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "16:12아어",
+      "code_prefix": "12아어",
+      "subject": "아랍어",
+      "subject_type": "일반선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 20
+    },
+    {
+      "subject_uid": "16:12아회",
+      "code_prefix": "12아회",
+      "subject": "아랍어 회화",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "상대방의 말을 경청하고 적극적인 자세로 의사소통 활동에 참여한다."
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "16:12일문",
+      "code_prefix": "12일문",
+      "subject": "일본 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "일본의 관심 분야에 대한 정보를 다양한 디지털 매체를 활용하여 조사하고, 상호 협력적"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "16:12일어",
+      "code_prefix": "12일어",
+      "subject": "일본어",
+      "subject_type": "일반선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 22
+    },
+    {
+      "subject_uid": "16:12일회",
+      "code_prefix": "12일회",
+      "subject": "일본어 회화",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "상대방의 말을 경청하고 적극적인 자세로 의사소통 활동에 참여한다."
+        }
+      ],
+      "standard_count": 11
+    },
+    {
+      "subject_uid": "16:12중문",
+      "code_prefix": "12중문",
+      "subject": "중국 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "중국 문화 중 관심 있는 분야의 정보를 다양한 매체를 통해 조사하고, 자신의 삶과 연계"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "16:12중어",
+      "code_prefix": "12중어",
+      "subject": "중국어",
+      "subject_type": "일반선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 21
+    },
+    {
+      "subject_uid": "16:12중회",
+      "code_prefix": "12중회",
+      "subject": "중국어 회화",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "중국어에 대한 관심과 호기심을 바탕으로 자신의 진로와 중국과의 연계성을 탐색한다."
+        }
+      ],
+      "standard_count": 11
+    },
+    {
+      "subject_uid": "16:12프문",
+      "code_prefix": "12프문",
+      "subject": "프랑스어권 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "프랑스어권 구성원들과의 의사소통 상황에서 상호 존중하고 협력하는 태도를 기른다."
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "16:12프어",
+      "code_prefix": "12프어",
+      "subject": "프랑스어",
+      "subject_type": "일반선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "듣기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "말하기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "읽기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "쓰기"
+        },
+        {
+          "area_no": "05",
+          "area_name": "문화"
+        }
+      ],
+      "standard_count": 19
+    },
+    {
+      "subject_uid": "16:12프회",
+      "code_prefix": "12프회",
+      "subject": "프랑스어 회화",
+      "subject_type": "진로선택",
+      "curriculum_area": "제2외국어",
+      "volume": 16,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "프랑스어권 구성원들과 적극적으로 의사소통하는 과정에서 상호 존중하고 협력하는 태도를"
+        }
+      ],
+      "standard_count": 11
+    },
+    {
+      "subject_uid": "17:12언한",
+      "code_prefix": "12언한",
+      "subject": "언어생활과 한자",
+      "subject_type": "융합선택",
+      "curriculum_area": "한문",
+      "volume": 17,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "한자와 한자 어휘의 개념적 이해를 통해 추론적 사고를 할 수 있는 능력을 기른다."
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "17:12한고",
+      "code_prefix": "12한고",
+      "subject": "한문 고전 읽기",
+      "subject_type": "진로선택",
+      "curriculum_area": "한문",
+      "volume": 17,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "한문으로 기록된 다양한 자료를 찾아 읽고 진로 탐색에 활용한다."
+        }
+      ],
+      "standard_count": 9
+    },
+    {
+      "subject_uid": "17:12한문",
+      "code_prefix": "12한문",
+      "subject": "한문",
+      "subject_type": "일반선택",
+      "curriculum_area": "한문",
+      "volume": 17,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "한자와 어휘"
+        },
+        {
+          "area_no": "02",
+          "area_name": "문장"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "19:12교이",
+      "code_prefix": "12교이",
+      "subject": "교육의 이해",
+      "subject_type": "진로선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "교육의 의미와 중요성"
+        },
+        {
+          "area_no": "02",
+          "area_name": "교육 활동"
+        },
+        {
+          "area_no": "03",
+          "area_name": "교육 제도"
+        },
+        {
+          "area_no": "04",
+          "area_name": "미래 교육"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "19:12논리",
+      "code_prefix": "12논리",
+      "subject": "논리와 사고",
+      "subject_type": "진로선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "생활과 논리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "언어와 논리"
+        },
+        {
+          "area_no": "03",
+          "area_name": "기호와 논리"
+        },
+        {
+          "area_no": "04",
+          "area_name": "과학과 논리"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "19:12논술",
+      "code_prefix": "12논술",
+      "subject": "논술",
+      "subject_type": "융합선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "논술과 비판적 사고"
+        },
+        {
+          "area_no": "02",
+          "area_name": "요약하는 글쓰기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "평가하는 글쓰기"
+        },
+        {
+          "area_no": "04",
+          "area_name": "주장하는 글쓰기"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "19:12보건",
+      "code_prefix": "12보건",
+      "subject": "보건",
+      "subject_type": "진로선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "건강증진과 질병예방"
+        },
+        {
+          "area_no": "02",
+          "area_name": "정서와 정신건강"
+        },
+        {
+          "area_no": "03",
+          "area_name": "성과 건강"
+        },
+        {
+          "area_no": "04",
+          "area_name": "건강안전과 응급처치"
+        },
+        {
+          "area_no": "05",
+          "area_name": "건강자원과 건강문화"
+        }
+      ],
+      "standard_count": 26
+    },
+    {
+      "subject_uid": "19:12삶종",
+      "code_prefix": "12삶종",
+      "subject": "삶과 종교",
+      "subject_type": "진로선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "인간과 종교"
+        },
+        {
+          "area_no": "02",
+          "area_name": "다양한 종교에 대한 이해"
+        },
+        {
+          "area_no": "03",
+          "area_name": "종교 문화유산"
+        },
+        {
+          "area_no": "04",
+          "area_name": "변화하는 사회와 종교"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "19:12생환",
+      "code_prefix": "12생환",
+      "subject": "생태와 환경",
+      "subject_type": "일반선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "환경과 인간"
+        },
+        {
+          "area_no": "02",
+          "area_name": "환경 체계"
+        },
+        {
+          "area_no": "03",
+          "area_name": "환경 문제와 쟁점"
+        },
+        {
+          "area_no": "04",
+          "area_name": "기후위기와 기후행동"
+        },
+        {
+          "area_no": "05",
+          "area_name": "지속가능성과 시민 참여"
+        }
+      ],
+      "standard_count": 21
+    },
+    {
+      "subject_uid": "19:12심리",
+      "code_prefix": "12심리",
+      "subject": "인간과 심리",
+      "subject_type": "진로선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "마음의 과학적 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "자기 이해"
+        },
+        {
+          "area_no": "03",
+          "area_name": "타인 이해"
+        },
+        {
+          "area_no": "04",
+          "area_name": "삶과 적응"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "19:12인경",
+      "code_prefix": "12인경",
+      "subject": "인간과 경제활동",
+      "subject_type": "융합선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "인간과 의사 결정"
+        },
+        {
+          "area_no": "02",
+          "area_name": "인간과 직업 세계"
+        },
+        {
+          "area_no": "03",
+          "area_name": "인간과 경제 공동체"
+        },
+        {
+          "area_no": "04",
+          "area_name": "인간과 미래 사회"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "19:12인철",
+      "code_prefix": "12인철",
+      "subject": "인간과 철학",
+      "subject_type": "진로선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "나의 삶과 철학함"
+        },
+        {
+          "area_no": "02",
+          "area_name": "공동체와 철학함"
+        },
+        {
+          "area_no": "03",
+          "area_name": "생태계와 철학함"
+        },
+        {
+          "area_no": "04",
+          "area_name": "창조성과 철학함"
+        }
+      ],
+      "standard_count": 16
+    },
+    {
+      "subject_uid": "19:12진로",
+      "code_prefix": "12진로",
+      "subject": "진로와 직업",
+      "subject_type": "일반선택",
+      "curriculum_area": "교양",
+      "volume": 19,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "진로와 나의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "직업 세계와 진로 탐색"
+        },
+        {
+          "area_no": "03",
+          "area_name": "진로 설계와 실천"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "20:12고기",
+      "code_prefix": "12고기",
+      "subject": "고급 기하",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "작도와 평면기하"
+        },
+        {
+          "area_no": "02",
+          "area_name": "곡선의 성질"
+        },
+        {
+          "area_no": "03",
+          "area_name": "곡면의 성질"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "20:12고대",
+      "code_prefix": "12고대",
+      "subject": "고급 대수",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "벡터공간"
+        },
+        {
+          "area_no": "02",
+          "area_name": "행렬과 선형변환"
+        },
+        {
+          "area_no": "03",
+          "area_name": "행렬의 대각화"
+        }
+      ],
+      "standard_count": 20
+    },
+    {
+      "subject_uid": "20:12고물",
+      "code_prefix": "12고물",
+      "subject": "고급 물리학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "역학"
+        },
+        {
+          "area_no": "02",
+          "area_name": "전자기학"
+        },
+        {
+          "area_no": "03",
+          "area_name": "광학"
+        },
+        {
+          "area_no": "04",
+          "area_name": "현대 물리"
+        }
+      ],
+      "standard_count": 22
+    },
+    {
+      "subject_uid": "20:12고미",
+      "code_prefix": "12고미",
+      "subject": "고급 미적분",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "미적분의 활용"
+        },
+        {
+          "area_no": "02",
+          "area_name": "극좌표와 극곡선"
+        },
+        {
+          "area_no": "03",
+          "area_name": "급수"
+        },
+        {
+          "area_no": "04",
+          "area_name": "미분방정식"
+        }
+      ],
+      "standard_count": 22
+    },
+    {
+      "subject_uid": "20:12고생",
+      "code_prefix": "12고생",
+      "subject": "고급 생명과학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "생물의 구조와 에너지"
+        },
+        {
+          "area_no": "02",
+          "area_name": "생물의 조절과 방어"
+        },
+        {
+          "area_no": "03",
+          "area_name": "생명의 연속성"
+        },
+        {
+          "area_no": "04",
+          "area_name": "생명공학기술과 미래"
+        }
+      ],
+      "standard_count": 21
+    },
+    {
+      "subject_uid": "20:12고지",
+      "code_prefix": "12고지",
+      "subject": "고급 지구과학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "고체 지구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "대기와 해양"
+        },
+        {
+          "area_no": "03",
+          "area_name": "우주"
+        }
+      ],
+      "standard_count": 33
+    },
+    {
+      "subject_uid": "20:12고화",
+      "code_prefix": "12고화",
+      "subject": "고급 화학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "물질의 구조"
+        },
+        {
+          "area_no": "02",
+          "area_name": "물질의 성질"
+        },
+        {
+          "area_no": "03",
+          "area_name": "물질의 변화와 에너지"
+        },
+        {
+          "area_no": "04",
+          "area_name": "물질의 변화와 화학 평형"
+        }
+      ],
+      "standard_count": 33
+    },
+    {
+      "subject_uid": "20:12과연",
+      "code_prefix": "12과연",
+      "subject": "과학과제 연구",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "과학 연구의 문제 탐색 및 선정"
+        },
+        {
+          "area_no": "02",
+          "area_name": "과학 연구의 설계 및 수행"
+        },
+        {
+          "area_no": "03",
+          "area_name": "과학 연구의 결론 도출 및 공유"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "20:12물실",
+      "code_prefix": "12물실",
+      "subject": "물리학 실험",
+      "subject_type": "융합선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "물리 실험의 기초"
+        },
+        {
+          "area_no": "02",
+          "area_name": "역학"
+        },
+        {
+          "area_no": "03",
+          "area_name": "전자기학"
+        },
+        {
+          "area_no": "04",
+          "area_name": "광학"
+        },
+        {
+          "area_no": "05",
+          "area_name": "현대 물리"
+        }
+      ],
+      "standard_count": 35
+    },
+    {
+      "subject_uid": "20:12생실",
+      "code_prefix": "12생실",
+      "subject": "생명과학 실험",
+      "subject_type": "융합선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "생물의 구조와 에너지"
+        },
+        {
+          "area_no": "02",
+          "area_name": "자극과 반응"
+        },
+        {
+          "area_no": "03",
+          "area_name": "생명의 연속성과 다양성"
+        },
+        {
+          "area_no": "04",
+          "area_name": "환경과 생태계"
+        },
+        {
+          "area_no": "05",
+          "area_name": "생명공학"
+        }
+      ],
+      "standard_count": 40
+    },
+    {
+      "subject_uid": "20:12이수",
+      "code_prefix": "12이수",
+      "subject": "이산 수학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "선택과 배열"
+        },
+        {
+          "area_no": "02",
+          "area_name": "점화 관계와 알고리즘"
+        },
+        {
+          "area_no": "03",
+          "area_name": "수의 표현과 부울 대수"
+        },
+        {
+          "area_no": "04",
+          "area_name": "그래프"
+        }
+      ],
+      "standard_count": 21
+    },
+    {
+      "subject_uid": "20:12전수",
+      "code_prefix": "12전수",
+      "subject": "전문 수학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "삼각함수와 미적분"
+        },
+        {
+          "area_no": "02",
+          "area_name": "기하"
+        },
+        {
+          "area_no": "03",
+          "area_name": "확률과 통계"
+        }
+      ],
+      "standard_count": 24
+    },
+    {
+      "subject_uid": "20:12정과",
+      "code_prefix": "12정과",
+      "subject": "정보과학",
+      "subject_type": "진로선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "프로그래밍"
+        },
+        {
+          "area_no": "02",
+          "area_name": "데이터 구조"
+        },
+        {
+          "area_no": "03",
+          "area_name": "알고리즘"
+        },
+        {
+          "area_no": "04",
+          "area_name": "정보과학 프로젝트"
+        }
+      ],
+      "standard_count": 18
+    },
+    {
+      "subject_uid": "20:12지실",
+      "code_prefix": "12지실",
+      "subject": "지구과학 실험",
+      "subject_type": "융합선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "고체 지구 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "대기와 해양 탐구"
+        },
+        {
+          "area_no": "03",
+          "area_name": "우주 탐구"
+        }
+      ],
+      "standard_count": 38
+    },
+    {
+      "subject_uid": "20:12화실",
+      "code_prefix": "12화실",
+      "subject": "화학 실험",
+      "subject_type": "융합선택",
+      "curriculum_area": "과학 계열 선택",
+      "volume": 20,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "화학 실험의 기초"
+        },
+        {
+          "area_no": "02",
+          "area_name": "물질의 성질"
+        },
+        {
+          "area_no": "03",
+          "area_name": "화학 반응"
+        },
+        {
+          "area_no": "04",
+          "area_name": "탄소 화합물의 합성과 특성"
+        }
+      ],
+      "standard_count": 32
+    },
+    {
+      "subject_uid": "21:12고전",
+      "code_prefix": "12고전",
+      "subject": "고급 체육 전공 실기",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "전공 실기 응용 기능"
+        },
+        {
+          "area_no": "02",
+          "area_name": "응용 기능 트레이닝"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "21:12기전",
+      "code_prefix": "12기전",
+      "subject": "기초 체육 전공 실기",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "전공 실기 기본 기능"
+        },
+        {
+          "area_no": "02",
+          "area_name": "기본 기능 트레이닝"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "21:12수상",
+      "code_prefix": "12수상",
+      "subject": "수상 스포츠",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "수상 스포츠와 사회"
+        },
+        {
+          "area_no": "02",
+          "area_name": "수상 스포츠 기술"
+        },
+        {
+          "area_no": "03",
+          "area_name": "수상 경기"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "21:12스개",
+      "code_prefix": "12스개",
+      "subject": "스포츠 개론",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠와 사회"
+        },
+        {
+          "area_no": "02",
+          "area_name": "스포츠와 학문"
+        },
+        {
+          "area_no": "03",
+          "area_name": "스포츠와 진로"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "21:12스경",
+      "code_prefix": "12스경",
+      "subject": "스포츠 행정 및 경영",
+      "subject_type": "융합선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠와 행정 및 경영"
+        },
+        {
+          "area_no": "02",
+          "area_name": "스포츠 행정 및 경영의 실제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "스포츠 행정 및 경영과 진로"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "21:12스교",
+      "code_prefix": "12스교",
+      "subject": "스포츠 교육",
+      "subject_type": "융합선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠와 교육"
+        },
+        {
+          "area_no": "02",
+          "area_name": "스포츠 교육의 실제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "스포츠 교육과 진로"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "21:12스기",
+      "code_prefix": "12스기",
+      "subject": "스포츠 경기 기술",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠 경기와 기술"
+        },
+        {
+          "area_no": "02",
+          "area_name": "경기 기술 트레이닝"
+        },
+        {
+          "area_no": "03",
+          "area_name": "경기 기술과 전략"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "21:12스분",
+      "code_prefix": "12스분",
+      "subject": "스포츠 경기 분석",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠 경기와 분석"
+        },
+        {
+          "area_no": "02",
+          "area_name": "경기 분석 방법"
+        },
+        {
+          "area_no": "03",
+          "area_name": "경기 분석과 전략"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "21:12스의",
+      "code_prefix": "12스의",
+      "subject": "스포츠 생리의학",
+      "subject_type": "융합선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠와 생리의학"
+        },
+        {
+          "area_no": "02",
+          "area_name": "스포츠 생리의학의 실제"
+        },
+        {
+          "area_no": "03",
+          "area_name": "스포츠 생리의학과 진로"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "21:12스체",
+      "code_prefix": "12스체",
+      "subject": "스포츠 경기 체력",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "스포츠 경기와 체력"
+        },
+        {
+          "area_no": "02",
+          "area_name": "경기 체력 트레이닝"
+        },
+        {
+          "area_no": "03",
+          "area_name": "경기 체력의 관리"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "21:12심전",
+      "code_prefix": "12심전",
+      "subject": "심화 체육 전공 실기",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "전공 실기 복합 기능"
+        },
+        {
+          "area_no": "02",
+          "area_name": "복합 기능 트레이닝"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "21:12육상",
+      "code_prefix": "12육상",
+      "subject": "육상",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "육상과 사회"
+        },
+        {
+          "area_no": "02",
+          "area_name": "육상 기술"
+        },
+        {
+          "area_no": "03",
+          "area_name": "육상 경기"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "21:12체조",
+      "code_prefix": "12체조",
+      "subject": "체조",
+      "subject_type": "진로선택",
+      "curriculum_area": "체육 계열 선택",
+      "volume": 21,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "체조와 사회"
+        },
+        {
+          "area_no": "02",
+          "area_name": "체조 기술"
+        },
+        {
+          "area_no": "03",
+          "area_name": "체조 경기"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12극창",
+      "code_prefix": "12극창",
+      "subject": "극 창작",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "극 창작의 원리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "극 창작의 실제"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12드로",
+      "code_prefix": "12드로",
+      "subject": "드로잉",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "재료와 기법"
+        },
+        {
+          "area_no": "03",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12무감",
+      "code_prefix": "12무감",
+      "subject": "무용 감상과 비평",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "무용 감상과 비평의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "무용 감상과 비평의 실제"
+        }
+      ],
+      "standard_count": 6
+    },
+    {
+      "subject_uid": "22:12무기",
+      "code_prefix": "12무기",
+      "subject": "무용 기초 실기",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "기본 동작 원리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "기본 동작 심화"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "22:12무대",
+      "code_prefix": "12무대",
+      "subject": "무대미술과 기술",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "무대장치"
+        },
+        {
+          "area_no": "02",
+          "area_name": "무대조명"
+        },
+        {
+          "area_no": "03",
+          "area_name": "무대음향"
+        },
+        {
+          "area_no": "04",
+          "area_name": "무대의상"
+        },
+        {
+          "area_no": "05",
+          "area_name": "무대분장"
+        }
+      ],
+      "standard_count": 20
+    },
+    {
+      "subject_uid": "22:12무매",
+      "code_prefix": "12무매",
+      "subject": "무용과 매체",
+      "subject_type": "융합선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "무용에서 매체의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "무용에서 매체의 활용"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "22:12무몸",
+      "code_prefix": "12무몸",
+      "subject": "무용과 몸",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "몸의 이해와 성찰"
+        },
+        {
+          "area_no": "02",
+          "area_name": "춤추는 몸"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "22:12무이",
+      "code_prefix": "12무이",
+      "subject": "무용의 이해",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "무용의 역사"
+        },
+        {
+          "area_no": "02",
+          "area_name": "무용과 삶"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "22:12무전",
+      "code_prefix": "12무전",
+      "subject": "무용 전공 실기",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "응용 동작"
+        },
+        {
+          "area_no": "02",
+          "area_name": "작품 실기"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12무제",
+      "code_prefix": "12무제",
+      "subject": "무용 제작 실습",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "무용 제작의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "무용 제작의 실제"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12문감",
+      "code_prefix": "12문감",
+      "subject": "문학 감상과 비평",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "문학 감상과 비평의 원리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "문학 감상과 비평의 실제"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12문매",
+      "code_prefix": "12문매",
+      "subject": "문학과 매체",
+      "subject_type": "융합선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "다매체 시대의 문학"
+        },
+        {
+          "area_no": "02",
+          "area_name": "문학의 확장과 융합"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12문이",
+      "code_prefix": "12문이",
+      "subject": "문예 창작의 이해",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "문예 창작의 원리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "문예 창작의 실제"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12문장",
+      "code_prefix": "12문장",
+      "subject": "문장론",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "문장 표현 방법"
+        },
+        {
+          "area_no": "02",
+          "area_name": "글 작성 과정"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12미론",
+      "code_prefix": "12미론",
+      "subject": "미술 이론",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "미술의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "조형론"
+        },
+        {
+          "area_no": "03",
+          "area_name": "비평론"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "22:12미사",
+      "code_prefix": "12미사",
+      "subject": "미술사",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "미술사의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "시대·지역별 미술사"
+        },
+        {
+          "area_no": "03",
+          "area_name": "미술사의 확장"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12미전",
+      "code_prefix": "12미전",
+      "subject": "미술 전공 실기",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "재료와 기법"
+        },
+        {
+          "area_no": "02",
+          "area_name": "창작"
+        },
+        {
+          "area_no": "03",
+          "area_name": "진로"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "22:12미탐",
+      "code_prefix": "12미탐",
+      "subject": "미술 매체 탐구",
+      "subject_type": "융합선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "표현"
+        },
+        {
+          "area_no": "03",
+          "area_name": "확장"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12미회",
+      "code_prefix": "12미회",
+      "subject": "미술과 사회",
+      "subject_type": "융합선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "미술과 소통"
+        },
+        {
+          "area_no": "02",
+          "area_name": "미술과 참여"
+        },
+        {
+          "area_no": "03",
+          "area_name": "미술의 확장"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12사감",
+      "code_prefix": "12사감",
+      "subject": "사진 감상과 비평",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "작품 감상과 비평"
+        },
+        {
+          "area_no": "02",
+          "area_name": "창의적 사고의 확장"
+        }
+      ],
+      "standard_count": 7
+    },
+    {
+      "subject_uid": "22:12사삶",
+      "code_prefix": "12사삶",
+      "subject": "사진과 삶",
+      "subject_type": "융합선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "사진과 일상"
+        },
+        {
+          "area_no": "02",
+          "area_name": "생각과 표현"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12사이",
+      "code_prefix": "12사이",
+      "subject": "사진의 이해",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "사진의 개념"
+        },
+        {
+          "area_no": "02",
+          "area_name": "사진의 표현"
+        }
+      ],
+      "standard_count": 9
+    },
+    {
+      "subject_uid": "22:12사촬",
+      "code_prefix": "12사촬",
+      "subject": "사진 촬영",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "사진 촬영과 조명"
+        },
+        {
+          "area_no": "02",
+          "area_name": "사진 제작"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12사표",
+      "code_prefix": "12사표",
+      "subject": "사진 표현 기법",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이미지 표현"
+        },
+        {
+          "area_no": "02",
+          "area_name": "이미지 활용"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12소창",
+      "code_prefix": "12소창",
+      "subject": "소설 창작",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "소설 창작의 원리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "소설 창작의 실제"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12시창",
+      "code_prefix": "12시창",
+      "subject": "시 창작",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "시 창작의 원리"
+        },
+        {
+          "area_no": "02",
+          "area_name": "시 창작의 실제"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12시청",
+      "code_prefix": "12시청",
+      "subject": "시창 · 청음",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "음악적 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "음악적 표현"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12안무",
+      "code_prefix": "12안무",
+      "subject": "안무",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "안무 원리와 방법"
+        },
+        {
+          "area_no": "02",
+          "area_name": "안무의 과정"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12연감",
+      "code_prefix": "12연감",
+      "subject": "연극 감상과 비평",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "감상과 비평의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "감상과 비평의 실제"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "22:12연극",
+      "code_prefix": "12연극",
+      "subject": "연극",
+      "subject_type": "일반선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "표현"
+        },
+        {
+          "area_no": "02",
+          "area_name": "체험"
+        },
+        {
+          "area_no": "03",
+          "area_name": "생활"
+        },
+        {
+          "area_no": "04",
+          "area_name": "감상"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "22:12연기",
+      "code_prefix": "12연기",
+      "subject": "연기",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "분석"
+        },
+        {
+          "area_no": "02",
+          "area_name": "훈련"
+        },
+        {
+          "area_no": "03",
+          "area_name": "적용"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "22:12연말",
+      "code_prefix": "12연말",
+      "subject": "연극과 말",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "훈련"
+        },
+        {
+          "area_no": "03",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 13
+    },
+    {
+      "subject_uid": "22:12연몸",
+      "code_prefix": "12연몸",
+      "subject": "연극과 몸",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "훈련"
+        },
+        {
+          "area_no": "03",
+          "area_name": "표현"
+        }
+      ],
+      "standard_count": 11
+    },
+    {
+      "subject_uid": "22:12연삶",
+      "code_prefix": "12연삶",
+      "subject": "연극과 삶",
+      "subject_type": "융합선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "일상과 연극"
+        },
+        {
+          "area_no": "02",
+          "area_name": "연극의 특성"
+        },
+        {
+          "area_no": "03",
+          "area_name": "연극의 흐름"
+        },
+        {
+          "area_no": "04",
+          "area_name": "연극과 직업"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "22:12연제",
+      "code_prefix": "12연제",
+      "subject": "연극 제작 실습",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "준비"
+        },
+        {
+          "area_no": "02",
+          "area_name": "제작"
+        },
+        {
+          "area_no": "03",
+          "area_name": "공연"
+        }
+      ],
+      "standard_count": 14
+    },
+    {
+      "subject_uid": "22:12영감",
+      "code_prefix": "12영감",
+      "subject": "영화 감상과 비평",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "감상과 비평의 이해"
+        },
+        {
+          "area_no": "02",
+          "area_name": "감상과 비평의 실제"
+        }
+      ],
+      "standard_count": 9
+    },
+    {
+      "subject_uid": "22:12영삶",
+      "code_prefix": "12영삶",
+      "subject": "영화와 삶",
+      "subject_type": "융합선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "영화로 표현하기"
+        },
+        {
+          "area_no": "02",
+          "area_name": "영화로 세상읽기"
+        },
+        {
+          "area_no": "03",
+          "area_name": "영화로 탐색하기"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12영실",
+      "code_prefix": "12영실",
+      "subject": "영화 제작 실습",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "사전 제작 단계"
+        },
+        {
+          "area_no": "02",
+          "area_name": "제작 단계"
+        },
+        {
+          "area_no": "03",
+          "area_name": "후반 제작 단계"
+        }
+      ],
+      "standard_count": 12
+    },
+    {
+      "subject_uid": "22:12영이",
+      "code_prefix": "12영이",
+      "subject": "영화의 이해",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "영화의 특성"
+        },
+        {
+          "area_no": "02",
+          "area_name": "영화의 구성 요소"
+        },
+        {
+          "area_no": "03",
+          "area_name": "영화의 역사"
+        }
+      ],
+      "standard_count": 15
+    },
+    {
+      "subject_uid": "22:12영제",
+      "code_prefix": "12영제",
+      "subject": "영상 제작의 이해",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "영상 촬영과 편집"
+        },
+        {
+          "area_no": "02",
+          "area_name": "영상 표현"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12음공",
+      "code_prefix": "12음공",
+      "subject": "음악 공연 실습",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "음악적 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "연계적 표현"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12음문",
+      "code_prefix": "12음문",
+      "subject": "음악과 문화",
+      "subject_type": "융합선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "문화적 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "문화적 소통"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12음사",
+      "code_prefix": "12음사",
+      "subject": "음악사",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "음악적 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "음악적 의미"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12음이",
+      "code_prefix": "12음이",
+      "subject": "음악 이론",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "음악적 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "음악적 적용"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12음전",
+      "code_prefix": "12음전",
+      "subject": "음악 전공 실기",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "음악적 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "심화적 표현"
+        }
+      ],
+      "standard_count": 8
+    },
+    {
+      "subject_uid": "22:12조형",
+      "code_prefix": "12조형",
+      "subject": "조형 탐구",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "조형의 기초"
+        },
+        {
+          "area_no": "02",
+          "area_name": "조형의 확장"
+        }
+      ],
+      "standard_count": 11
+    },
+    {
+      "subject_uid": "22:12촬조",
+      "code_prefix": "12촬조",
+      "subject": "촬영·조명",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "촬영"
+        },
+        {
+          "area_no": "02",
+          "area_name": "조명"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12편사",
+      "code_prefix": "12편사",
+      "subject": "편집·사운드",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "편집"
+        },
+        {
+          "area_no": "02",
+          "area_name": "사운드"
+        }
+      ],
+      "standard_count": 10
+    },
+    {
+      "subject_uid": "22:12합",
+      "code_prefix": "12합",
+      "subject": "합창 · 합주",
+      "subject_type": "진로선택",
+      "curriculum_area": "예술 계열 선택",
+      "volume": 22,
+      "grade_band": "2-3",
+      "areas": [
+        {
+          "area_no": "01",
+          "area_name": "음악적 탐구"
+        },
+        {
+          "area_no": "02",
+          "area_name": "실천적 표현"
+        }
+      ],
+      "standard_count": 8
+    }
+  ]
+}

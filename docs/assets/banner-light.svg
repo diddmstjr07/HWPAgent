@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 320" width="860" height="320" role="img" aria-label="HWP Agent — 3년을 잇는 탐구, 한 편의 보고서로">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBFAF8"/>
+      <stop offset="1" stop-color="#F3F1EC"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="860" height="320" rx="22" fill="url(#paper)"/>
+
+  <!-- 표식 -->
+  <g transform="translate(60 56)" stroke="#D97757" stroke-width="4.4" stroke-linecap="round">
+    <path d="M18 0 V36 M0 18 H36 M5.3 5.3 L30.7 30.7 M30.7 5.3 L5.3 30.7"/>
+  </g>
+
+  <text x="114" y="88" font-family="Iowan Old Style, Palatino, Georgia, serif"
+        font-size="45" font-weight="700" fill="#141414">HWP Agent</text>
+
+  <text x="60" y="150" font-family="Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, sans-serif"
+        font-size="24" font-weight="600" fill="#2A2724">3년을 잇는 탐구, 한 편의 보고서로</text>
+
+  <text x="60" y="185" font-family="Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, sans-serif"
+        font-size="15" fill="#8A8579">생기부를 하나의 연구 서사로 설계하고, 직접 탐구하고, 한글 문서로 남깁니다.</text>
+
+  <!-- 3년 타임라인 : 학년마다 굵어지고, 끝에 보고서가 나온다 -->
+  <g transform="translate(60 248)">
+    <line x1="0" y1="0" x2="700" y2="0" stroke="#0F172A" stroke-opacity="0.12" stroke-width="1.5"/>
+    <g fill="#0F172A">
+      <circle cx="28" cy="0" r="5.5" fill-opacity="0.28"/>
+      <circle cx="228" cy="0" r="7.5" fill-opacity="0.52"/>
+      <circle cx="428" cy="0" r="9.5"/>
+    </g>
+    <circle cx="648" cy="0" r="12.5" fill="#D97757"/>
+    <path d="M642.5 0.5 l4 4 L655 -4" fill="none" stroke="#FBFAF8" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <g font-family="Apple SD Gothic Neo, Malgun Gothic, Noto Sans KR, sans-serif"
+       font-size="13.5" fill="#8A8579">
+      <text x="28" y="27" text-anchor="middle">1학년</text>
+      <text x="228" y="27" text-anchor="middle">2학년</text>
+      <text x="428" y="27" text-anchor="middle">3학년</text>
+      <text x="648" y="27" text-anchor="middle" fill="#B4614A">보고서</text>
+    </g>
+  </g>
+</svg>

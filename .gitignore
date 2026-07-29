@@ -33,3 +33,19 @@ vpn/clients/
 build/
 tools/build/
 mobile/node_modules/
+
+# Reproducible official source corpus (large downloaded binaries/snapshots)
+data/reference_sources/raw/
+data/reference_sources/catalog/
+# 원자료에서 뽑아낸 텍스트(재생성 가능, 30MB)
+data/reference_sources_text/
+data/reference_sources_text.zip
+
+# 백업본. .env 와 DB 는 비밀·개인정보가 들어 있어 절대 올리지 않는다.
+*.bak
+*.bak-*
+.env.bak*
+*.db.bak*
+hwp_agent.db.bak*
+*.before-legacy-removal-*
+*.local-backup.*

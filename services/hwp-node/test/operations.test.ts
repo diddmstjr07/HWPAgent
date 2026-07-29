@@ -51,6 +51,7 @@ describe('applyOp: write operations', () => {
 
   it('set_char_format applies with fontName -> fontId conversion', () => {
     applyOp(doc, { kind: 'insert_text', sec: 0, para: 0, offset: 0, text: 'TESTING' });
+    const before = doc.getText(0, 0, 0, 100);
     applyOp(doc, {
       kind: 'set_char_format',
       sec: 0,
@@ -59,16 +60,19 @@ describe('applyOp: write operations', () => {
       end: 7,
       props: { bold: true, fontSize: 1200, fontName: '함초롬바탕' },
     });
+    expect(doc.getText(0, 0, 0, 100)).toBe(before);
   });
 
   it('set_para_format changes alignment', () => {
     applyOp(doc, { kind: 'insert_text', sec: 0, para: 0, offset: 0, text: 'TEST' });
+    const before = doc.getText(0, 0, 0, 100);
     applyOp(doc, {
       kind: 'set_para_format',
       sec: 0,
       para: 0,
       props: { align: 'Center' },
     });
+    expect(doc.getText(0, 0, 0, 100)).toBe(before);
   });
 
   it('set_field throws for non-existent field', () => {
@@ -93,6 +97,114 @@ describe('applyOp: write operations', () => {
     expect(after).toContain('XYZ bar XYZ baz XYZ');
     expect(after).not.toContain('foo');
   });
+
+  it('create_table inserts a real table and optional cell text', () => {
+    const result = applyOp(doc, {
+      kind: 'create_table',
+      sec: 0,
+      para: 0,
+      offset: 0,
+      rows: 2,
+      cols: 3,
+      cells: [
+        ['A1', 'B1', 'C1'],
+        ['A2', 'B2', 'C2'],
+      ],
+    });
+
+    const data = result.data as { rows: number; cols: number; paraIdx: number; controlIdx: number };
+    expect(data.rows).toBe(2);
+    expect(data.cols).toBe(3);
+    expect(JSON.parse(doc.raw.getTableDimensions(0, data.paraIdx, data.controlIdx))).toEqual({
+      rowCount: 2,
+      colCount: 3,
+      cellCount: 6,
+    });
+    expect(doc.raw.getTextInCell(0, data.paraIdx, data.controlIdx, 4, 0, 0, 100)).toBe('B2');
+  });
+
+  it('paste_reference_component rejects blocks that corrupt exported page geometry', () => {
+    applyOp(doc, { kind: 'split_paragraph', sec: 0, para: 0, offset: 0 });
+    expect(() =>
+      applyOp(doc, {
+        kind: 'paste_reference_component',
+        component: 'attachment_header_bar',
+        sec: 0,
+        para: 0,
+        offset: 0,
+        replacements: [
+          { cellIdx: 0, text: '붙임 9' },
+          { cellIdx: 2, text: '복제 테스트 제목' },
+        ],
+      }),
+    ).toThrow(/corrupts exported page geometry/);
+  });
+
+  it('table and cell ops edit an existing table', () => {
+    const created = applyOp(doc, { kind: 'create_table', sec: 0, para: 0, offset: 0, rows: 2, cols: 2 });
+    const table = created.data as { paraIdx: number; controlIdx: number };
+
+    applyOp(doc, {
+      kind: 'insert_text_in_cell',
+      sec: 0,
+      para: table.paraIdx,
+      controlIdx: table.controlIdx,
+      cellIdx: 0,
+      cellPara: 0,
+      offset: 0,
+      text: 'cell text',
+    });
+    expect((applyOp(doc, {
+      kind: 'get_text_in_cell',
+      sec: 0,
+      para: table.paraIdx,
+      controlIdx: table.controlIdx,
+      cellIdx: 0,
+    }).data as { text: string }).text).toBe('cell text');
+
+    expect(() => applyOp(doc, {
+      kind: 'set_char_format_in_cell',
+      sec: 0,
+      para: table.paraIdx,
+      controlIdx: table.controlIdx,
+      cellIdx: 0,
+      cellPara: 0,
+      start: 0,
+      end: 4,
+      props: { fontName: '함초롬돋움', fontSize: 1100, bold: true },
+    })).not.toThrow();
+
+    expect(() => applyOp(doc, {
+      kind: 'set_para_format_in_cell',
+      sec: 0,
+      para: table.paraIdx,
+      controlIdx: table.controlIdx,
+      cellIdx: 0,
+      cellPara: 0,
+      props: { align: 'Center', lineSpacing: 140 },
+    })).not.toThrow();
+
+    applyOp(doc, { kind: 'insert_table_row', sec: 0, para: table.paraIdx, controlIdx: table.controlIdx, rowIdx: 1, below: true });
+    applyOp(doc, { kind: 'insert_table_column', sec: 0, para: table.paraIdx, controlIdx: table.controlIdx, colIdx: 1, right: true });
+    const info = applyOp(doc, { kind: 'get_table_info', sec: 0, para: table.paraIdx, controlIdx: table.controlIdx }).data as {
+      dimensions: { rowCount: number; colCount: number };
+    };
+    expect(info.dimensions.rowCount).toBe(3);
+    expect(info.dimensions.colCount).toBe(3);
+  });
+
+  it('raw HWP function gateway exposes and calls Node functions', () => {
+    const catalog = applyOp(doc, { kind: 'get_hwp_function_catalog' }).data as {
+      functions: Array<{ name: string; arity: number }>;
+    };
+    expect(catalog.functions.some((fn) => fn.name === 'insertText')).toBe(true);
+
+    const before = applyOp(doc, { kind: 'call_hwp_function', method: 'getParagraphCount', args: [0], affectsDocument: false });
+    expect((before.data as { result: number }).result).toBeGreaterThan(0);
+
+    applyOp(doc, { kind: 'call_hwp_function', method: 'insertText', args: [0, 0, 0, 'RAW-'], affectsDocument: true });
+    expect(doc.getText(0, 0, 0, 10).startsWith('RAW-')).toBe(true);
+  });
 });
 
 describe('applyOp: read operations', () => {
@@ -108,6 +220,13 @@ describe('applyOp: read operations', () => {
     const doc = await openHwp(`${SAMPLES}/text.hwp`);
     applyOp(doc, { kind: 'insert_text', sec: 0, para: 0, offset: 0, text: 'UNIQUE_TOKEN' });
     const result = applyOp(doc, { kind: 'search_text', query: 'UNIQUE_TOKEN' });
+    expect((result.data as { count: number }).count).toBeGreaterThanOrEqual(1);
+  });
+
+  it('search_deep finds whitespace-normalized paragraph labels', async () => {
+    const doc = await openHwp(`${SAMPLES}/text.hwp`);
+    applyOp(doc, { kind: 'insert_text', sec: 0, para: 0, offset: 0, text: '성 명 : ______' });
+    const result = applyOp(doc, { kind: 'search_deep', query: '성명' });
     expect((result.data as { count: number }).count).toBeGreaterThanOrEqual(1);
   });
 });
