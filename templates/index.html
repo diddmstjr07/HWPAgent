@@ -79,6 +79,9 @@
             --shadow-3d: 0 20px 50px -12px rgba(15, 23, 42, 0.1), 0 4px 12px rgba(0,0,0,0.05);
             --radius-md: 16px;
             --radius-sm: 10px;
+
+            /* 강조 한 점. 로고와 알림 점에만 쓴다 — 여러 곳에 뿌리면 힘이 없어진다. */
+            --accent-warm: #D97757;
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
@@ -419,13 +422,33 @@
             pointer-events: none; z-index: 0;
         }
 
+        /* ── 모바일 헤더 ──
+           가로 막대 대신 떠 있는 동그란 버튼 두 개. 배경을 덮지 않으므로
+           본문이 화면 끝까지 이어져 보이고, 손가락은 양쪽 모서리에서 닿는다. */
         .mobile-header {
-            display: none; align-items: center; justify-content: space-between;
-            padding: 14px 20px; 
-            background: rgba(248, 250, 252, 0.8); backdrop-filter: blur(15px);
-            border-bottom: 1px solid #E2E8F0; z-index: 40;
+            display: none; align-items: flex-start; justify-content: space-between;
+            padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 0;
+            background: none; border: 0; z-index: 40;
+            position: absolute; top: 0; left: 0; right: 0;
+            pointer-events: none;
         }
-        .mobile-header button { color: var(--text-main) !important; }
+        .hbtn {
+            pointer-events: auto; position: relative;
+            width: 44px; height: 44px; border-radius: 50%;
+            border: none; background: #fff; color: var(--text-main);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.25rem; cursor: pointer;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.07);
+            transition: box-shadow 0.18s ease, transform 0.18s ease;
+        }
+        .hbtn:active { transform: scale(0.94); }
+        .hbtn:focus-visible { box-shadow: 0 0 0 4px var(--accent-glow); }
+        /* 읽지 않은 것이 있을 때만 켜지는 점. 숫자보다 조용하다. */
+        .hbtn-dot {
+            position: absolute; top: 9px; right: 10px;
+            width: 7px; height: 7px; border-radius: 50%; background: var(--accent-warm);
+        }
+        body[data-theme="dark"] .hbtn { background: #111827; color: #E2E8F0; box-shadow: none; }
 
         .scroll-container {
             flex: 1; overflow-y: auto; scroll-behavior: smooth;
@@ -451,6 +474,11 @@
             background-size: 400% 100%; animation: home-shimmer 1.4s ease infinite;
         }
         @keyframes home-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+        /* 표식 하나. 강조색은 여기와 알림 점에만 쓴다. */
+        .home-mark {
+            font-size: 1.7rem; line-height: 1; color: var(--accent-warm);
+            margin-bottom: 14px;
+        }
         .home-eyebrow {
             font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
             text-transform: uppercase; color: #94A3B8;
@@ -2126,6 +2154,23 @@
             .calendar-state { min-height: 360px; }
             .calendar-skeleton { min-height: 360px; }
 
+            /* ── 첫 화면 ──
+               카드 테두리를 걷고 화면 한가운데에 세운다. 좁은 화면에서 테두리는
+               내용을 한 겹 더 가둬 답답해 보인다. */
+            .home { margin-top: 0; padding: 0 22px; display: flex;
+                    align-items: center; min-height: 62vh; }
+            .home-card {
+                background: none; border: 0; box-shadow: none; padding: 0;
+                text-align: center; width: 100%;
+            }
+            .home-title { font-size: 1.5rem; }
+            .home-lead { font-size: 0.94rem; }
+            .home-steps { justify-content: center; border-top: 0; padding-top: 22px; }
+            .home-actions { justify-content: center; margin-top: 26px; }
+            .home-btn { min-height: 48px; padding: 13px 22px; }
+            .home-btn.primary { flex: 1 1 auto; max-width: 320px; }
+            .home-skeleton { background-color: rgba(15, 23, 42, 0.04); }
+
             /* ── 채팅 본문. 학생들은 폰·태블릿으로 더 많이 쓴다 ── */
             .doc-viewer { padding: 0 14px 1rem; padding-top: 56px; }
             .message-row { gap: 10px; margin-bottom: 26px; }
@@ -2146,12 +2191,51 @@
             .resume-open { min-height: 40px; }
             .exp-phases { gap: 4px 10px; font-size: 0.74rem; padding-left: 16px; }
 
-            /* iOS는 16px 미만 입력에 포커스하면 화면을 멋대로 확대한다. */
-            textarea { font-size: 16px; }
-            /* 홈 바(iPhone 하단 제스처 영역)에 입력창이 깔리지 않게 띄운다. */
-            .input-region { padding: 0 10px calc(10px + env(safe-area-inset-bottom)); }
-            /* 포커스 시 떠오르는 효과는 모바일 키보드와 겹쳐 덜컹거린다. */
-            .input-wrapper:focus-within { transform: none; }
+            /* ── 종이 같은 바탕 ──
+               차가운 슬레이트 흰색은 화면이 넓게 비었을 때 '미완성'처럼 보인다.
+               따뜻한 종이 톤이면 같은 여백이 '여유'로 읽힌다. */
+            body, .main-content { background: #FAF9F7; }
+            .scroll-container { background: transparent; }
+
+            /* ── 입력 도크 ──
+               글 칸이 위, 버튼 줄이 아래인 2단. 한 줄에 다 밀어 넣으면
+               폰에서는 글 칸이 두세 글자 폭밖에 남지 않는다. */
+            .input-region {
+                padding: 0 12px calc(12px + env(safe-area-inset-bottom));
+                background: linear-gradient(to top, #FAF9F7 55%, transparent);
+            }
+            .input-wrapper {
+                flex-direction: column; align-items: stretch; gap: 0;
+                border-radius: 26px; padding: 14px 16px 10px;
+                background: #F2F0EC; border-color: transparent;
+                box-shadow: none; min-height: 0;
+            }
+            .input-wrapper:focus-within {
+                transform: none; background: #fff;
+                border-color: transparent;
+                box-shadow: 0 6px 20px -8px rgba(15, 23, 42, 0.16);
+            }
+            /* 16px 미만이면 iOS가 포커스할 때 화면을 확대한다. */
+            textarea { font-size: 16px; padding: 0 0 6px; max-height: 120px; }
+            .input-bar {
+                display: flex; align-items: center; justify-content: space-between;
+                gap: 8px; margin-top: 4px;
+            }
+            .input-chip {
+                display: inline-flex; align-items: center; gap: 5px;
+                padding: 6px 12px; border-radius: 999px;
+                background: rgba(15, 23, 42, 0.05); color: #64748B;
+                font-size: 0.78rem; font-weight: 600;
+                max-width: 62vw; overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap;
+            }
+            .input-chip[hidden] { display: none; }
+            /* 보내기 버튼은 아래 줄 오른쪽 끝. 엄지가 가장 편한 자리다. */
+            .btn-send { width: 42px; height: 42px; border-radius: 50%; margin-left: auto; }
+            .btn-send.active:hover { transform: none; }
+            body[data-theme="dark"] .input-wrapper { background: #111827; }
+            body[data-theme="dark"] .input-wrapper:focus-within { background: #0F172A; }
+            body[data-theme="dark"] .input-chip { background: rgba(226, 232, 240, 0.08); color: #94A3B8; }
 
             /* 눌러볼 화면(demo)은 좁은 화면에서 조금 더 높게 — 안의 UI가 눌리지 않게. */
             .demo-frame { height: 260px; }
@@ -2196,8 +2280,62 @@
             .measure-send { min-height: 44px; padding: 11px 22px; font-size: 0.92rem; }
             .measure-add { min-height: 40px; }
 
-            /* 사이드바 서랍은 화면의 대부분을 덮되 손가락이 빠져나갈 틈은 남긴다. */
-            .sidebar { width: min(300px, 84vw); }
+            /* ── 서랍(사이드바) ──
+               테두리와 배경 카드를 걷어내고 여백으로만 나눈다. 좁은 화면에서
+               선이 많으면 실제보다 더 좁아 보인다. */
+            .sidebar {
+                width: min(320px, 86vw);
+                background: #FAF9F7; border: 0;
+                padding: calc(18px + env(safe-area-inset-top, 0px)) 12px
+                         calc(84px + env(safe-area-inset-bottom, 0px));
+                box-shadow: 24px 0 60px -20px rgba(15, 23, 42, 0.18);
+            }
+            .sidebar-overlay { background: rgba(15, 23, 42, 0.28); backdrop-filter: blur(1px); }
+
+            .nav-item, .folder, .chat-row {
+                padding: 12px 14px; border-radius: 14px; font-size: 0.98rem;
+                min-height: 48px;
+            }
+            .nav-item:hover, .folder:hover, .chat-row:hover {
+                background: rgba(15, 23, 42, 0.045); box-shadow: none;
+            }
+            .nav-item i, .folder i.bi { font-size: 1.05rem; }
+            .nav-label {
+                padding: 18px 14px 6px; font-size: 0.72rem;
+                letter-spacing: 0.02em; text-transform: none; color: #A8A29E;
+            }
+            .chat-row { padding-left: 40px; }
+
+            /* 새 대화는 목록 위가 아니라 화면 아래에 떠 있는 알약으로.
+               스크롤을 어디까지 내렸든 늘 같은 자리에서 눌린다. */
+            .btn-new-chat {
+                position: fixed; z-index: 60;
+                left: auto; right: max(16px, calc(100vw - min(320px, 86vw) + 16px));
+                bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+                width: auto; padding: 13px 22px; border-radius: 999px;
+                background: var(--accent-primary); color: #fff; border: none;
+                font-weight: 600; box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.4);
+            }
+            .sidebar:not(.open) .btn-new-chat { display: none; }
+            .btn-new-chat i { color: #fff; }
+            /* 프로필은 아래 왼쪽에 동그라미 하나로. 이름·이메일은 눌러서 본다. */
+            .user-profile {
+                position: fixed; z-index: 60;
+                left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+                width: 46px; height: 46px; padding: 0; border: 0; background: none;
+                border-radius: 50%; overflow: hidden;
+            }
+            .sidebar:not(.open) .user-profile { display: none; }
+            .user-profile .user-info, .user-profile #btnAuthToggle { display: none; }
+            .user-avatar { width: 46px; height: 46px; font-size: 0.95rem; }
+            .theme-toggle-row { margin-top: 8px; }
+
+            body[data-theme="dark"] .sidebar { background: #0B0F17; }
+            body[data-theme="dark"] .nav-item:hover,
+            body[data-theme="dark"] .folder:hover,
+            body[data-theme="dark"] .chat-row:hover { background: rgba(226, 232, 240, 0.06); }
+            body[data-theme="dark"] .btn-new-chat { background: #E2E8F0; color: #0F172A; }
+            body[data-theme="dark"] .btn-new-chat i { color: #0F172A; }
         }
         .user-info {
             display: flex; flex-direction: column; gap: 2px; flex: 1;
@@ -2646,14 +2784,17 @@
             <p class="peek-hint" id="roadmapPeekHint" hidden>누르면 3년 로드맵으로 이동해요.</p>
         </div>
 
+        <!-- 모바일 헤더. 가로 막대가 아니라 떠 있는 동그란 버튼 두 개다 —
+             화면 위쪽을 막대가 잘라먹지 않아야 본문이 넓어 보인다. -->
         <header class="mobile-header">
-            <button class="btn-icon" id="btnMenu" style="color:white; background:none; border:none; font-size:1.4rem;"><i class="bi bi-list"></i></button>
-            <div style="font-weight:700; font-size:1.1rem;">DOC Agent</div>
-            <div class="mobile-actions">
-                <button class="btn-icon theme-toggle-icon" id="btnThemeToggleMobile" data-theme-toggle aria-pressed="false" title="다크 모드 토글" style="background:none; border:none; font-size:1.1rem;">
-                    <i class="bi bi-moon-stars" data-theme-icon></i>
-                </button>
-            </div>
+            <button class="hbtn" id="btnMenu" aria-label="메뉴 열기">
+                <i class="bi bi-list"></i>
+                <span class="hbtn-dot" id="menuDot" hidden></span>
+            </button>
+            <button class="hbtn theme-toggle-icon" id="btnThemeToggleMobile"
+                    data-theme-toggle aria-pressed="false" aria-label="다크 모드 토글">
+                <i class="bi bi-moon-stars" data-theme-icon></i>
+            </button>
         </header>
 
         <div class="scroll-container" id="scrollContainer">
@@ -2672,13 +2813,18 @@
             </div>
         </div>
 
+        <!-- 입력 도크. 글 칸이 위, 버튼 줄이 아래인 2단 구조다.
+             폰에서 한 줄에 다 밀어 넣으면 글 칸이 좁아 두세 글자만 보인다. -->
         <div class="input-region">
             <div class="input-wrapper">
                 <textarea id="userRequest" rows="1" placeholder="메시지를 입력하세요..."></textarea>
-                <button id="btnSend" class="btn-send">
-                    <i class="bi bi-arrow-up" id="iconSend" style="font-weight:bold; font-size:1.1rem;"></i>
-                    <div class="spinner hidden" id="spinnerSend"></div>
-                </button>
+                <div class="input-bar">
+                    <span class="input-chip" id="stageChip" hidden></span>
+                    <button id="btnSend" class="btn-send" aria-label="보내기">
+                        <i class="bi bi-arrow-up" id="iconSend"></i>
+                        <div class="spinner hidden" id="spinnerSend"></div>
+                    </button>
+                </div>
             </div>
         </div>
     </main>
@@ -2879,8 +3025,8 @@
 
     <div id="toast" class="app-toast" role="status" aria-live="polite"></div>
     
-    <script src="/static/js/shell.js?v=1"></script>
-    <script src="/static/js/home.js?v=1"></script>
+    <script src="/static/js/shell.js?v=2"></script>
+    <script src="/static/js/home.js?v=2"></script>
     <script src="/static/js/guide.js?v=41"></script>
     <script src="/static/js/history.js?v=20260729"></script>
 </body>

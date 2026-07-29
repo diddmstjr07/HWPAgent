@@ -78,6 +78,7 @@
     const render = (next, status) => {
         if (status === 401) {
             paint(`
+                <div class="home-mark" aria-hidden="true">✳</div>
                 <div class="home-eyebrow">3년 연구 서사</div>
                 <h1 class="home-title">생기부를 하나의 이야기로</h1>
                 <p class="home-lead">테마 하나로 3년을 잇고, 과목마다 직접 탐구해서
@@ -95,6 +96,7 @@
             : (next.message || '');
 
         const body = `
+            <div class="home-mark" aria-hidden="true">✳</div>
             <div class="home-eyebrow">3년 연구 서사</div>
             <h1 class="home-title">${esc(title)}</h1>
             <p class="home-lead">${esc(lead).replace(/\n/g, '<br>')}</p>
@@ -121,14 +123,37 @@
         paint(body, buttons);
     };
 
+    /**
+     * 입력창 위 작은 칩과 메뉴 점.
+     * 대화로 들어가면 첫 화면은 사라지지만 "지금 몇 단계인지"는 계속 보여야 한다.
+     */
+    const markShell = (next) => {
+        const chip = document.getElementById('stageChip');
+        if (chip && next && next.stage && next.stage !== 'done') {
+            const at = STAGES.findIndex((item) => item.key === next.stage);
+            const name = at >= 0 ? STAGES[at].name : '';
+            if (name) {
+                chip.textContent = `${at + 1}/${STAGES.length} ${name}`;
+                chip.hidden = false;
+            }
+        }
+        // 지금 할 일이 남아 있으면 메뉴 버튼에 점을 켠다.
+        const dot = document.getElementById('menuDot');
+        if (dot && next && next.stage && next.stage !== 'done') dot.hidden = false;
+    };
+
     (async () => {
         try {
             const boot = window.__boot || {};
             // 프리페치를 소비하지 않는다 — guide.js도 같은 값을 기다리고 있다.
             const pre = boot.next ? await boot.next : null;
-            if (pre) { render(pre.body, pre.status); return; }
+            const body = pre ? pre.body : null;
+            const status = pre ? pre.status : null;
+            if (pre) { render(body, status); markShell(body); return; }
             const res = await fetch('/api/research/next', { credentials: 'same-origin' });
-            render(res.ok ? await res.json() : null, res.status);
+            const data = res.ok ? await res.json() : null;
+            render(data, res.status);
+            markShell(data);
         } catch (_) {
             // 첫 화면 하나 때문에 앱을 막지는 않는다. 조용히 비운다.
             home.hidden = true;
