@@ -1,0 +1,12 @@
+<svg id="ic_info_red_16" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+    <defs>
+        <style>
+            .cls-1{fill:#f24147}
+        </style>
+    </defs>
+    <g id="그룹_3479" data-name="그룹 3479" transform="rotate(180 195.5 187.25)">
+        <path id="패스_348" data-name="패스 348" class="cls-1" d="M12 6c.552 0 1 .336 1 .75v4.5c0 .414-.448.75-1 .75s-1-.336-1-.75v-4.5c0-.414.448-.75 1-.75z" transform="translate(371 356)"/>
+        <path id="패스_349" data-name="패스 349" class="cls-1" d="M12 16a1 1 0 1 0 1 1 1 1 0 0 0-1-1z" transform="translate(371 353)"/>
+    </g>
+    <path id="패스_350" data-name="패스 350" d="M10 2a8 8 0 1 0 8 8 8 8 0 0 0-8-8zm-6.4 8A6.4 6.4 0 1 0 10 3.6 6.4 6.4 0 0 0 3.6 10z" transform="translate(-2 -2)" style="fill-rule:evenodd;fill:#f24147"/>
+</svg>

@@ -159,6 +159,18 @@
             padding: 0;
         }
         .input-field input::placeholder { color: #CBD5E1; }
+        .register-only-field {
+            display: none;
+            flex-direction: column;
+            gap: 7px;
+            text-align: left;
+        }
+        .field-help {
+            margin: 0 4px;
+            color: var(--text-muted);
+            font-size: 0.76rem;
+            line-height: 1.45;
+        }
 
         .btn-primary {
             width: 100%;
@@ -201,24 +213,75 @@
         }
         .divider span { padding: 0 12px; }
 
-        .social-login {
-            display: flex; gap: 14px; justify-content: center;
-        }
-        .btn-social {
-            width: 50px; height: 50px; border-radius: 50%; border: 1px solid #E2E8F0;
+        .social-login { display: flex; justify-content: center; }
+
+        /* 제거한 Google/Kakao/Naver 버튼과 같은 형태(50x50 원형, 로고만).
+           호버는 위로 뜨는 대신 채움을 반전시킨다. 로고는 currentColor라 함께 뒤집힌다. */
+        .btn-codex {
+            position: relative;
+            width: 50px; height: 50px; border-radius: 50%;
+            border: 1px solid #E2E8F0; background: #fff; color: var(--text-main);
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.2rem; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            background: #fff; color: var(--text-main);
-            text-decoration: none;
+            padding: 0; cursor: pointer;
+            transition: background-color 0.22s ease, color 0.22s ease,
+                        border-color 0.22s ease, box-shadow 0.22s ease;
         }
-        .btn-social:hover { transform: translateY(-3px); box-shadow: 0 8px 16px -4px rgba(0,0,0,0.1); }
-        .btn-google { background: #fff; border-color: #E2E8F0; }
-        .btn-google:hover { border-color: #E2E8F0; background: #fff; }
-        .btn-kakao { background: #FEE500; border-color: #FEE500; color: #3C1E1E; }
-        .btn-kakao:hover { background: #FDD835; }
-        .btn-naver { background: #03C75A; border-color: #03C75A; color: white; }
-        .btn-naver:hover { background: #00B34E; }
-        
+        .btn-codex:hover:not(:disabled),
+        .btn-codex:focus-visible:not(:disabled) {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: #fff;
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .btn-codex:disabled { opacity: 0.55; cursor: not-allowed; }
+        .btn-codex svg { flex-shrink: 0; color: inherit; }
+
+        /* 글자가 없으므로 연결 상태는 모서리 점으로만 알린다. */
+        .btn-codex .codex-dot {
+            position: absolute; top: 2px; right: 2px;
+            width: 9px; height: 9px; border-radius: 50%;
+            background: #CBD5E1; border: 2px solid #fff;
+            transition: background-color 0.22s ease, border-color 0.22s ease;
+        }
+        /* 점을 둘러싼 링은 버튼 바탕을 따라가야 배경에서 오려낸 것처럼 보인다. */
+        .btn-codex:hover:not(:disabled) .codex-dot,
+        .btn-codex:focus-visible:not(:disabled) .codex-dot {
+            border-color: var(--accent-primary);
+        }
+        .btn-codex[data-status="connected"] .codex-dot { background: #10A37F; }
+        .btn-codex[data-status="pending"] .codex-dot { background: #F59E0B; }
+        .btn-codex[data-status="error"] .codex-dot { background: #EF4444; }
+
+        .codex-panel {
+            display: none; margin-top: 16px; padding: 18px;
+            border: 1px solid #E2E8F0; border-radius: 14px; background: #F8FAFC;
+            text-align: left;
+        }
+        .codex-panel.show { display: block; }
+        .codex-panel p { font-size: 0.83rem; color: var(--text-muted); margin: 0 0 12px; line-height: 1.6; }
+        .codex-code {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 12px 14px; border-radius: 10px; background: #fff;
+            border: 1px solid #E2E8F0; margin-bottom: 12px;
+        }
+        .codex-code strong {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 1.15rem; letter-spacing: 0.16em; color: var(--text-main);
+        }
+        .codex-code button {
+            border: none; background: var(--accent-gradient); color: #fff; border-radius: 8px;
+            padding: 6px 12px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+            font-family: inherit; transition: box-shadow 0.2s ease;
+        }
+        .codex-code button:hover { box-shadow: 0 0 0 3px var(--accent-glow); }
+        .codex-open {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 0.85rem; font-weight: 600; color: var(--text-main); text-decoration: none;
+            border-bottom: 1px solid #CBD5E1; padding-bottom: 2px;
+            transition: border-color 0.2s ease;
+        }
+        .codex-open:hover { border-color: var(--accent-primary); }
+
         .home-link {
             position: absolute; top: 24px; left: 24px;
             display: flex; align-items: center; gap: 6px;
@@ -256,7 +319,16 @@
             .btn-primary { padding: 14px; }
             .home-link { top: 16px; left: 16px; padding: 6px 10px; font-size: 0.85rem; }
         }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
+    <link rel="stylesheet" href="/static/css/score-dream.css">
 </head>
 <body>
 
@@ -277,6 +349,23 @@
                         <i class="bi bi-person"></i>
                         <input type="text" id="input-name" placeholder="이름 (회원가입용)">
                     </div>
+                    <div class="register-only-field" id="field-student-number">
+                        <div class="input-field">
+                            <i class="bi bi-mortarboard"></i>
+                            <input
+                                type="text"
+                                id="input-student-number"
+                                inputmode="numeric"
+                                maxlength="4"
+                                pattern="[1-3][1-9](0[1-9]|[1-9][0-9])"
+                                autocomplete="off"
+                                aria-label="학년 반 번호로 구성된 학번 4자리"
+                                aria-describedby="student-number-help"
+                                placeholder="학번 4자리 (예: 2412)"
+                            >
+                        </div>
+                        <p class="field-help" id="student-number-help"><strong>2412</strong> = 2학년 4반 12번 · 학년은 매년 3월 자동 변경되며 새 학번은 이메일로 안내합니다.</p>
+                    </div>
                     <div class="input-field">
                         <i class="bi bi-envelope"></i>
                         <input type="email" id="input-email" placeholder="이메일 주소" required>
@@ -293,16 +382,25 @@
 
                 <div class="toggle-link" id="btn-toggle-mode">계정이 없으신가요? 회원가입</div>
 
-                <div class="divider"><span>또는 소셜 계정으로 계속</span></div>
+                <div class="divider"><span>로그인한 뒤 ChatGPT 사용량 연결</span></div>
                 <div class="social-login">
-                    <a href="/api/auth/social/google" class="btn-social btn-google" title="Google로 계속하기" data-social-auth="google">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
-                    </a>
-                    <a href="/api/auth/social/kakao" class="btn-social btn-kakao" title="Kakao로 계속하기" data-social-auth="kakao">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.75C7.29 3.75 3.75 6.77 3.75 10.5c0 2.21 1.25 4.14 3.09 5.28L6.2 19.45l3.87-2.31c.91.13 1.86.2 2.8.2 4.71 0 8.25-3.02 8.25-6.75S16.71 3.75 12 3.75z" fill="#3C1E1E"/></svg>
-                    </a>
-                    <a href="/api/auth/social/naver" class="btn-social btn-naver" title="Naver로 계속하기" data-social-auth="naver">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><path fill="#ffffff" d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727v12.845z"/></svg>
+                <button type="button" class="btn-codex" id="btn-codex" data-status="disconnected"
+                        aria-label="ChatGPT 사용량 연결하기" title="ChatGPT 사용량 연결하기">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path fill="currentColor" d="M22.28 9.82a5.99 5.99 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.52-2.9A6 6 0 0 0 10.7.02a6.05 6.05 0 0 0-5.77 4.19 5.99 5.99 0 0 0-4 2.9 6.05 6.05 0 0 0 .74 7.1 5.99 5.99 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9A5.99 6.05 0 0 0 13.3 24a6.05 6.05 0 0 0 5.77-4.2 5.99 5.99 0 0 0 4-2.9 6.05 6.05 0 0 0-.75-7.09zM13.3 22.43a4.5 4.5 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.78.78 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.5 4.5zM3.63 18.3a4.47 4.47 0 0 1-.54-3.01l.14.09 4.79 2.76a.78.78 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.78 19.96a4.5 4.5 0 0 1-6.15-1.65zM2.37 7.9a4.5 4.5 0 0 1 2.35-1.98v5.68a.77.77 0 0 0 .38.67l5.83 3.36-2.02 1.17a.07.07 0 0 1-.07 0L4 14.01a4.5 4.5 0 0 1-1.65-6.14zm16.6 3.86-5.83-3.4L15.16 7.2a.07.07 0 0 1 .07 0l4.83 2.79a4.49 4.49 0 0 1-.68 8.1v-5.67a.79.79 0 0 0-.4-.67zm2.01-3.03-.14-.09-4.78-2.79a.78.78 0 0 0-.79 0L9.44 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.34 12.86l-2.02-1.17a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08-4.79 2.76a.78.78 0 0 0-.39.68zm1.1-2.37 2.6-1.5 2.6 1.5v3l-2.6 1.5-2.6-1.5z"/>
+                    </svg>
+                    <span class="codex-dot" aria-hidden="true"></span>
+                </button>
+                </div>
+
+                <div class="codex-panel" id="codex-panel">
+                    <p>아래 코드를 복사한 뒤 ChatGPT 인증 페이지에서 입력해 주세요. 승인하면 이 계정에 사용량이 연결됩니다(로그인 수단은 아닙니다).</p>
+                    <div class="codex-code">
+                        <strong id="codex-user-code">----</strong>
+                        <button type="button" id="codex-copy">복사</button>
+                    </div>
+                    <a class="codex-open" id="codex-open" href="#" target="_blank" rel="noopener noreferrer">
+                        인증 페이지 열기 <i class="bi bi-box-arrow-up-right"></i>
                     </a>
                 </div>
             </form>
@@ -323,6 +421,8 @@
             desc: document.getElementById('pageDesc'),
             fieldName: document.getElementById('field-name'),
             inputName: document.getElementById('input-name'),
+            fieldStudentNumber: document.getElementById('field-student-number'),
+            inputStudentNumber: document.getElementById('input-student-number'),
             inputEmail: document.getElementById('input-email'),
             inputPw: document.getElementById('input-password'),
             btnSubmit: document.getElementById('btn-submit'),
@@ -345,15 +445,116 @@
         };
 
         const nextTarget = getNextTarget();
-        const withNextParam = (base) => {
-            const joiner = base.includes('?') ? '&' : '?';
-            return `${base}${joiner}next=${encodeURIComponent(nextTarget)}`;
+
+        // ===== ChatGPT(Codex) 기기 코드 연결 =====
+        // 연결은 사용 한도를 빌려오는 것일 뿐, 로그인이 아니다. 서버가 로그인 없는
+        // 연결 요청을 401로 막으므로, 그 경우에는 로그인부터 하라고 알려 준다.
+        const codex = {
+            btn: document.getElementById('btn-codex'),
+            panel: document.getElementById('codex-panel'),
+            userCode: document.getElementById('codex-user-code'),
+            copyBtn: document.getElementById('codex-copy'),
+            openLink: document.getElementById('codex-open'),
+            pollTimer: null
         };
 
-        document.querySelectorAll('[data-social-auth]').forEach(link => {
-            const base = link.getAttribute('href') || '';
-            link.setAttribute('href', withNextParam(base));
+        const CODEX_LABELS = {
+            connected: 'ChatGPT 사용량 연결됨',
+            pending: 'ChatGPT 승인 대기 중...',
+            error: '연결 실패 · 다시 시도',
+            unavailable: 'ChatGPT 연결 준비 중',
+            disconnected: 'ChatGPT 사용량 연결하기'
+        };
+
+        // 로고만 있는 버튼이라 상태는 모서리 점과 aria-label/title로만 전달한다.
+        // pending은 '승인 대기'일 뿐 재시도를 막지 않는다. 다시 누르면 새 코드를 발급한다.
+        // 요청이 날아가는 동안의 중복 클릭만 busy로 잠근다.
+        const setCodexStatus = (status, { busy = false } = {}) => {
+            codex.btn.dataset.status = status;
+            const label = status === 'pending' && !codex.panel.classList.contains('show')
+                ? '다시 코드 받기'
+                : (CODEX_LABELS[status] || CODEX_LABELS.disconnected);
+            codex.btn.setAttribute('aria-label', label);
+            codex.btn.setAttribute('title', label);
+            codex.btn.disabled = busy || status === 'unavailable';
+        };
+
+        const stopCodexPoll = () => {
+            if (codex.pollTimer) { clearInterval(codex.pollTimer); codex.pollTimer = null; }
+        };
+
+        const onCodexConnected = () => {
+            stopCodexPoll();
+            setCodexStatus('connected');
+            codex.panel.classList.remove('show');
+            showStatus('ChatGPT 사용량이 연결되었습니다. 이동합니다...', true);
+            window.location.href = nextTarget;
+        };
+
+        const pollCodexStatus = async () => {
+            try {
+                const res = await fetch('/api/auth/codex/status', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!res.ok) return;
+                const status = data?.connection?.status;
+                if (status === 'connected') { onCodexConnected(); return; }
+                if (status === 'error') {
+                    stopCodexPoll();
+                    setCodexStatus('error');
+                    showStatus(data.connection.error || 'ChatGPT 연결에 실패했습니다.', false);
+                }
+            } catch (_) { /* 폴링 실패는 조용히 넘어가고 다음 주기에 재시도 */ }
+        };
+
+        codex.btn?.addEventListener('click', async () => {
+            setCodexStatus('pending', { busy: true });
+            clearStatus();
+            try {
+                const res = await fetch('/api/auth/codex/connect', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    setCodexStatus(res.status === 401 ? 'disconnected' : 'error');
+                    // 401 = 아직 앱 로그인이 없다. 연결은 로그인 뒤에만 된다.
+                    showStatus(data.error || 'ChatGPT 연결에 실패했습니다.', false);
+                    return;
+                }
+                if (data.connected) { onCodexConnected(); return; }
+
+                codex.userCode.textContent = data.login.user_code;
+                codex.openLink.href = data.login.verification_url;
+                codex.panel.classList.add('show');
+                setCodexStatus('pending');
+                window.open(data.login.verification_url, '_blank', 'noopener,noreferrer');
+
+                stopCodexPoll();
+                codex.pollTimer = setInterval(pollCodexStatus, 3000);
+            } catch (err) {
+                setCodexStatus('error');
+                showStatus('ChatGPT 연결 중 오류가 발생했습니다.', false);
+            }
         });
+
+        codex.copyBtn?.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(codex.userCode.textContent.trim());
+                codex.copyBtn.textContent = '복사됨';
+                setTimeout(() => { codex.copyBtn.textContent = '복사'; }, 1500);
+            } catch (_) { /* 클립보드 거부 시 코드가 화면에 보이므로 수동 복사 */ }
+        });
+
+        // 진입 시 이미 연결돼 있는지 확인한다.
+        (async () => {
+            try {
+                const res = await fetch('/api/auth/codex/status', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!res.ok) { setCodexStatus('error'); return; }
+                if (!data.configured) { setCodexStatus('unavailable'); return; }
+                setCodexStatus(data.connection.status);
+            } catch (_) { setCodexStatus('disconnected'); }
+        })();
 
         // Toggle Login / Register Mode
         elements.btnToggle.addEventListener('click', () => {
@@ -369,14 +570,18 @@
                 elements.title.textContent = '환영합니다';
                 elements.desc.textContent = '계정에 로그인하고 문서 작업을 계속하세요.';
                 elements.fieldName.style.display = 'none';
+                elements.fieldStudentNumber.style.display = 'none';
                 elements.inputName.removeAttribute('required');
+                elements.inputStudentNumber.removeAttribute('required');
                 elements.btnSubmit.textContent = '로그인';
                 elements.btnToggle.textContent = '계정이 없으신가요? 회원가입';
             } else {
                 elements.title.textContent = '회원가입';
                 elements.desc.textContent = '새로운 계정을 만들고 DOC Agent를 시작하세요.';
                 elements.fieldName.style.display = 'flex';
+                elements.fieldStudentNumber.style.display = 'flex';
                 elements.inputName.setAttribute('required', 'true');
+                elements.inputStudentNumber.setAttribute('required', 'true');
                 elements.btnSubmit.textContent = '계정 만들기';
                 elements.btnToggle.textContent = '이미 계정이 있으신가요? 로그인';
             }
@@ -389,16 +594,25 @@
             const email = elements.inputEmail.value.trim();
             const password = elements.inputPw.value;
             const name = elements.inputName.value.trim();
+            const studentNumber = elements.inputStudentNumber.value.trim();
 
             if (!email || !password) return;
             if (!state.isLogin && !name) return;
+            if (!state.isLogin && !/^[1-3][1-9](?:0[1-9]|[1-9]\d)$/.test(studentNumber)) {
+                showStatus('학번 형식을 확인하세요. 예: 2412 = 2학년 4반 12번', false);
+                elements.inputStudentNumber.focus();
+                return;
+            }
 
             setLoading(true);
 
             try {
                 const endpoint = state.isLogin ? '/api/auth/login' : '/api/auth/register';
                 const payload = { email, password };
-                if (!state.isLogin) payload.name = name;
+                if (!state.isLogin) {
+                    payload.name = name;
+                    payload.student_number = studentNumber;
+                }
 
                 const res = await fetch(endpoint, {
                     method: 'POST',
@@ -409,19 +623,12 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    showStatus(state.isLogin ? '로그인 성공! 이동합니다...' : '가입 성공! 로그인해주세요.', true);
+                    // 새로 가입한 학생은 먼저 온보딩에서 탐구의 출발점을 만든다.
+                    const target = state.isLogin ? nextTarget : '/welcome';
+                    showStatus(state.isLogin ? '로그인 성공! 이동합니다...' : '가입 완료! 시작해볼게요...', true);
                     setTimeout(() => {
-                        if (state.isLogin) {
-                            window.location.href = nextTarget;
-                        } else {
-                            // Switch to login mode after register
-                            state.isLogin = true;
-                            updateUI();
-                            elements.inputEmail.value = email; // Keep email
-                            elements.inputPw.value = '';
-                            setLoading(false);
-                        }
-                    }, 1500);
+                        window.location.href = target;
+                    }, 1200);
                 } else {
                     showStatus(data.error || '오류가 발생했습니다.', false);
                     setLoading(false);
@@ -436,6 +643,11 @@
         function setLoading(isLoading) {
             elements.btnSubmit.disabled = isLoading;
             elements.btnSubmit.textContent = isLoading ? '처리 중...' : (state.isLogin ? '로그인' : '계정 만들기');
+        }
+
+        function clearStatus() {
+            elements.statusMsg.textContent = '';
+            elements.statusMsg.className = 'status-message';
         }
 
         function showStatus(msg, isSuccess) {

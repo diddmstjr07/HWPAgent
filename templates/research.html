@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOC Agent | 3년 연구 서사</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+    <style>
+        :root {
+            --bg:      #F8FAFC;
+            --side:    #F1F5F9;
+            --card:    #FFFFFF;
+            --text:    #0F172A;
+            --muted:   #64748B;
+            --faint:   #94A3B8;
+            --line:    #E2E8F0;
+            --line-2:  #F1F5F9;
+            --ink:     #0F172A;
+
+            /* 상태는 색이 아니라 채움의 무게로 구분한다 (슬레이트 모노톤). */
+            --st-draft:     #CBD5E1;
+            --st-narrowing: #64748B;
+            --st-fixed:     #0F172A;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { margin: 0; }
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            font-size: 15px; line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--ink); text-decoration: none; }
+        a:hover { color: #334155; }
+        ::selection { background: rgba(15, 23, 42, 0.14); }
+        :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+        button { font-family: inherit; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.5); border-radius: 10px; }
+
+        /* ---------- 앱 셸 ---------- */
+        .app { display: flex; min-height: 100dvh; }
+
+        .side {
+            width: 264px; flex: 0 0 auto;
+            background: var(--side); border-right: 1px solid var(--line);
+            padding: 20px 16px; display: flex; flex-direction: column; gap: 4px;
+            position: sticky; top: 0; height: 100dvh;
+        }
+        .back {
+            display: inline-flex; align-items: center; gap: 7px;
+            color: var(--muted); font-size: 0.86rem; font-weight: 500;
+            padding: 8px 10px; margin-bottom: 4px; border-radius: 9px;
+            transition: color 0.18s ease, background-color 0.18s ease;
+        }
+        .back:hover { color: var(--text); background: #fff; }
+        .brand { padding: 4px 10px 14px; }
+        .brand h1 { font-family: 'Noto Serif KR', serif; font-size: 1.12rem; font-weight: 700; margin: 0; }
+        .brand p { margin: 3px 0 0; font-size: 0.8rem; color: var(--muted); }
+
+        .nav-label {
+            font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em;
+            text-transform: uppercase; color: var(--faint); padding: 4px 10px 6px;
+        }
+
+        /* ---------- 진행 레일: 서버의 6단계를 그대로 세운다 ----------
+           상태는 색만이 아니라 마크의 모양(체크/링/점선)과 글자 라벨로도 읽힌다. */
+        .rail { display: flex; flex-direction: column; }
+        .rail-step {
+            position: relative; display: flex; align-items: flex-start; gap: 11px;
+            width: 100%; text-align: left; border: none; background: transparent;
+            padding: 8px 10px; border-radius: 10px; cursor: pointer;
+            color: #475569; font-size: 0.86rem;
+            transition: background-color 0.15s ease;
+        }
+        .rail-step:hover:not([data-state="locked"]) { background: #fff; }
+        .rail-step[data-state="locked"] { cursor: default; }
+        /* 단계를 잇는 세로선 */
+        .rail-step::before {
+            content: ''; position: absolute; left: 20px; top: 30px; bottom: -2px;
+            width: 1px; background: var(--line);
+        }
+        .rail-step:last-child::before { display: none; }
+        .rail-mark {
+            position: relative; z-index: 1; flex: 0 0 auto;
+            width: 21px; height: 21px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.66rem; font-weight: 700; line-height: 1;
+            border: 1.5px solid var(--st-draft); background: #fff; color: var(--faint);
+        }
+        .rail-step[data-state="locked"] .rail-mark { border-style: dashed; }
+        .rail-step[data-state="current"] .rail-mark {
+            border-color: var(--ink); color: var(--ink);
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12);
+        }
+        .rail-step[data-state="done"] .rail-mark { border-color: var(--ink); background: var(--ink); color: #fff; }
+        .rail-text { display: flex; flex-direction: column; min-width: 0; }
+        .rail-name { font-weight: 600; line-height: 1.4; word-break: keep-all; }
+        .rail-step[data-state="locked"] .rail-name { color: var(--faint); font-weight: 500; }
+        .rail-step[data-state="current"] .rail-name { color: var(--ink); font-weight: 700; }
+        .rail-state { font-size: 0.7rem; font-weight: 600; color: var(--faint); margin-top: 1px; }
+        .rail-step[data-state="current"] .rail-state { color: #475569; }
+
+        .curtheme { margin-top: auto; padding: 14px 10px 4px; border-top: 1px solid var(--line); }
+        .curtheme .lbl { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+        .curtheme .val { font-family: 'Noto Serif KR', serif; font-size: 0.9rem; font-weight: 700; margin-top: 6px; line-height: 1.42; word-break: keep-all; }
+        .curtheme .val.empty { font-family: inherit; font-weight: 500; font-size: 0.82rem; color: var(--muted); }
+
+        .main { flex: 1 1 0; min-width: 0; display: flex; justify-content: center; }
+        .detail { width: 100%; max-width: 820px; padding: 40px 44px 80px; }
+
+        /* ---------- 상세 공통 ---------- */
+        .eyebrow { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+        h2.view-title { font-family: 'Noto Serif KR', serif; font-size: 1.7rem; font-weight: 700; margin: 8px 0 8px; letter-spacing: -0.01em; word-break: keep-all; }
+        .lead { margin: 0 0 22px; font-size: 0.95rem; color: var(--muted); line-height: 1.6; word-break: keep-all; }
+
+        .head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .head-left { display: flex; align-items: center; gap: 14px; }
+        .grade-h { font-family: 'Noto Serif KR', serif; font-size: 1.55rem; font-weight: 700; margin: 0; }
+
+        .node {
+            width: 36px; height: 36px; border-radius: 10px; flex: 0 0 auto;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.95rem;
+            border: 2px solid var(--st-draft); color: var(--faint); background: #fff;
+        }
+        .node[data-status="narrowing"] { border-color: var(--st-narrowing); color: #475569; }
+        .node[data-status="fixed"] { border-color: var(--ink); background: var(--ink); color: #fff; }
+
+        /* ---------- 구간 ---------- */
+        .sec { scroll-margin-top: 20px; }
+        .sec + .sec { margin-top: 42px; }
+        .sec-head {
+            display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+            margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+        }
+        .sec-head h3 { font-family: 'Noto Serif KR', serif; font-size: 1.14rem; font-weight: 700; margin: 0; }
+        .sec-state { font-size: 0.71rem; font-weight: 700; letter-spacing: 0.04em; color: var(--faint); }
+
+        /* ---------- 3년 타임라인: 비어 있어도 항상 그린다 ---------- */
+        .track { list-style: none; margin: 0; padding: 0; }
+        .track-item { position: relative; padding: 0 0 28px 52px; scroll-margin-top: 20px; }
+        .track-item::before {
+            content: ''; position: absolute; left: 17px; top: 40px; bottom: 4px;
+            width: 2px; background: var(--line);
+        }
+        .track-item:last-child { padding-bottom: 0; }
+        .track-item:last-child::before { display: none; }
+        .track-node {
+            position: absolute; left: 0; top: 0;
+            width: 36px; height: 36px; border-radius: 11px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.95rem;
+            border: 2px solid var(--st-draft); color: var(--faint); background: #fff;
+        }
+        .track-item[data-state="locked"] .track-node { border-style: dashed; }
+        .track-item[data-state="active"] .track-node {
+            border-color: var(--ink); color: var(--ink);
+            box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.08);
+        }
+        .track-item[data-state="done"] .track-node { border-color: var(--ink); background: var(--ink); color: #fff; }
+        .track-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 36px; }
+        .track-title { font-family: 'Noto Serif KR', serif; font-size: 1.22rem; font-weight: 700; margin: 0; }
+        .track-item[data-state="locked"] .track-title { color: var(--faint); }
+        .track-body { margin-top: 12px; }
+
+        /* 잠긴 구간의 자리표시 — 채워졌을 때와 같은 리듬을 미리 보여준다 */
+        .ghost { border: 1px dashed var(--line); border-radius: 14px; padding: 17px 19px; background: rgba(255, 255, 255, 0.5); }
+        .ghost-line { height: 9px; border-radius: 999px; background: var(--line-2); }
+        .ghost-line + .ghost-line { margin-top: 10px; }
+        .ghost-note { margin-top: 13px; font-size: 0.82rem; color: var(--faint); word-break: keep-all; }
+        .ghost-note b { color: var(--muted); font-weight: 600; }
+
+        /* 결정은 채팅에서 한다. 이 페이지는 그 결과를 정리해 보여줄 뿐이라
+           생성 버튼 대신 무슨 말을 하면 되는지만 알려준다. */
+        .chat-hint {
+            margin: 14px 0 0; font-size: 0.84rem; color: var(--muted);
+            line-height: 1.6; word-break: keep-all;
+        }
+        .chat-hint i { margin-right: 6px; color: var(--faint); }
+        .chat-hint b { color: var(--text); font-weight: 600; }
+        .chat-hint a { text-decoration: underline; }
+
+        /* 채움 없는 마커 + 라벨 (알약형 배지 아님) */
+        .mk { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+        .mk::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--st-draft); }
+        .mk[data-status="draft"] { color: var(--faint); }
+        .mk[data-status="narrowing"] { color: #475569; }
+        .mk[data-status="narrowing"]::before { background: var(--st-narrowing); }
+        .mk[data-status="fixed"] { color: var(--ink); }
+        .mk[data-status="fixed"]::before { background: var(--st-fixed); }
+        .mk.sm { font-size: 0.72rem; }
+        .mk.sm::before { width: 6px; height: 6px; }
+
+        .goal { color: #475569; font-size: 0.98rem; margin: 16px 0 0; line-height: 1.6; word-break: keep-all; }
+
+        .anchor { margin-top: 18px; padding: 17px 19px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+        .anchor .lbl { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+        .anchor .name { font-weight: 600; font-size: 1.02rem; margin-top: 5px; word-break: keep-all; }
+        .anchor .desc { font-size: 0.9rem; color: var(--muted); margin-top: 6px; line-height: 1.6; word-break: keep-all; }
+
+        .section-label { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin: 24px 0 12px; }
+
+        /* ---------- 버튼 ---------- */
+        .btn {
+            font-size: 0.86rem; font-weight: 600; border-radius: 11px; padding: 9px 15px;
+            cursor: pointer; border: 1px solid var(--line); background: #fff; color: var(--text);
+            transition: background-color 0.18s, color 0.18s, border-color 0.18s, box-shadow 0.18s;
+        }
+        .btn:hover:not(:disabled), .btn:focus-visible:not(:disabled) {
+            background: var(--ink); border-color: var(--ink); color: #fff;
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12);
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.primary { border-color: var(--ink); background: var(--ink); color: #fff; }
+        .btn.current { border-color: var(--ink); background: var(--ink); color: #fff; cursor: default; }
+        .btn.current:hover { box-shadow: none; }
+
+        .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+        .chip {
+            font-size: 0.8rem; font-weight: 500; padding: 5px 11px; border-radius: 8px;
+            background: #fff; border: 1px solid var(--line); color: #334155;
+        }
+        .chip.empty { color: var(--faint); border-style: dashed; }
+
+        /* ---------- 테마 후보 ---------- */
+        .themes { display: flex; flex-direction: column; gap: 14px; }
+        .theme-card { border: 1.5px solid var(--line); background: #fff; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+        .theme-card.selected { border-color: var(--ink); }
+        .theme-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+        .theme-card h3 { font-family: 'Noto Serif KR', serif; font-size: 1.18rem; font-weight: 700; margin: 0; line-height: 1.4; word-break: keep-all; }
+        /* 채팅이 번호로 고르므로 번호가 제목만큼 잘 보여야 한다 */
+        .theme-no {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px; margin-right: 9px; vertical-align: 2px;
+            border-radius: 50%; border: 1.5px solid var(--ink);
+            font-family: 'Inter', sans-serif; font-size: 0.74rem; font-weight: 700;
+        }
+        .theme-card.selected .theme-no { background: var(--ink); color: #fff; }
+        .theme-flag {
+            flex: 0 0 auto; font-size: 0.72rem; font-weight: 700;
+            color: var(--ink); border: 1px solid var(--ink);
+            border-radius: 7px; padding: 3px 9px; white-space: nowrap;
+        }
+        .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+        .theme-grid p { margin: 0; font-size: 0.82rem; color: #475569; line-height: 1.6; word-break: keep-all; }
+        .theme-grid p span { display: block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+
+        .thesis { border: 1px solid var(--line); background: #fff; border-radius: 18px; padding: 24px; }
+        .thesis h2 { font-family: 'Noto Serif KR', serif; font-size: 1.35rem; font-weight: 700; line-height: 1.42; margin: 10px 0 14px; letter-spacing: -0.01em; word-break: keep-all; }
+        .thesis .question { padding-top: 14px; border-top: 1px solid var(--line); font-size: 0.9rem; color: var(--muted); word-break: keep-all; }
+        .thesis .question b { color: var(--text); font-weight: 600; }
+        .thesis-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
+
+        /* ---------- 과목 카드 ---------- */
+        .subjects { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .subject { border: 1px solid var(--line); border-radius: 14px; padding: 17px; background: #fff; display: flex; flex-direction: column; gap: 9px; }
+        .subject-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .subject-name { font-weight: 700; font-size: 0.98rem; }
+        .appr { font-size: 0.66rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; white-space: nowrap; border: 1px solid #CBD5E1; color: #475569; background: transparent; }
+        .appr[data-kind="deepening"] { color: var(--ink); border-color: var(--faint); }
+        .area { font-size: 0.82rem; color: var(--muted); word-break: keep-all; }
+        .area code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
+        .subject-q { font-size: 0.88rem; color: #334155; line-height: 1.55; word-break: keep-all; }
+        .subject-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+
+        /* ---------- 실험 상태 ---------- */
+        /* 실험은 이제 카드 안에서 돌지 않는다. 전용 대화방(/experiment/{id})으로 나간다. */
+        .subject-foot a.btn { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; }
+        .doc-ico { width: 16px; height: 16px; display: block; flex: none; }
+        /* 문서 아이콘은 원래 색을 지켜야 한글 문서라는 게 읽힌다. 호버로 반전시키지 않는다. */
+        .subject-foot a.btn.doc:hover, .subject-foot a.btn.doc:focus-visible {
+            background: #fff; color: var(--text); border-color: var(--ink);
+        }
+        .subject[data-exp="done"] { border-color: #CBD5E1; }
+
+        .spin { display: inline-block; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---------- 상태/빈 화면 ---------- */
+        .notice { background: #fff; border: 1px dashed var(--line); border-radius: 16px; padding: 26px 22px; color: var(--muted); margin-top: 16px; }
+        .notice b { display: block; color: var(--text); font-size: 1rem; margin-bottom: 6px; }
+        .notice .btn { margin-top: 14px; }
+
+        /* 알림. 메인 화면과 같은 모양으로 상단 중앙에서만 뜬다(index.html의 .app-toast와 동일). */
+        .app-toast {
+            position: fixed; top: 20px; left: 50%; transform: translate(-50%, -12px);
+            z-index: 300; max-width: min(560px, calc(100vw - 32px));
+            padding: 11px 18px; border-radius: 12px;
+            background: rgba(15, 23, 42, 0.94); color: #fff;
+            font-size: 0.88rem; font-weight: 500; line-height: 1.5; text-align: center;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .app-toast.show { opacity: 1; transform: translate(-50%, 0); }
+        .app-toast.error { background: #B91C1C; }
+        .app-toast.success { background: #14532D; }
+
+        .skeleton { background: linear-gradient(90deg, #F1F5F9 25%, #E9EEF5 37%, #F1F5F9 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; border-radius: 12px; }
+        @keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+        /* ---------- 반응형: 좁은 화면에서 레일 → 상단 가로 스텝퍼 ---------- */
+        @media (max-width: 820px) {
+            .app { flex-direction: column; }
+            .side { width: auto; height: auto; position: sticky; top: 0; z-index: 20; flex-direction: column; gap: 8px; padding: 12px 14px; }
+            .brand { padding: 0 4px; }
+            .brand p { display: none; }
+            .nav-label, .curtheme { display: none; }
+            .rail { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 2px; }
+            .rail-step { width: auto; white-space: nowrap; align-items: center; padding: 8px 11px; }
+            .rail-step::before { display: none; }
+            .rail-text { flex-direction: row; align-items: center; gap: 7px; }
+            .rail-state { margin-top: 0; }
+            .back { margin-bottom: 0; }
+            .detail { padding: 24px 18px 96px; }
+            h2.view-title { font-size: 1.4rem; }
+            .theme-grid, .subjects { grid-template-columns: 1fr; }
+            /* 타임라인은 모바일에서도 유지하되 들여쓰기만 줄인다 */
+            .track-item { padding-left: 44px; }
+            .track-node { width: 32px; height: 32px; font-size: 0.88rem; }
+            .track-item::before { left: 15px; top: 36px; }
+            .track-title { font-size: 1.08rem; }
+
+            /* 버튼은 손가락 크기(44px 이상)로. 카드 안 버튼이 빗맞으면
+               학생은 실험 진행 대신 카드만 열었다 닫았다 하게 된다. */
+            .btn { min-height: 44px; padding: 11px 16px; font-size: 0.92rem; }
+            .sec-head .btn { width: 100%; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+        }
+
+        /* ---------- 미니 채팅: 로드맵을 보면서 AI와 계속 이야기한다 ---------- */
+        .mini {
+            position: fixed; right: 20px; bottom: 20px; z-index: 40;
+            width: 340px; max-width: calc(100vw - 32px);
+            display: flex; flex-direction: column;
+            background: var(--card); border: 1px solid var(--line);
+            border-radius: 16px; box-shadow: 0 18px 40px -18px rgba(15, 23, 42, 0.28);
+            overflow: hidden;
+        }
+        .mini-head {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 14px; border-bottom: 1px solid var(--line);
+            font-size: 0.86rem; font-weight: 700; cursor: pointer;
+        }
+        .mini-head .dot {
+            width: 7px; height: 7px; border-radius: 50%; background: var(--st-fixed);
+        }
+        .mini-head .grow { flex: 1; }
+        .mini-head i { color: var(--faint); transition: transform 0.2s ease; }
+        .mini.collapsed .mini-head i { transform: rotate(180deg); }
+        .mini.collapsed .mini-body, .mini.collapsed .mini-form { display: none; }
+
+        .mini-body {
+            padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+            height: 300px; overflow-y: auto;
+        }
+        .mini-msg { font-size: 0.86rem; line-height: 1.6; word-break: keep-all; }
+        /* AI가 알려주는 페이지 경로 — 메인 채팅과 같은 문법 */
+        .chat-link {
+            color: #2563EB; text-decoration: underline;
+            text-underline-offset: 3px; text-decoration-thickness: 1.5px;
+            font-weight: 600; white-space: nowrap;
+        }
+        .chat-link:hover, .chat-link:focus-visible { color: #1D4ED8; }
+        .mini-msg.me .chat-link { color: #BFDBFE; }
+        /* 사용량 초과처럼 기다려야 하는 상태는 빨갛게 알린다. */
+        .mini-msg.msg-error { color: #DC2626; font-weight: 500; }
+
+        /* 클릭으로 답하는 선택지 */
+        .mini-choices { display: flex; flex-direction: column; gap: 6px; align-self: stretch; }
+        .mini-choice {
+            font-family: inherit; font-size: 0.84rem; font-weight: 500;
+            padding: 9px 12px; border-radius: 10px; text-align: left;
+            border: 1px solid var(--line); background: #fff; color: var(--text);
+            cursor: pointer; word-break: keep-all;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .mini-choice:hover, .mini-choice:focus-visible {
+            border-color: var(--ink); box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12);
+        }
+        .mini-msg.me {
+            align-self: flex-end; max-width: 85%;
+            background: var(--ink); color: #fff; padding: 8px 12px;
+            border-radius: 12px 12px 4px 12px;
+        }
+        .mini-msg.ai {
+            align-self: flex-start; max-width: 92%;
+            background: #F1F5F9; color: var(--text); padding: 9px 12px;
+            border-radius: 12px 12px 12px 4px;
+        }
+        .mini-form { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+        .mini-form textarea {
+            flex: 1; font-family: inherit; font-size: 0.86rem; line-height: 1.5;
+            padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px;
+            background: #fff; color: var(--text); resize: none; max-height: 90px;
+        }
+        .mini-form textarea:focus {
+            outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(15,23,42,0.1);
+        }
+        .mini-send {
+            flex: 0 0 auto; border: none; background: var(--ink); color: #fff;
+            border-radius: 10px; padding: 0 13px; cursor: pointer; font-size: 0.9rem;
+        }
+        .mini-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .mini-dots { display: inline-flex; gap: 4px; align-items: center; }
+        .mini-dots i {
+            width: 5px; height: 5px; border-radius: 50%; background: var(--faint);
+            animation: mini-pulse 1.25s ease-in-out infinite;
+        }
+        .mini-dots i:nth-child(2) { animation-delay: 0.16s; }
+        .mini-dots i:nth-child(3) { animation-delay: 0.32s; }
+        @keyframes mini-pulse { 0%, 60%, 100% { opacity: 0.28; } 30% { opacity: 1; } }
+
+        /* 좁은 화면에서는 화면 폭을 채우고 기본으로 접어 둔다. */
+        @media (max-width: 820px) {
+            .mini { right: 12px; left: 12px; bottom: 12px; width: auto; }
+            .mini-body { height: 240px; }
+        }
+    </style>
+    <link rel="stylesheet" href="/static/css/score-dream.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="side">
+            <a class="back" href="/"><i class="bi bi-chevron-left"></i> 홈으로</a>
+            <div class="brand">
+                <h1>3년 연구 서사</h1>
+                <p>테마 하나로 3년을 잇는 탐구</p>
+            </div>
+            <div class="nav-label">진행 단계</div>
+            <nav class="rail" id="nav" aria-label="탐구 진행 단계">
+                <div class="skeleton" style="height:38px;margin-bottom:5px"></div>
+                <div class="skeleton" style="height:38px;margin-bottom:5px"></div>
+                <div class="skeleton" style="height:38px"></div>
+            </nav>
+            <div class="curtheme" id="curtheme"></div>
+        </aside>
+
+        <main class="main">
+            <div class="detail" id="detail">
+                <div class="skeleton" style="height:150px;margin-bottom:16px"></div>
+                <div class="skeleton" style="height:110px;margin-bottom:12px"></div>
+                <div class="skeleton" style="height:110px"></div>
+            </div>
+        </main>
+    </div>
+
+    <div class="app-toast" id="toast" role="status" aria-live="polite"></div>
+
+
+    <aside class="mini collapsed" id="miniChat">
+        <div class="mini-head" id="miniHead">
+            <span class="dot"></span>
+            <span class="grow">AI와 이야기하기</span>
+            <i class="bi bi-chevron-down"></i>
+        </div>
+        <div class="mini-body" id="miniBody"></div>
+        <form class="mini-form" id="miniForm">
+            <textarea id="miniInput" rows="1" placeholder="예: 2학년은 좀 더 실험 위주로 바꿔줘"></textarea>
+            <button class="mini-send" type="submit" aria-label="보내기"><i class="bi bi-arrow-up"></i></button>
+        </form>
+    </aside>
+
+    <script src="/static/js/guide.js?v=40"></script>
+    <script src="/static/js/research.js?v=15"></script>
+</body>
+</html>

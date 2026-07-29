@@ -12,6 +12,41 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     
+    <!--
+      첫 화면에 필요한 데이터를 스크립트 파싱과 동시에 미리 요청해 둔다.
+      이게 없으면 모든 요청이 index.js(223KB) 파싱이 끝난 뒤에야 출발해서,
+      사용량 → HISTORY → 채팅이 한 박자씩 늦게 차례로 나타난다.
+      각 항목은 {ok, status, body}로 풀어 두므로 여러 곳에서 함께 기다려도 안전하다.
+    -->
+    <script>
+    (() => {
+        const wrap = (path) => fetch(path, { credentials: 'same-origin' })
+            .then(async (res) => ({ ok: res.ok, status: res.status,
+                                    body: res.ok ? await res.json() : null }))
+            .catch(() => null);
+
+        const chatId = new URLSearchParams(location.search).get('chat');
+        const boot = window.__boot = {
+            next: wrap('/api/research/next'),
+            sessions: wrap('/api/chat/sessions'),
+            codex: wrap('/api/auth/codex/status'),
+            chatPending: wrap('/api/research/chat/pending'),
+            messages: wrap('/api/research/messages'),
+            session: null, expView: null, expPending: null,
+        };
+        if (chatId) {
+            boot.session = wrap(`/api/chat/sessions/${encodeURIComponent(chatId)}`)
+                .then((r) => (r && r.body && r.body.session) || null);
+            // 실험 대화면 그 내용까지 이어서 미리 받는다(플랜 번호는 대화방이 알고 있다).
+            boot.expView = boot.session.then((s) => {
+                if (!s || s.folder !== '실험' || !s.plan_id) return null;
+                boot.expPending = wrap(`/api/research/experiment/${s.plan_id}/pending`);
+                return wrap(`/api/research/experiment/${s.plan_id}`);
+            });
+        }
+    })();
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
@@ -131,6 +166,7 @@
             padding: 11px 14px; border-radius: var(--radius-sm);
             color: #475569; font-size: 0.9rem; cursor: pointer; font-weight: 500;
             transition: all 0.2s; border: none; background: transparent; width: 100%; text-align: left;
+            text-decoration: none; /* 링크로도 쓰이므로 밑줄을 지운다 */
         }
         .nav-item:hover { background: #fff; color: #1E293B; padding-left: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
         .nav-item i { color: #94A3B8; transition: 0.2s; }
@@ -396,29 +432,102 @@
             padding-bottom: 180px; display: flex; flex-direction: column; align-items: center; width: 100%; z-index: 1;
         }
 
-        /* Hero */
+        /* ── 첫 화면. 인사말이 아니라 '지금 할 일'을 세운다. ──
+           예전에는 로고와 "How can I help you?"만 있어서 이 앱이 무엇을 하는
+           곳인지 알 수 없었고, 화면의 8할이 비어 있었다. */
+        .home {
+            width: 100%; max-width: 620px; padding: 0 24px;
+            margin-top: 16vh;
+            animation: fade-in-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .home-card {
+            background: #fff; border: 1px solid #E2E8F0; border-radius: 20px;
+            padding: 28px 26px;
+            box-shadow: 0 18px 40px -28px rgba(15, 23, 42, 0.22);
+        }
+        .home-skeleton {
+            height: 148px; border-radius: 12px;
+            background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 37%, #F1F5F9 63%);
+            background-size: 400% 100%; animation: home-shimmer 1.4s ease infinite;
+        }
+        @keyframes home-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+        .home-eyebrow {
+            font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+            text-transform: uppercase; color: #94A3B8;
+        }
+        .home-title {
+            font-family: 'Noto Serif KR', serif; font-size: 1.6rem; font-weight: 700;
+            color: #0F172A; margin: 8px 0 10px; line-height: 1.35;
+            letter-spacing: -0.01em; word-break: keep-all;
+        }
+        .home-lead {
+            margin: 0; font-size: 0.96rem; line-height: 1.7; color: #64748B;
+            word-break: keep-all;
+        }
+        /* 진행 단계. 지금 어디쯤인지가 첫 화면에서 바로 보여야 한다. */
+        .home-steps {
+            display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 20px;
+            padding-top: 16px; border-top: 1px solid #F1F5F9;
+        }
+        .home-step {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 0.76rem; font-weight: 500; color: #CBD5E1; white-space: nowrap;
+        }
+        .home-step i {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: #E2E8F0; flex-shrink: 0;
+        }
+        .home-step.done { color: #94A3B8; }
+        .home-step.done i { background: #94A3B8; }
+        .home-step.now { color: #0F172A; font-weight: 700; }
+        .home-step.now i {
+            background: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12);
+        }
+        .home-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+        .home-btn {
+            padding: 11px 18px; border-radius: 999px;
+            border: 1px solid #E2E8F0; background: #fff; color: #475569;
+            font-family: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            transition: border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .home-btn:hover, .home-btn:focus-visible {
+            border-color: var(--accent-primary); color: #0F172A;
+        }
+        .home-btn.primary {
+            background: var(--accent-primary); border-color: var(--accent-primary); color: #fff;
+        }
+        .home-btn.primary:hover, .home-btn.primary:focus-visible {
+            box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.14); color: #fff;
+        }
+        body[data-theme="dark"] .home-card { background: #0F172A; border-color: #1E293B; }
+        body[data-theme="dark"] .home-title { color: #E2E8F0; }
+        body[data-theme="dark"] .home-lead { color: #94A3B8; }
+        body[data-theme="dark"] .home-steps { border-color: #1E293B; }
+        body[data-theme="dark"] .home-step { color: #475569; }
+        body[data-theme="dark"] .home-step i { background: #1E293B; }
+        body[data-theme="dark"] .home-step.now { color: #E2E8F0; }
+        body[data-theme="dark"] .home-step.now i { background: #E2E8F0; }
+        body[data-theme="dark"] .home-btn { background: #111827; border-color: #1E293B; color: #94A3B8; }
+        body[data-theme="dark"] .home-btn.primary { background: #E2E8F0; border-color: #E2E8F0; color: #0F172A; }
+        body[data-theme="dark"] .home-skeleton {
+            background: linear-gradient(90deg, #111827 25%, #1E293B 37%, #111827 63%);
+            background-size: 400% 100%;
+        }
+
+        /* Hero (레거시 첫 화면 잔재) */
         .hero-container {
             margin-top: 30vh; text-align: center;
             opacity: 1; /* Ensure visible */
             animation: fade-in-up 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
             padding: 0 24px; max-width: 600px;
         }
-        .hero-logo {
-            width: 80px; height: 80px; 
-            background: #fff;
-            border: 1px solid #E2E8F0;
-            border-radius: 24px; margin: 0 auto 28px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 2.2rem; color: var(--accent-primary);
-            box-shadow: 0 20px 40px -10px rgba(79, 70, 229, 0.15);
-            background: linear-gradient(135deg, #fff, #F8FAFC);
-        }
-        .hero-logo i { background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .hero-text { font-family: 'Noto Serif KR', serif; font-size: 2.4rem; font-weight: 700; margin-bottom: 14px; color: #1E293B; letter-spacing: -0.02em; }
-        .hero-sub { font-size: 1.1rem; color: #64748B; font-weight: 400; line-height: 1.6; }
 
         /* Doc Viewer & Paper */
         .doc-viewer { width: 100%; max-width: 850px; padding: 2rem; display: none; flex-direction: column; }
+        /* 첫 메시지가 화면 꼭대기에 붙지 않도록 위에서 조금만 띄운다.
+           스크롤되면 그대로 올라가므로 긴 대화에는 영향이 없다. */
+        .doc-viewer { padding-top: 72px; }
         
         .message-row { 
             display: flex; gap: 20px; margin-bottom: 40px; animation: fade-in-up 0.4s ease; width: 100%;
@@ -433,6 +542,599 @@
         .role-avatar.user { background: #fff; color: #475569; border: 1px solid #E2E8F0; }
         
         .message-content { flex: 1; font-size: 1.05rem; line-height: 1.75; color: #334155; font-weight: 400; }
+
+        /* AI가 알려주는 페이지 경로. 눌러도 된다는 걸 색·밑줄·마우스 제스처로 알린다. */
+        .chat-link {
+            color: #2563EB; text-decoration: underline;
+            text-underline-offset: 3px; text-decoration-thickness: 1.5px;
+            font-weight: 600; white-space: nowrap;
+            border-radius: 5px; padding: 0 1px;
+            transition: color 0.18s ease, background-color 0.18s ease;
+        }
+        .chat-link:hover, .chat-link:focus-visible { color: #1D4ED8; background: rgba(37, 99, 235, 0.09); }
+        /* ---------- 사이드바 사용량 게이지 ---------- */
+        .usage-box { padding: 6px 14px 4px; }
+        .usage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+        .usage-name { font-size: 0.82rem; font-weight: 600; color: #475569; }
+        .usage-pct { font-size: 0.8rem; font-weight: 700; color: var(--text-main); font-variant-numeric: tabular-nums; }
+        .usage-bar {
+            margin-top: 7px; height: 6px; border-radius: 999px;
+            background: #E2E8F0; overflow: hidden;
+        }
+        .usage-fill {
+            display: block; height: 100%; width: 0;
+            border-radius: 999px; background: var(--accent-gradient);
+            transition: width 0.4s ease, background-color 0.2s ease;
+        }
+        /* 사이드바는 상시 노출이라 경고색을 쓰지 않는다.
+           다 썼다는 사실은 100%라는 수치와 아래 문구로 이미 읽힌다. */
+        .usage-note { margin-top: 6px; font-size: 0.72rem; color: #94A3B8; line-height: 1.45; word-break: keep-all; }
+        .usage-box[data-level="over"] .usage-note { color: #64748B; font-weight: 600; }
+
+        body[data-theme="dark"] .usage-name { color: #CBD5E1; }
+        body[data-theme="dark"] .usage-pct { color: #E2E8F0; }
+        body[data-theme="dark"] .usage-bar { background: #1E293B; }
+        body[data-theme="dark"] .usage-fill { background: #E2E8F0; }
+        body[data-theme="dark"] .usage-note { color: #64748B; }
+
+        /* 사용량 초과처럼 기다려야 하는 상태는 대화에서도 빨갛게 알린다. */
+        .message-row.msg-error .markdown-body { color: #DC2626; font-weight: 500; }
+
+        /* ---------- 채팅 옆 로드맵 요약 ---------- */
+        .roadmap-peek-wrap {
+            position: fixed; right: 24px; top: 76px; z-index: 30;
+            width: 148px; display: flex; flex-direction: column; align-items: center;
+        }
+        .roadmap-peek {
+            width: 100%; padding: 16px 14px 14px;
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+            background: #fff; border: 1px solid #E2E8F0; border-radius: 18px;
+            box-shadow: 0 12px 28px -20px rgba(15, 23, 42, 0.4);
+            text-decoration: none; color: inherit;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+        .roadmap-peek:hover, .roadmap-peek:focus-visible {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+        .peek-label {
+            font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em;
+            text-transform: uppercase; color: #94A3B8;
+        }
+        /* 6단계를 잇는 길. 점의 채움만으로 어디까지 왔는지 읽힌다. */
+        .peek-track { position: relative; display: flex; flex-direction: column; align-items: center; gap: 9px; }
+        .peek-track::before {
+            content: ''; position: absolute; left: 50%; top: 4px; bottom: 4px;
+            width: 2px; margin-left: -1px; background: #E2E8F0;
+        }
+        .peek-node {
+            position: relative; z-index: 1;
+            width: 9px; height: 9px; border-radius: 50%;
+            border: 2px solid #CBD5E1; background: #fff;
+        }
+        .peek-node[data-state="done"] { border-color: var(--accent-primary); background: var(--accent-primary); }
+        .peek-node[data-state="current"] {
+            border-color: var(--accent-primary); background: #fff;
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .peek-count { font-size: 0.78rem; font-weight: 700; color: #475569; }
+
+        .peek-help {
+            margin-top: 6px; width: 26px; height: 26px; border-radius: 50%;
+            border: 1px solid #E2E8F0; background: #fff; color: #94A3B8;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 0.78rem;
+            transition: color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+        }
+        .peek-help:hover, .peek-help:focus-visible { color: var(--accent-primary); border-color: var(--accent-primary); }
+        .peek-help[aria-expanded="true"] i { transform: rotate(180deg); }
+        .peek-help i { transition: transform 0.2s ease; }
+        .peek-hint {
+            margin: 8px 0 0; padding: 8px 10px;
+            font-size: 0.74rem; line-height: 1.45; color: #475569; text-align: center;
+            background: #F1F5F9; border-radius: 10px; word-break: keep-all;
+        }
+
+        /* 캔버스가 열리면 오른쪽을 내주고, 좁은 화면에서는 자리를 차지하지 않는다. */
+        body.canvas-open .roadmap-peek-wrap { display: none; }
+        @media (max-width: 1100px) { .roadmap-peek-wrap { display: none; } }
+
+        body[data-theme="dark"] .roadmap-peek { background: #0F172A; border-color: #1E293B; }
+        body[data-theme="dark"] .peek-track::before { background: #1E293B; }
+        body[data-theme="dark"] .peek-node { border-color: #334155; background: #0F172A; }
+        body[data-theme="dark"] .peek-node[data-state="done"] { border-color: #E2E8F0; background: #E2E8F0; }
+        body[data-theme="dark"] .peek-node[data-state="current"] { border-color: #E2E8F0; background: #0F172A; box-shadow: 0 0 0 3px rgba(148,163,184,0.2); }
+        body[data-theme="dark"] .peek-count { color: #CBD5E1; }
+        body[data-theme="dark"] .peek-help { background: #0F172A; border-color: #1E293B; }
+        body[data-theme="dark"] .peek-hint { background: #111827; color: #CBD5E1; }
+
+        /* 클릭으로 답하는 선택지. 아바타 자리는 비워 답변 줄과 세로선을 맞춘다. */
+        .role-avatar.ghost { background: transparent; border: none; box-shadow: none; }
+        .choice-row { margin-top: -24px; }
+        .choice-prompt { font-size: 0.9rem; color: #64748B; margin-bottom: 10px; word-break: keep-all; }
+        /* 번호가 붙은 목록이라 가로로 흘리면 1번만 떨어져 보인다.
+           한 줄에 하나씩 쌓아 번호 순서대로 읽히게 한다. */
+        .choice-list {
+            display: flex; flex-direction: column; align-items: stretch;
+            gap: 8px; max-width: 520px;
+        }
+        .choice-btn {
+            font-family: inherit; font-size: 0.95rem; font-weight: 500;
+            padding: 10px 16px; border-radius: 12px;
+            border: 1px solid #E2E8F0; background: #fff; color: #1E293B;
+            cursor: pointer; text-align: left; word-break: keep-all;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+        }
+        .choice-btn:hover, .choice-btn:focus-visible {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .choice-btn:active { background: #F8FAFC; }
+        /* 고를 게 하나뿐이면 넓게 늘일 이유가 없다. */
+        .choice-btn:only-child { align-self: flex-start; }
+        body[data-theme="dark"] .choice-prompt { color: #94A3B8; }
+        body[data-theme="dark"] .choice-btn { background: #111827; border-color: #1E293B; color: #E2E8F0; }
+        body[data-theme="dark"] .choice-btn:hover,
+        body[data-theme="dark"] .choice-btn:focus-visible {
+            border-color: #334155; box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
+        }
+
+        /* ── 실험 대화. 같은 채팅방 안에서 진행되므로 말풍선 규격은 그대로 두고,
+              지금 몇 번째 국면인지와 무엇을 다루는 자리인지만 얇게 덧붙인다. ── */
+        .phase-badge {
+            margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+            font-size: 0.72rem; font-weight: 600; letter-spacing: 0.01em;
+            background: #F1F5F9; color: #475569; vertical-align: middle;
+        }
+        .exp-head .message-content {
+            border: 1px solid #E2E8F0; border-radius: 14px;
+            padding: 14px 16px; background: #F8FAFC; max-width: 620px;
+        }
+        .exp-head-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .exp-subject { font-weight: 700; color: #1E293B; }
+        .exp-meta { font-size: 0.82rem; color: #64748B; }
+        .exp-question { margin-top: 8px; color: #334155; word-break: keep-all; }
+        .exp-phases {
+            display: flex; flex-wrap: wrap; gap: 6px 14px;
+            margin: 12px 0 0; padding-left: 18px;
+            font-size: 0.8rem; color: #64748B;
+        }
+        .exp-done .message-content {
+            border: 1px solid #E2E8F0; border-radius: 14px;
+            padding: 16px; background: #F8FAFC; max-width: 620px;
+        }
+        .exp-done-title { font-weight: 700; color: #1E293B; }
+        .exp-done-sub { margin-top: 4px; font-size: 0.88rem; color: #64748B; }
+        .exp-doc {
+            display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
+            padding: 9px 14px; border-radius: 12px; text-decoration: none;
+            border: 1px solid #E2E8F0; background: #fff; color: #1E293B; font-weight: 600;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .exp-doc:hover { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .exp-doc img { width: 18px; height: 18px; }
+        /* 내려받기는 곁다리다. 주된 길은 편집기에서 여는 쪽이라 눈에 덜 띄게 둔다. */
+        .exp-dl {
+            display: inline-flex; align-items: center; gap: 6px;
+            margin: 12px 0 0 10px; font-size: 0.82rem; color: #64748B; text-decoration: none;
+        }
+        .exp-dl:hover { color: #1E293B; }
+        body[data-theme="dark"] .exp-dl { color: #94A3B8; }
+        body[data-theme="dark"] .exp-dl:hover { color: #E2E8F0; }
+        body[data-theme="dark"] .phase-badge { background: #1E293B; color: #CBD5E1; }
+        body[data-theme="dark"] .exp-head .message-content,
+        body[data-theme="dark"] .exp-done .message-content { background: #111827; border-color: #1E293B; }
+        body[data-theme="dark"] .exp-subject,
+        body[data-theme="dark"] .exp-done-title { color: #E2E8F0; }
+        body[data-theme="dark"] .exp-question { color: #CBD5E1; }
+        body[data-theme="dark"] .exp-doc { background: #0F172A; border-color: #1E293B; color: #E2E8F0; }
+        body[data-theme="dark"] .exp-doc:hover { border-color: #334155; box-shadow: 0 0 0 3px rgba(148,163,184,0.15); }
+
+        /* ── 찾는 중. 생각하는 것과 찾는 것은 다른 일이라 다르게 보인다.
+              점 세 개(생각 중)와 달리, 검색은 '무엇을' 찾는지가 보여야 한다.
+              끝나면 다시 점 세 개로 돌아간다. ── */
+        .searching {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 12px 6px 10px; border-radius: 999px;
+            border: 1px solid #E2E8F0; background: #F8FAFC;
+            font-size: 0.86rem; color: #475569; max-width: 100%;
+        }
+        .searching i { color: var(--accent-primary); font-size: 0.95rem; }
+        .searching .q {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 26ch;
+            /* 검색어 위를 빛이 한 번씩 훑고 지나간다. 진행 중임을 점멸 없이 알린다. */
+            background: linear-gradient(90deg, #64748B 20%, #CBD5E1 42%, #64748B 64%);
+            background-size: 220% 100%;
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            animation: searching-scan 1.6s linear infinite;
+        }
+        @keyframes searching-scan { from { background-position: 120% 0; } to { background-position: -20% 0; } }
+        @media (prefers-reduced-motion: reduce) {
+            .searching .q { animation: none; color: #475569; -webkit-text-fill-color: currentColor; }
+        }
+        .message-row.is-searching .role-avatar.ai { border-color: var(--accent-primary); }
+        body[data-theme="dark"] .searching { background: #111827; border-color: #1E293B; color: #CBD5E1; }
+        body[data-theme="dark"] .searching .q {
+            background: linear-gradient(90deg, #94A3B8 20%, #E2E8F0 42%, #94A3B8 64%);
+            background-size: 220% 100%; -webkit-background-clip: text; background-clip: text;
+        }
+
+        /* 답변 아래 동작. 눈에 띄지 않다가 그 답을 보고 있을 때만 또렷해진다. */
+        /* 답변 오른쪽 끝에 붙인다. 읽는 흐름을 막지 않고, 다 읽은 자리에서 만난다. */
+        .msg-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+        .act-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 11px; border-radius: 999px;
+            border: 1px solid #E2E8F0; background: transparent;
+            font-family: inherit; font-size: 0.8rem; color: #64748B;
+            cursor: pointer; opacity: 0.75;
+            transition: opacity 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+        .message-row:hover .act-btn { opacity: 1; }
+        .act-btn:hover, .act-btn:focus-visible {
+            opacity: 1; color: #1E293B; border-color: var(--accent-primary);
+        }
+        .act-btn i { font-size: 0.85rem; }
+        body[data-theme="dark"] .act-btn { border-color: #1E293B; color: #94A3B8; }
+        body[data-theme="dark"] .act-btn:hover { color: #E2E8F0; border-color: #334155; }
+
+        /* 출처 칩. 주소를 통째로 늘어놓으면 문장이 안 읽히므로 제목과 도메인만 작게 남긴다. */
+        .src-chip {
+            display: inline-flex; align-items: baseline; gap: 6px;
+            max-width: 100%; vertical-align: baseline;
+            margin: 0 2px; padding: 1px 9px 2px; border-radius: 999px;
+            border: 1px solid #E2E8F0; background: #F8FAFC;
+            font-size: 0.82rem; line-height: 1.5; color: #334155; text-decoration: none;
+            transition: border-color 0.18s ease, background-color 0.18s ease;
+        }
+        .src-chip:hover, .src-chip:focus-visible {
+            border-color: var(--accent-primary); background: #fff; color: #0F172A;
+        }
+        .src-chip i { font-size: 0.8rem; color: #94A3B8; align-self: center; }
+        .src-chip:hover i { color: var(--accent-primary); }
+        .src-chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
+        .src-chip .d { font-size: 0.74rem; color: #94A3B8; white-space: nowrap; }
+        body[data-theme="dark"] .src-chip { background: #111827; border-color: #1E293B; color: #CBD5E1; }
+        body[data-theme="dark"] .src-chip:hover { background: #0F172A; border-color: #334155; color: #E2E8F0; }
+        body[data-theme="dark"] .src-chip .d { color: #64748B; }
+
+        /* 찾아온 이미지. 대화 흐름을 끊지 않게 한 줄로 눕히고, 누르면 출처로 간다. */
+        .img-strip {
+            display: flex; gap: 8px; margin-top: 12px;
+            overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin;
+        }
+        .img-card {
+            flex: 0 0 auto; width: 148px; height: 108px; border-radius: 10px;
+            overflow: hidden; border: 1px solid #E2E8F0; background: #F1F5F9;
+            display: block; padding: 0; cursor: zoom-in;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .img-card:hover, .img-card:focus-visible {
+            border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .img-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        body[data-theme="dark"] .img-card { border-color: #1E293B; background: #0F172A; }
+
+        /* 직접 눌러볼 화면. 대화의 일부처럼 보이되, 여기부터는 만들어진 화면이라는 걸
+           머리말로 분명히 해 둔다. 안쪽은 sandbox iframe이라 이 페이지를 건드리지 못한다. */
+        .demo-card {
+            margin-top: 14px; border: 1px solid #E2E8F0; border-radius: 14px;
+            overflow: hidden; background: #fff; max-width: 620px;
+        }
+        .demo-head {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 12px; background: #F8FAFC; border-bottom: 1px solid #E2E8F0;
+            font-size: 0.82rem; font-weight: 600; color: #475569;
+        }
+        .demo-head i { color: #94A3B8; }
+        .demo-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .demo-reset {
+            margin-left: auto; padding: 3px 10px; border-radius: 999px;
+            border: 1px solid #E2E8F0; background: #fff; color: #64748B;
+            font-family: inherit; font-size: 0.75rem; cursor: pointer;
+            transition: color 0.18s ease, border-color 0.18s ease;
+        }
+        .demo-reset:hover, .demo-reset:focus-visible { color: #1E293B; border-color: var(--accent-primary); }
+        .demo-frame { display: block; width: 100%; height: 220px; border: 0; background: #fff; }
+
+        /* ── 실험 국면 진행 바. 폰 전용 — 데스크톱은 머리말이 그 역할을 한다. ── */
+        .phase-bar { display: none; }
+
+        /* ── 복귀 카드. 며칠 만에 온 학생에게 "어디까지 했는지"부터 알려준다. ── */
+        .resume-box {
+            border: 1px solid #E2E8F0; border-radius: 14px;
+            padding: 12px 14px; background: #F8FAFC; max-width: 620px;
+        }
+        .resume-where {
+            display: flex; align-items: center; gap: 7px;
+            font-size: 0.92rem; color: #334155;
+        }
+        .resume-where i { color: #94A3B8; }
+        .resume-where b { color: #1E293B; }
+        .resume-last {
+            margin-top: 7px; font-size: 0.84rem; color: #64748B;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .resume-open {
+            margin-top: 10px; padding: 7px 13px; border-radius: 999px;
+            border: 1px solid #E2E8F0; background: #fff; color: #64748B;
+            font-family: inherit; font-size: 0.8rem; font-weight: 500; cursor: pointer;
+            transition: border-color 0.18s ease, color 0.18s ease;
+        }
+        .resume-open:hover, .resume-open:focus-visible {
+            border-color: var(--accent-primary); color: #1E293B;
+        }
+        body[data-theme="dark"] .resume-box { background: #111827; border-color: #1E293B; }
+        body[data-theme="dark"] .resume-where { color: #CBD5E1; }
+        body[data-theme="dark"] .resume-where b { color: #E2E8F0; }
+        body[data-theme="dark"] .resume-open {
+            background: #0F172A; border-color: #1E293B; color: #94A3B8;
+        }
+
+        /* ── 측정값 표 입력기. 폰으로 실험하며 값만 넣는 자리다. ── */
+        .measure-card {
+            margin-top: 12px; border: 1px solid #E2E8F0; border-radius: 14px;
+            background: #fff; overflow: hidden; max-width: 620px;
+        }
+        .measure-head {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 14px; background: #F8FAFC; border-bottom: 1px solid #E2E8F0;
+            font-size: 0.85rem; font-weight: 600; color: #475569;
+        }
+        .measure-head i { color: #94A3B8; }
+        /* 열이 많으면 표만 가로로 스크롤한다. 페이지가 밀리면 안 된다. */
+        .measure-scroll { overflow-x: auto; }
+        .measure-table { width: 100%; border-collapse: collapse; }
+        .measure-table th {
+            padding: 8px 10px; text-align: left; white-space: nowrap;
+            font-size: 0.78rem; font-weight: 600; color: #64748B;
+            border-bottom: 1px solid #E2E8F0; background: #fff;
+        }
+        .measure-table td { padding: 0; border-bottom: 1px solid #F1F5F9; }
+        .measure-input {
+            width: 100%; min-width: 72px; border: none; background: transparent;
+            padding: 11px 10px; font-family: inherit; font-size: 0.95rem; color: #1E293B;
+        }
+        .measure-input:focus { outline: none; background: #F8FAFC; }
+        .measure-del { width: 34px; }
+        .measure-drop {
+            width: 30px; height: 30px; border: none; background: transparent;
+            color: #CBD5E1; cursor: pointer; border-radius: 8px; font-size: 1rem;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .measure-drop:hover, .measure-drop:focus-visible { color: #64748B; background: #F1F5F9; }
+        .measure-actions {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; padding: 10px 12px; background: #F8FAFC;
+            border-top: 1px solid #E2E8F0;
+        }
+        .measure-add {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 12px; border-radius: 999px;
+            border: 1px solid #E2E8F0; background: #fff; color: #64748B;
+            font-family: inherit; font-size: 0.82rem; font-weight: 500; cursor: pointer;
+            transition: border-color 0.18s ease, color 0.18s ease;
+        }
+        .measure-add:hover, .measure-add:focus-visible {
+            border-color: var(--accent-primary); color: #1E293B;
+        }
+        .measure-send {
+            padding: 9px 18px; border-radius: 999px; border: none;
+            background: var(--accent-primary); color: #fff;
+            font-family: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+            transition: box-shadow 0.18s ease;
+        }
+        .measure-send:hover, .measure-send:focus-visible {
+            box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.14);
+        }
+        body[data-theme="dark"] .measure-card { background: #0F172A; border-color: #1E293B; }
+        body[data-theme="dark"] .measure-head {
+            background: #111827; border-color: #1E293B; color: #CBD5E1;
+        }
+        body[data-theme="dark"] .measure-table th {
+            background: #0F172A; border-color: #1E293B; color: #94A3B8;
+        }
+        body[data-theme="dark"] .measure-table td { border-color: #1E293B; }
+        body[data-theme="dark"] .measure-input { color: #E2E8F0; }
+        body[data-theme="dark"] .measure-input:focus { background: #111827; }
+        body[data-theme="dark"] .measure-actions { background: #111827; border-color: #1E293B; }
+        body[data-theme="dark"] .measure-add { background: #0F172A; border-color: #1E293B; color: #94A3B8; }
+        body[data-theme="dark"] .measure-send { background: #E2E8F0; color: #0F172A; }
+        body[data-theme="dark"] .demo-card { border-color: #1E293B; background: #0F172A; }
+        body[data-theme="dark"] .demo-head { background: #111827; border-bottom-color: #1E293B; color: #CBD5E1; }
+        body[data-theme="dark"] .demo-reset { background: #0F172A; border-color: #1E293B; color: #94A3B8; }
+        body[data-theme="dark"] .demo-reset:hover { color: #E2E8F0; border-color: #334155; }
+
+        /* 알림. 화면 상단 중앙 한 곳에서만 뜬다.
+           저장·복사·오류가 저마다 다른 자리에서 나타나면 어디를 봐야 할지 알 수 없다. */
+        .app-toast {
+            position: fixed; top: 20px; left: 50%; transform: translate(-50%, -12px);
+            z-index: 300; max-width: min(560px, calc(100vw - 32px));
+            padding: 11px 18px; border-radius: 12px;
+            background: rgba(15, 23, 42, 0.94); color: #fff;
+            font-size: 0.88rem; font-weight: 500; line-height: 1.5; text-align: center;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .app-toast.show { opacity: 1; transform: translate(-50%, 0); }
+        /* 성패는 색으로만 구분한다. 모양이 달라지면 같은 알림으로 읽히지 않는다. */
+        .app-toast.error { background: #B91C1C; }
+        .app-toast.success { background: #14532D; }
+        .copy-box { width: min(680px, 100%); }
+        .copy-head { color: #E2E8F0; font-size: 0.88rem; }
+        .copy-box textarea {
+            width: 100%; height: min(420px, 50vh); resize: vertical;
+            padding: 14px; border-radius: 12px; border: 1px solid #334155;
+            background: #fff; color: #0F172A; font-family: ui-monospace, SFMono-Regular, monospace;
+            font-size: 0.85rem; line-height: 1.6;
+        }
+
+        /* 단계 점검표. 문서 생성처럼 긴 작업이 몇 분짜리 침묵이 되지 않도록,
+           계획 → 장별 집필 → 그림 → 조립 → 검수가 하나씩 끝나는 것을 보여준다. */
+        .steps-card {
+            display: flex; flex-direction: column; gap: 2px;
+            border: 1px solid #E2E8F0; border-radius: 14px;
+            padding: 12px 14px; background: #F8FAFC; max-width: 460px;
+        }
+        .step {
+            display: flex; align-items: baseline; gap: 10px;
+            padding: 5px 2px; font-size: 0.9rem; color: #94A3B8;
+        }
+        .step[data-state="running"] { color: #1E293B; font-weight: 600; }
+        .step[data-state="done"] { color: #475569; }
+        .step[data-state="failed"] { color: #B91C1C; }
+        .st-ico { width: 18px; flex: 0 0 auto; text-align: center; align-self: center; }
+        .st-pin {
+            display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+            border: 1.5px solid #CBD5E1;
+        }
+        .step[data-state="done"] .st-ico { color: var(--accent-primary); }
+        .st-spin { display: inline-block; animation: st-rotate 1s linear infinite; }
+        @keyframes st-rotate { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .st-spin { animation: none; } }
+        .st-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .st-note { margin-left: auto; font-size: 0.76rem; color: #94A3B8; white-space: nowrap; }
+        body[data-theme="dark"] .steps-card { background: #111827; border-color: #1E293B; }
+        body[data-theme="dark"] .step { color: #64748B; }
+        body[data-theme="dark"] .step[data-state="running"] { color: #E2E8F0; }
+        body[data-theme="dark"] .step[data-state="done"] { color: #CBD5E1; }
+        body[data-theme="dark"] .st-pin { border-color: #334155; }
+
+        /* 그림 계획 확인. 생성이 멈춰 기다리는 자리라, 눌러야 할 것이 분명해야 한다. */
+        .plan-q-card {
+            border: 1px solid #E2E8F0; border-radius: 14px;
+            padding: 14px 16px; background: #F8FAFC; max-width: 620px;
+        }
+        .plan-q-title { font-weight: 600; color: #1E293B; word-break: keep-all; }
+        .plan-q-list { list-style: none; margin: 10px 0 12px; padding: 0;
+                       display: flex; flex-direction: column; gap: 6px; }
+        .plan-q-list li { display: flex; align-items: baseline; gap: 8px; font-size: 0.9rem; }
+        .plan-q-list .k {
+            flex: 0 0 auto; padding: 1px 8px; border-radius: 999px;
+            font-size: 0.72rem; font-weight: 600;
+            background: #E2E8F0; color: #475569;
+        }
+        .plan-q-list .k[data-kind="image"] { background: #0F172A; color: #fff; }
+        .plan-q-list .c { color: #334155; word-break: keep-all; }
+        .plan-q-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .plan-q-ok {
+            padding: 8px 14px; border-radius: 10px; border: none; cursor: pointer;
+            background: #0F172A; color: #fff; font-family: inherit; font-size: 0.88rem;
+            font-weight: 600; transition: opacity 0.15s ease;
+        }
+        .plan-q-ok:hover { opacity: 0.85; }
+        .plan-q-input {
+            flex: 1 1 200px; min-width: 0; padding: 8px 12px; border-radius: 10px;
+            border: 1px solid #E2E8F0; font-family: inherit; font-size: 0.88rem;
+            background: #fff; color: #0F172A;
+        }
+        .plan-q-input:focus { outline: none; border-color: var(--accent-primary);
+                              box-shadow: 0 0 0 3px var(--accent-glow); }
+        .plan-q-send {
+            padding: 8px 14px; border-radius: 10px; cursor: pointer;
+            border: 1px solid #E2E8F0; background: #fff; color: #1E293B;
+            font-family: inherit; font-size: 0.88rem; font-weight: 600;
+            transition: border-color 0.18s ease;
+        }
+        .plan-q-send:hover { border-color: var(--accent-primary); }
+        .plan-q-done { display: flex; align-items: center; gap: 8px;
+                       font-size: 0.88rem; color: #475569; }
+        .plan-q-done i { color: var(--accent-primary); }
+        body[data-theme="dark"] .plan-q-card { background: #111827; border-color: #1E293B; }
+        body[data-theme="dark"] .plan-q-title { color: #E2E8F0; }
+        body[data-theme="dark"] .plan-q-list .c { color: #CBD5E1; }
+        body[data-theme="dark"] .plan-q-list .k { background: #1E293B; color: #CBD5E1; }
+        body[data-theme="dark"] .plan-q-list .k[data-kind="image"] { background: #E2E8F0; color: #0F172A; }
+        body[data-theme="dark"] .plan-q-ok { background: #E2E8F0; color: #0F172A; }
+        body[data-theme="dark"] .plan-q-input { background: #0F172A; border-color: #1E293B; color: #E2E8F0; }
+        body[data-theme="dark"] .plan-q-send { background: #0F172A; border-color: #1E293B; color: #E2E8F0; }
+
+        /* 크게 보기. 대화를 떠나지 않고 그 자리에서 확인하고 닫는다. */
+        .lightbox {
+            position: fixed; inset: 0; z-index: 200;
+            display: flex; align-items: center; justify-content: center;
+            padding: 32px; background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(3px); animation: fade-in 0.16s ease;
+            cursor: zoom-out;
+        }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        .lightbox-body {
+            position: relative; display: flex; flex-direction: column; gap: 10px;
+            max-width: min(1100px, 100%); max-height: 100%; cursor: default;
+        }
+        .lightbox-body img {
+            max-width: 100%; max-height: calc(100vh - 130px);
+            object-fit: contain; border-radius: 12px; background: #fff;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+        }
+        .lightbox-close {
+            position: absolute; top: -14px; right: -14px; z-index: 1;
+            width: 34px; height: 34px; border-radius: 50%;
+            border: none; background: #fff; color: #0F172A; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.9rem; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+            transition: transform 0.15s ease;
+        }
+        .lightbox-close:hover, .lightbox-close:focus-visible { transform: scale(1.08); }
+        .lightbox-cap {
+            display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+            color: #E2E8F0; font-size: 0.88rem; word-break: keep-all;
+        }
+        .lightbox-cap a { color: #fff; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+        .lightbox-cap a:hover { color: #CBD5E1; }
+        @media (max-width: 640px) {
+            .lightbox { padding: 16px; }
+            .lightbox-close { top: 4px; right: 4px; }
+        }
+
+        /* ── 사이드바 HISTORY. 대화가 섞이지 않도록 폴더로 나눠 둔다. ── */
+        /* Tools의 .nav-item과 같은 크기·굵기. 폴더라고 더 진하게 두지 않는다. */
+        .folder {
+            display: flex; align-items: center; gap: 10px; width: 100%;
+            padding: 9px 14px; border: none; background: transparent; cursor: pointer;
+            font-family: inherit; font-size: 0.9rem; font-weight: 500; color: #475569;
+            border-radius: var(--radius-sm); text-align: left;
+        }
+        .folder:hover { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+        .folder .chev { margin-left: auto; font-size: 0.75rem; color: #94A3B8; transition: transform 0.18s ease; }
+        .folder[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+        .folder .count { font-size: 0.75rem; font-weight: 600; color: #94A3B8; }
+        .folder i.bi { color: #94A3B8; }
+        .folder-body { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px; }
+        .folder-body[hidden] { display: none; }
+        .chat-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 14px 8px 34px; border-radius: var(--radius-sm);
+            font-size: 0.9rem; font-weight: 500; color: #475569; cursor: pointer;
+            border: none; background: transparent; width: 100%; text-align: left;
+            font-family: inherit; text-decoration: none;
+            overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+        }
+        .chat-row:hover { background: #fff; color: #1E293B; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+        /* 지금 열린 대화는 굵기가 아니라 배경과 점 색으로만 구분한다. */
+        .chat-row[aria-current="true"] { background: #fff; color: #1E293B; }
+        .chat-row .dot {
+            width: 6px; height: 6px; border-radius: 50%; background: #CBD5E1; flex-shrink: 0;
+        }
+        .chat-row[aria-current="true"] .dot { background: var(--accent-primary); }
+        /* flex 자식은 min-width:0 이 없으면 내용만큼 버텨서 말줄임 대신 가로로 밀어낸다. */
+        .chat-row .txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .folder-empty { padding: 8px 14px 8px 34px; font-size: 0.8rem; color: #94A3B8; }
+        body[data-theme="dark"] .folder { color: #CBD5E1; }
+        body[data-theme="dark"] .folder:hover,
+        body[data-theme="dark"] .chat-row:hover,
+        body[data-theme="dark"] .chat-row[aria-current="true"] {
+            background: rgba(15, 23, 42, 0.7); color: #E2E8F0; box-shadow: none;
+        }
+        body[data-theme="dark"] .chat-row { color: #CBD5E1; }
+        body[data-theme="dark"] .chat-row .dot { background: #334155; }
+        body[data-theme="dark"] .folder-empty { color: #64748B; }
+
+        body[data-theme="dark"] .chat-link { color: #60A5FA; }
+        body[data-theme="dark"] .chat-link:hover,
+        body[data-theme="dark"] .chat-link:focus-visible { color: #93C5FD; background: rgba(96, 165, 250, 0.14); }
         .message-name { font-size: 0.8rem; color: #94A3B8; margin-bottom: 8px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 
         /* Loading Bubble for "작성 중..." */
@@ -481,66 +1183,8 @@
             display: none; 
             border: 1px solid #F1F5F9;
         }
-        .paper-sheet.active { display: block; animation: sheet-arrive 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-        .doc-frame {
-            width: 100%;
-            min-height: 720px;
-            border: none;
-            background: transparent;
-            display: block;
-        }
-        .doc-frame.hidden { display: none; }
 
         .paper-title { font-family: 'Noto Serif KR', serif; font-size: 2.4rem; font-weight: 700; border-bottom: 2px solid #F1F5F9; padding-bottom: 1.5rem; margin-bottom: 2.5rem; color: #0F172A; }
-        .paper-body { font-family: 'Noto Serif KR', serif; font-size: 1.15rem; line-height: 2.0; color: #334155; }
-
-        .scroll-container.template-mode { align-items: stretch; }
-        .doc-viewer.template-mode { max-width: 100%; padding: 1.5rem 0; }
-        .paper-sheet.template-mode {
-            padding: 0;
-            background: transparent;
-            border: none;
-            box-shadow: none;
-            margin-top: 0.5rem;
-            min-height: 0;
-            transform: none;
-        }
-        .paper-sheet.template-mode.active { animation: none; }
-        .paper-sheet.template-mode .paper-title { display: none; }
-        .paper-sheet.template-mode .paper-body { font-family: inherit; font-size: 1rem; line-height: normal; color: inherit; }
-        .paper-sheet.template-mode #docContent {
-            width: 100%;
-            overflow-x: auto;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            transform: none;
-        }
-        .paper-sheet.template-mode .hwp-doc {
-            display: inline-block;
-            min-width: auto;
-            background: transparent !important;
-            padding: 0 !important;
-            margin: 0 auto;
-            transform: none;
-        }
-        .paper-sheet.template-mode .Paper { margin: 0 auto 20px; }
-
-        .section-fill-panel {
-            width: 100%;
-            max-width: 850px;
-            margin-top: 12px;
-            padding: 14px 18px;
-            border-radius: 16px;
-            border: 1px solid #E2E8F0;
-            background: #ffffff;
-            box-shadow: 0 18px 35px -20px rgba(15, 23, 42, 0.3);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .section-fill-panel.hidden { display: none; }
         .section-fill-item {
             display: flex;
             align-items: center;
@@ -572,70 +1216,6 @@
             background: linear-gradient(to top, #F8FAFC 40%, transparent 100%);
         }
         .input-region > * { pointer-events: auto; }
-
-        .inline-edit-bubble {
-            position: fixed;
-            z-index: 120;
-            background: #ffffff;
-            border: 1px solid #E2E8F0;
-            box-shadow: 0 18px 35px -18px rgba(15, 23, 42, 0.3);
-            border-radius: 14px;
-            padding: 10px 12px;
-            min-width: 240px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .inline-edit-bubble.hidden { display: none; }
-        .inline-edit-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .inline-edit-input {
-            flex: 1;
-            border: 1px solid #E2E8F0;
-            border-radius: 10px;
-            padding: 8px 10px;
-            font-size: 0.85rem;
-            font-family: inherit;
-            color: #1E293B;
-        }
-        .inline-edit-submit {
-            border: none;
-            background: var(--accent-gradient);
-            color: #fff;
-            border-radius: 10px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 8px 12px;
-            cursor: pointer;
-            box-shadow: 0 8px 16px -10px var(--accent-glow);
-            white-space: nowrap;
-        }
-
-        .edit-cover {
-            position: fixed;
-            z-index: 118;
-            pointer-events: none;
-            border-radius: 14px;
-            border: 1px solid rgba(14, 165, 233, 0.35);
-            background: linear-gradient(110deg, rgba(14, 165, 233, 0.08), rgba(14, 165, 233, 0.16), rgba(14, 165, 233, 0.08));
-            background-size: 200% 100%;
-            box-shadow: 0 20px 40px -24px rgba(14, 165, 233, 0.45);
-            opacity: 0;
-            transform: translateY(-10px) scale(0.98);
-            transition: opacity 0.2s ease, transform 0.3s ease, left 0.32s ease, top 0.32s ease, width 0.32s ease, height 0.32s ease;
-            animation: edit-cover-shimmer 1.2s linear infinite;
-        }
-        .edit-cover.active {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-        }
-        .edit-cover.done {
-            opacity: 0;
-            transform: translateY(10px) scale(0.98);
-        }
         @keyframes edit-cover-shimmer {
             0% { background-position: 0% 50%; }
             100% { background-position: 200% 50%; }
@@ -644,28 +1224,6 @@
         body {
             --canvas-panel-width: min(52vw, 820px);
             --canvas-reserve-width: var(--canvas-panel-width);
-        }
-        body.canvas-open { overflow: hidden; }
-        body.canvas-open .scroll-container {
-            padding-right: calc(var(--canvas-reserve-width) + 32px);
-        }
-        body.canvas-open .input-region {
-            right: calc(var(--canvas-reserve-width) + 32px);
-        }
-        body.canvas-open[data-canvas-mode="side"] .scroll-container {
-            align-items: flex-start;
-            padding-left: clamp(28px, 4vw, 88px);
-            padding-top: clamp(16px, 3vw, 48px);
-        }
-        body.canvas-open[data-canvas-mode="side"] .input-region {
-            padding-left: clamp(24px, 4vw, 80px);
-        }
-        body.canvas-open[data-canvas-mode="side"] .canvas-overlay.active {
-            pointer-events: none;
-            background: transparent;
-        }
-        body.canvas-open[data-canvas-mode="side"] .canvas-panel {
-            pointer-events: auto;
         }
         /* CANVAS - SIMPLE & SOPHISTICATED */
         .canvas-overlay {
@@ -680,82 +1238,10 @@
             transition: opacity 0.2s ease;
             opacity: 0;
         }
-        .canvas-overlay.active { display: block; opacity: 1; pointer-events: auto; }
-        
-        .canvas-panel {
-            position: absolute;
-            top: 12px; right: 12px; bottom: 12px;
-            width: var(--canvas-panel-width);
-            
-            /* Premium Solid Look (Like Login Modal) */
-            background: #ffffff;
-            border-radius: 20px; /* Refined roundness */
-            box-shadow: 
-                0 0 0 1px rgba(0,0,0,0.04), /* Subtle outline */
-                0 25px 50px -12px rgba(0, 0, 0, 0.25); /* Deep sleek shadow */
-            
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            
-            /* Simple Entrance */
-            transform: translateX(20px);
-            opacity: 0;
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
-        }
-
-        .canvas-overlay.active .canvas-panel {
-            transform: translateX(0);
-            opacity: 1;
-        }
-
-        .canvas-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 20px;
-            background: #fff;
-            border-bottom: 1px solid #F1F5F9;
-            flex-shrink: 0;
-        }
-        .canvas-title {
-            font-family: 'Inter', sans-serif;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #0F172A;
-            display: flex; align-items: center; gap: 10px;
-        }
         /* Decorator like the login modal logo or simple dot */
         .canvas-title::before {
             content: ''; display: block; width: 6px; height: 6px; 
             background: #0F172A; border-radius: 50%;
-        }
-
-        .canvas-close {
-            width: 32px; height: 32px;
-            border-radius: 10px;
-            border: 1px solid transparent;
-            background: transparent;
-            color: #64748B;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.1rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .canvas-close:hover {
-            background: #F1F5F9;
-            color: #0F172A;
-            border-color: #E2E8F0;
-        }
-
-        .canvas-body {
-            flex: 1;
-            overflow: auto;
-            padding: 0;
-            background: #F8FAFC; /* Light gray background for contrast with paper */
-            display: flex;
-            flex-direction: column;
-            position: relative;
         }
         
         /* Dark Mode for Canvas */
@@ -764,168 +1250,6 @@
             box-shadow: 
                 0 0 0 1px rgba(255,255,255,0.1),
                 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-        body[data-theme="dark"] .canvas-header {
-            background: #0F172A;
-            border-bottom-color: #1E293B;
-        }
-        body[data-theme="dark"] .canvas-title { color: #F1F5F9; }
-        body[data-theme="dark"] .canvas-title::before { background: #F1F5F9; }
-        
-        body[data-theme="dark"] .canvas-close { color: #94A3B8; }
-        body[data-theme="dark"] .canvas-close:hover {
-            background: #1E293B;
-            color: #fff;
-            border-color: #334155;
-        }
-        body[data-theme="dark"] .canvas-body {
-            background: #0B0F17; /* Darker than panel for depth */
-        }
-        
-        .canvas-body .paper-sheet {
-            display: block;
-            margin: 0;
-            width: 100%;
-            border-radius: 0;
-            box-shadow: none;
-            flex: 1;
-            min-height: 100%;
-            display: flex;
-            flex-direction: column;
-            background: transparent;
-        }
-        .canvas-body .doc-frame,
-        .canvas-body #docContent {
-            width: 100%;
-            min-height: 100%;
-        }
-
-        .canvas-message-card {
-            position: relative;
-            overflow: hidden;
-            border-radius: 14px;
-            border: 1px solid #E2E8F0;
-            background: #fff;
-            padding: 18px 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            cursor: pointer;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            max-width: 420px;
-        }
-        .canvas-message-card::before {
-            content: '';
-            position: absolute;
-            left: 0; top: 0; bottom: 0; width: 4px;
-            background: var(--accent-gradient);
-            opacity: 0.8;
-        }
-        .canvas-message-card > * {
-            position: relative;
-            z-index: 1;
-        }
-        .canvas-message-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
-            border-color: #CBD5E1;
-        }
-        .canvas-card-kicker {
-            font-size: 0.7rem;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            font-weight: 600;
-            color: #94A3B8;
-            margin-bottom: 2px;
-            display: flex; align-items: center; gap: 6px;
-        }
-        .canvas-card-kicker::before {
-            content: ''; width: 6px; height: 6px; background: #94A3B8; border-radius: 50%; opacity: 0.5;
-        }
-        .canvas-card-title {
-            font-family: 'Noto Serif KR', serif;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #1E293B;
-            letter-spacing: -0.01em;
-        }
-        .canvas-card-summary {
-            font-size: 0.9rem;
-            color: #64748B;
-            line-height: 1.6;
-            margin-top: 4px;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        .canvas-card-cta {
-            font-size: 0.8rem;
-            color: var(--accent-primary);
-            font-weight: 600;
-            align-self: flex-start;
-            margin-top: 12px;
-            padding: 6px 12px;
-            border-radius: 8px;
-            background: #F1F5F9;
-            transition: 0.2s;
-        }
-        .canvas-message-card:hover .canvas-card-cta {
-            background: var(--accent-primary);
-            color: white;
-        }
-        .verification-card {
-            border: 1px solid #E2E8F0;
-            border-radius: 16px;
-            background: #ffffff;
-            padding: 16px 18px;
-            max-width: 520px;
-            box-shadow: 0 14px 28px -18px rgba(15, 23, 42, 0.3);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .verification-title {
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: #334155;
-        }
-        .verification-list {
-            margin: 0;
-            padding-left: 18px;
-            color: #475569;
-            font-size: 0.88rem;
-            line-height: 1.5;
-            max-height: 240px;
-            overflow-y: auto;
-        }
-        .verification-note {
-            font-size: 0.75rem;
-            color: #94A3B8;
-            line-height: 1.5;
-        }
-        .verification-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 2px;
-        }
-        .verification-btn {
-            border: none;
-            padding: 8px 14px;
-            border-radius: 999px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .verification-btn.primary {
-            color: #fff;
-            background: var(--accent-gradient);
-            box-shadow: 0 10px 20px -12px var(--accent-glow);
-        }
-        .verification-btn.ghost {
-            background: #F1F5F9;
-            color: #334155;
         }
 
         .input-wrapper {
@@ -959,14 +1283,6 @@
         }
         textarea::placeholder { color: #94A3B8; }
 
-        .btn-attach {
-            width: 36px; height: 36px; border-radius: 50%; border: none;
-            background: transparent; color: #94A3B8;
-            display: flex; align-items: center; justify-content: center; cursor: pointer;
-            transition: 0.2s; flex-shrink: 0; position: relative;
-        }
-        .btn-attach:hover { background: #F1F5F9; color: #475569; }
-
         .btn-send {
             width: 38px; height: 38px; border-radius: 14px; border: none;
             background: #F1F5F9; color: #CBD5E1;
@@ -998,17 +1314,6 @@
             display: none; flex-direction: column; gap: 2px;
             min-width: 220px; z-index: 100;
         }
-        .attach-menu.open { display: flex; animation: fade-in-up 0.2s; }
-        .attach-item {
-            display: flex; align-items: center; gap: 12px;
-            padding: 12px 14px; border-radius: 10px;
-            background: transparent; border: none; color: #475569;
-            cursor: pointer; text-align: left; font-size: 0.95rem; font-weight: 500;
-            transition: background 0.2s;
-        }
-        .attach-item:hover { background: #F8FAFC; color: var(--accent-primary); }
-        .attach-item i { font-size: 1.1rem; color: #94A3B8; }
-        .attach-item:hover i { color: var(--accent-primary); }
 
         /* File Badge */
         .file-badge-float {
@@ -1038,77 +1343,6 @@
             transition: transform 0.3s ease;
         }
         .modal-wrap.show .modal-box { transform: scale(1) translateY(0); }
-
-        .modal-box.template-modal {
-            max-width: 760px;
-            width: min(92vw, 760px);
-            padding: 28px 28px 24px;
-            background: #ffffff;
-        }
-        .template-modal-header h3 {
-            margin: 0 0 6px;
-            font-size: 1.4rem;
-            font-weight: 700;
-            color: var(--text-main);
-        }
-        .template-modal-header p {
-            margin: 0 0 16px;
-            color: var(--text-muted);
-            font-size: 0.95rem;
-        }
-        .template-search {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: 1px solid #E2E8F0;
-            background: #F8FAFC;
-        }
-        .template-search input {
-            border: none;
-            background: transparent;
-            font-size: 0.95rem;
-            width: 100%;
-            color: var(--text-main);
-        }
-        .template-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 14px;
-            margin-top: 18px;
-        }
-        .template-card {
-            border: 1px solid #E2E8F0;
-            background: #FFFFFF;
-            border-radius: 14px;
-            padding: 14px 16px;
-            text-align: left;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 10px 20px -18px rgba(15, 23, 42, 0.35);
-        }
-        .template-card:hover {
-            border-color: var(--accent-primary);
-            transform: translateY(-2px);
-            box-shadow: 0 18px 30px -18px rgba(15, 23, 42, 0.45);
-        }
-        .template-card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 6px;
-        }
-        .template-card-title {
-            font-weight: 600;
-            color: var(--text-main);
-            font-size: 0.98rem;
-        }
-        .template-card-desc {
-            color: var(--text-muted);
-            font-size: 0.82rem;
-        }
         .template-badge {
             font-size: 0.7rem;
             text-transform: uppercase;
@@ -1121,69 +1355,6 @@
         .template-badge.file {
             background: rgba(14, 165, 233, 0.12);
             color: #0EA5E9;
-        }
-        .template-empty {
-            margin-top: 20px;
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            text-align: center;
-        }
-        .download-modal {
-            max-width: 520px;
-        }
-        .download-modal-header h3 {
-            margin: 0 0 6px;
-            font-size: 1.35rem;
-            font-weight: 700;
-            color: var(--text-main);
-        }
-        .download-modal-header p {
-            margin: 0;
-            color: var(--text-muted);
-            font-size: 0.92rem;
-        }
-        .download-options {
-            display: grid;
-            gap: 12px;
-            margin-top: 18px;
-        }
-        .download-option {
-            display: flex;
-            gap: 12px;
-            padding: 14px 16px;
-            border-radius: 16px;
-            border: 1px solid #E2E8F0;
-            background: #F8FAFC;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .download-option:hover {
-            border-color: var(--accent-primary);
-            background: #FFFFFF;
-            box-shadow: 0 12px 28px -18px rgba(15, 23, 42, 0.4);
-        }
-        .download-option input {
-            margin-top: 2px;
-            accent-color: var(--accent-primary);
-        }
-        .download-option-body {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .download-option-title {
-            font-weight: 600;
-            color: var(--text-main);
-        }
-        .download-option-desc {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-        .download-actions {
-            margin-top: 20px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
         }
         .btn-secondary {
             border-radius: 12px;
@@ -1250,125 +1421,230 @@
         .btn-primary-3d:active { transform: translateY(0); box-shadow: 0 5px 10px -3px var(--accent-glow); }
 
         /* ============================================
-           RIROSCHOOL LOGIN - "MAXIMUM COOL" REDESIGN
+           LOGIN MODALS — /login 통합 로그인과 동일한 카드
+           계정 로그인(#modalAuth)과 리로스쿨 연동(#modalLogin)이
+           같은 표면·간격·타이포를 쓰도록 한 벌로 정의한다.
            ============================================ */
         .modal-box.login-modal {
             position: relative;
-            width: min(92vw, 400px); /* Sleeker width */
-            max-width: 400px;
-            padding: 50px 36px; /* Optimized spacing */
-            overflow: hidden;
-            /* Background Logic - Image */
-            background: url('/static/images/riro.jpg') center/cover no-repeat;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
-            border-radius: 28px;
-        }
-        
-        /* Dark Overlay for Readability */
-        .modal-box.login-modal::before {
-            content: '';
-            position: absolute; inset: 0;
-            background: linear-gradient(to bottom, rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.9));
-            z-index: 1;
-            backdrop-filter: blur(1px);
+            width: min(92vw, 420px);
+            max-width: 420px;
+            padding: 40px 32px 32px;
+            background: #FFFFFF;
+            color: var(--text-main);
+            border: 1px solid #E2E8F0;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.1);
         }
 
-        .login-simple { 
-            position: relative; 
-            z-index: 5; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 28px; 
-            color: white;
+        .login-simple {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
             text-align: center;
         }
-        
-        /* Heading Style - Mascot Font */
-        .login-heading h3 { 
-            margin: 0; 
-            font-family: 'Noto Serif KR', serif; /* Mascot Font Style */
-            font-size: 1.8rem; 
-            font-weight: 700; 
-            letter-spacing: -0.01em; 
-            color: #fff;
-            text-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            margin-bottom: 6px;
+
+        /* 브랜드 마크 — /login의 .brand-logo와 같은 크기·모서리 */
+        .login-brand {
+            width: 64px; height: 64px;
+            margin: 0 auto;
+            border-radius: 18px;
+            overflow: hidden;
+            background: #EFF6FF;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+            display: flex; align-items: center; justify-content: center;
         }
-        .login-heading p { 
-            margin: 0; 
-            color: #94A3B8; 
-            font-size: 0.9rem; 
-            font-weight: 400; 
+        .login-brand img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .login-brand i {
+            font-size: 1.8rem;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .login-heading h3 {
+            margin: 0 0 8px;
+            font-family: 'Noto Serif KR', serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+        }
+        .login-heading p {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
             font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            word-break: keep-all; /* 한글은 어절 단위로만 줄바꿈 */
         }
 
-        .login-fields { display: flex; flex-direction: column; gap: 14px; }
+        .login-fields { display: flex; flex-direction: column; gap: 16px; text-align: left; }
 
-        /* Floating Glass Inputs - Cleaner */
+        /* ============================================
+           리로스쿨 로그인 — 실제 리로 로그인 화면(user.php?action=signin)의
+           renewal_signin 마크업/스타일을 그대로 옮김. 폰트만 S-Core Dream.
+           ============================================ */
+        /* 원본 620px 기준을 약 0.8배로 줄인 값. 비율은 그대로 유지한다. */
+        .modal-box.riro-signin {
+            width: min(92vw, 480px);
+            max-width: 480px;
+            padding: 0;
+            background: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            text-align: center;
+            color: #414141;
+            font-family: 'S-Core Dream', 'Noto Sans KR', sans-serif;
+        }
+        .riro-signin .renewal_signin_wrap { padding: 44px 0 24px; }
+        .riro-signin .top_section { padding: 0 80px; }
+        .riro-signin .top_section .logo { display: block; margin: 0 auto; width: 28px; height: 28px; }
+        .riro-signin .top_section .text p { margin: 0; font-size: 19px; font-weight: 400; color: #414141; }
+        .riro-signin .top_section .text p:first-child { margin-top: 8px; margin-bottom: 0; }
+        .riro-signin .contents { margin-top: 22px; padding: 0 80px; }
+        .riro-signin .tabs { height: 42px; margin: 0 0 10px; padding: 0 16px; display: flex; list-style: none; }
+        .riro-signin .tabs .tab { width: 50%; height: 100%; display: flex; justify-content: center; align-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .riro-signin .tabs .tab .check_ic { width: 17px; height: 17px; margin-right: 4px; }
+        .riro-signin .tabs .tab .check_text { font-size: 14px; font-weight: 400; color: #c8c8c8; }
+        .riro-signin .tabs .on .check_text { color: #0091EA; font-weight: 700; }
+        .riro-signin .tabs .tab:first-child { position: relative; }
+        .riro-signin .tabs .tab:first-child::after { content: ""; position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 1px; height: 12px; background-color: #ced4da; }
+        .riro-signin .input_normal {
+            width: 100%; height: 46px; padding: 14px;
+            border-radius: 4px; border: 1px solid #dee2e6;
+            background-color: #fff; color: #414141;
+            font-family: inherit; font-size: 14px; cursor: pointer; box-sizing: border-box;
+        }
+        .riro-signin .input_normal:hover { border: 1px solid #868e96; }
+        .riro-signin .input_normal:focus,
+        .riro-signin .input_normal:active { border: 1px solid #0091EA; }
+        .riro-signin .input_normal::placeholder { color: #a1a1a1; }
+        .riro-signin .school_input { margin-bottom: 10px; text-align: left; }
+        .riro-signin .id_input { margin-bottom: 10px; text-align: left; overflow: hidden; }
+        .riro-signin .id_input .id_info { margin-top: 8px; height: 22px; display: flex; align-items: center; }
+        .riro-signin .id_input .id_info .id_info_ic { margin-right: 6px; width: 14px; height: 14px; }
+        .riro-signin .id_input .id_info p { margin: 0; line-height: normal; font-size: 11.5px; font-weight: 400; color: #414141; }
+        .riro-signin .password_input { position: relative; }
+        .riro-signin .button_normal {
+            border: none; font-family: inherit;
+            margin-top: 16px; width: 100%; height: 46px; padding: 13px 0;
+            border-radius: 4px; background-color: #0091EA; color: #fff;
+            font-size: 15px; cursor: pointer;
+        }
+        .riro-signin .button_normal:hover { background-color: #08c; }
+        .riro-signin .button_normal:disabled { cursor: default; background-color: #dee2e6; color: #848484; }
+        /* 원본은 alert()로 알리지만 모달에서는 버튼 아래 한 줄로 보여준다 */
+        .riro-signin .signin_error {
+            margin: 10px 0 0; font-size: 12px; color: #f24147;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+        }
+        .riro-signin .signin_error:empty { display: none; }
+        .riro-signin .signin_error.success { color: #0091EA; }
+        .riro-signin .find_btn_area { margin: 16px 0 0; padding: 0; font-size: 12.5px; font-weight: 400; color: #848484; list-style: none; }
+        .riro-signin .find_btn_area .find_btn { width: 130px; height: 28px; display: inline-block; position: relative; line-height: 28px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .riro-signin .find_btn_area .find_btn:first-child::after { content: ""; position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 1px; height: 14px; background-color: #ced4da; }
+        .riro-signin .none_signup { display: none; margin-top: 16px; padding: 0 28px; width: 100%; box-sizing: border-box; }
+        .riro-signin .none_signup.show { display: block; }
+        .riro-signin .none_signup .none_signup_text { background-color: #f1f3f5; width: 100%; padding: 14px; box-sizing: border-box; }
+        .riro-signin .none_signup .none_signup_text p { font-size: 12.5px; font-weight: normal; line-height: 1.5; letter-spacing: normal; text-align: center; color: #414141; margin: 0; }
+        .riro-signin .none_signup .none_signup_text p strong { color: #0091EA; }
+
+        /* 리로 연동은 앱 계정 세션이 있어야 서버가 받아준다(401).
+           비로그인 상태를 폼 안에서 먼저 알리고 로그인 페이지로 보낸다. */
+        .riro-signin .signin_notice { display: none; margin: 0 0 14px; padding: 12px 14px; background: #fff4f4; border: 1px solid #f7d4d6; border-radius: 4px; text-align: left; }
+        .riro-signin .signin_notice.show { display: block; }
+        .riro-signin .signin_notice p { margin: 0; font-size: 12.5px; line-height: 1.5; color: #414141; word-break: keep-all; }
+        .riro-signin .signin_notice a { display: inline-block; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: #0091EA; text-decoration: underline; }
+        @media (max-width: 560px) {
+            .modal-box.riro-signin { width: 92vw; }
+            .riro-signin .renewal_signin_wrap { padding: 36px 0 20px; }
+            .riro-signin .top_section,
+            .riro-signin .contents { padding: 0 24px; }
+            .riro-signin .none_signup { padding: 0 24px; }
+        }
+
         .modal-box.login-modal .input-glass-container {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
             border-radius: 14px;
-            padding: 14px 18px;
-            backdrop-filter: blur(4px);
+            padding: 14px 16px;
             transition: all 0.2s ease;
         }
         .modal-box.login-modal .input-glass-container:focus-within {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.3);
+            background: #fff;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
             transform: translateY(-1px);
         }
-        .modal-box.login-modal i { color: #64748B; font-size: 1.1rem; transition: 0.2s; }
-        .modal-box.login-modal .input-glass-container:focus-within i { color: #E2E8F0; }
-        
-        .modal-box.login-modal .form-input { 
-            font-family: 'Inter', 'Noto Sans KR', sans-serif;
-            color: white; font-size: 0.95rem; font-weight: 400; margin-left: 10px; 
-        }
-        .modal-box.login-modal .form-input::placeholder { color: #64748B; }
+        .modal-box.login-modal .input-glass-container i { color: #94A3B8; font-size: 1.1rem; transition: color 0.2s; }
+        .modal-box.login-modal .input-glass-container:focus-within i { color: var(--accent-primary); }
 
-        /* Cool Button - Refined */
+        .modal-box.login-modal .form-input {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            color: var(--text-main); font-size: 0.95rem; font-weight: 400;
+        }
+        .modal-box.login-modal .form-input::placeholder { color: #CBD5E1; }
+
         .modal-box.login-modal .btn-primary-3d {
             font-family: 'Inter', 'Noto Sans KR', sans-serif;
-            margin-top: 12px;
-            padding: 14px;
-            background: white;
-            color: #0F172A;
+            margin-top: 0;
+            padding: 16px;
+            background: var(--accent-gradient);
+            color: #fff;
             border-radius: 14px;
-            font-size: 0.95rem;
+            font-size: 1rem;
             font-weight: 600;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            transition: all 0.2s;
+            box-shadow: 0 10px 20px -5px var(--accent-glow);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .modal-box.login-modal .btn-primary-3d:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            background: #F8FAFC;
+            box-shadow: 0 15px 30px -8px var(--accent-glow);
+        }
+        .modal-box.login-modal .btn-primary-3d:active { transform: translateY(0); }
+
+        /* 회원가입은 보조 동작이라 같은 크기로 두되 채움만 뺀다 */
+        .modal-box.login-modal .btn-secondary-3d {
+            background: #fff;
+            color: var(--text-main);
+            border: 1px solid #E2E8F0;
+            box-shadow: none;
+        }
+        .modal-box.login-modal .btn-secondary-3d:hover {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
         }
 
-        .login-footnote { 
+        .login-footnote {
             font-family: 'Inter', 'Noto Sans KR', sans-serif;
-            justify-content: center; 
-            color: #475569; 
-            font-size: 0.8rem; 
-            margin-top: 8px; 
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            margin-top: -8px;
         }
-        .login-footnote i { color: #10B981; margin-right: 4px; font-size: 0.9rem; }
+        .login-footnote i { color: #10B981; font-size: 0.9rem; }
+        .auth-field-help {
+            margin: -8px 4px 0;
+            color: var(--text-muted);
+            font-size: 0.74rem;
+            line-height: 1.45;
+            text-align: left;
+        }
         .auth-divider {
             display: flex;
             align-items: center;
             gap: 12px;
-            color: rgba(226, 232, 240, 0.7);
+            color: var(--text-muted);
             font-size: 0.8rem;
-            margin-top: 6px;
+            margin-top: -4px;
         }
         .auth-divider::before,
         .auth-divider::after {
             content: '';
             flex: 1;
             height: 1px;
-            background: rgba(226, 232, 240, 0.2);
+            background: #E2E8F0;
         }
         .auth-social-btn {
             display: inline-flex;
@@ -1376,41 +1652,48 @@
             justify-content: center;
             gap: 10px;
             width: 100%;
-            padding: 12px 14px;
-            margin-top: 10px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: rgba(255, 255, 255, 0.92);
-            color: #0F172A;
+            padding: 14px;
+            margin-top: -8px;
+            border-radius: 14px;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            color: var(--text-main);
             font-weight: 600;
             font-size: 0.95rem;
             text-decoration: none;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
         }
-        .auth-social-btn:hover {
+        .auth-social-btn:hover,
+        .auth-social-btn:focus-visible {
             transform: translateY(-2px);
-            box-shadow: 0 10px 18px -10px rgba(0, 0, 0, 0.6);
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
         }
         .auth-social-btn svg { width: 18px; height: 18px; }
 
         .btn-close-icon {
-            position: absolute; top: 20px; right: 20px;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 50%; width: 36px; height: 36px;
-            color: white; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; z-index: 10; backdrop-filter: blur(4px);
+            position: absolute; top: 18px; right: 18px;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 50%; width: 34px; height: 34px;
+            color: var(--text-muted); display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 10;
             transition: all 0.2s;
         }
-        .btn-close-icon:hover { background: white; color: black; transform: rotate(90deg); }
+        .btn-close-icon:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: #fff;
+            transform: rotate(90deg);
+        }
 
-        /* Autofill Fix for Dark Modal */
+        /* 크롬 자동완성이 카드 배경을 노란색으로 덮지 않도록 고정 */
         .modal-box.login-modal input:-webkit-autofill,
-        .modal-box.login-modal input:-webkit-autofill:hover, 
-        .modal-box.login-modal input:-webkit-autofill:focus, 
+        .modal-box.login-modal input:-webkit-autofill:hover,
+        .modal-box.login-modal input:-webkit-autofill:focus,
         .modal-box.login-modal input:-webkit-autofill:active{
-            -webkit-box-shadow: 0 0 0 100px rgba(0,0,0,0) inset !important; /* Trick: Transparent via transition? No, needs solid color for Chrome */
-            -webkit-text-fill-color: white !important;
+            -webkit-box-shadow: 0 0 0 100px #F8FAFC inset !important;
+            -webkit-text-fill-color: var(--text-main) !important;
             transition: background-color 5000s ease-in-out 0s;
         }
 
@@ -1424,20 +1707,7 @@
             gap: 15px; color: #64748B;
             font-size: 0.95rem; transition: all 0.3s ease; text-align: center;
         }
-        .img-placeholder-box:hover { border-color: var(--accent-primary); background: #F1F5F9; }
-        .img-placeholder-box .spinner {
-            width: 30px; height: 30px; border-width: 3px; margin-bottom: 10px;
-            border-top-color: var(--accent-primary); border-right-color: var(--accent-primary);
-            border-bottom-color: transparent; border-left-color: transparent;
-        }
-        .img-placeholder-box span {
-            background: var(--accent-gradient);
-            background-size: 200% 100%;
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            animation: shimmer 2s infinite linear; font-weight: 600;
-        }
         @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-        .img-placeholder-box.loaded { padding: 0; border: none; background: transparent; }
 
         /* Utilities */
         .hidden { display: none !important; }
@@ -1447,12 +1717,332 @@
         @keyframes sheet-arrive { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes section-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         
-        /* Calendar Overrides */
-        #calendarView { font-family: 'Inter', sans-serif; --fc-border-color: #E2E8F0; --fc-today-bg-color: #F1F5F9; }
-        .fc-toolbar-title { color: #1E293B; font-size: 1.2rem !important; font-weight: 700 !important; font-family: 'Noto Serif KR', serif; }
-        .fc-button-primary { background: #1E293B !important; border: none !important; box-shadow: none !important; }
-        .fc-daygrid-day-number { color: #64748B; text-decoration: none; }
-        .fc-col-header-cell-cushion { color: #475569; font-weight: 600; }
+        @font-face {
+            font-family: 'S-CoreDream-3Light';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');
+            font-weight: 300;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        /* Calendar — restrained, Notion Calendar-inspired surface */
+        #modalCalendar {
+            --calendar-bg: #FFFFFF;
+            --calendar-surface: #FBFBFA;
+            --calendar-border: #E7E7E5;
+            --calendar-border-strong: #D8D8D5;
+            --calendar-text: #37352F;
+            --calendar-muted: #787774;
+            --calendar-faint: #AEACA8;
+            --calendar-hover: #F5F5F3;
+            --calendar-today: #5B5BD6;
+            --calendar-today-soft: #F1F1FB;
+            font-family: 'S-CoreDream-3Light', 'Apple SD Gothic Neo', sans-serif;
+            font-weight: 300;
+        }
+        #modalCalendar .calendar-modal {
+            display: flex;
+            flex-direction: column;
+            width: min(94vw, 1080px);
+            max-width: 1080px;
+            height: min(88vh, 820px);
+            padding: 0;
+            overflow: hidden;
+            border: 1px solid var(--calendar-border);
+            border-radius: 12px;
+            background: var(--calendar-bg);
+            box-shadow: 0 18px 48px -26px rgba(15, 23, 42, 0.34);
+        }
+        .calendar-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            min-height: 54px;
+            padding: 10px 18px;
+            border-bottom: 1px solid var(--calendar-border);
+        }
+        .calendar-header-copy {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            min-width: 0;
+            flex: 1;
+        }
+        .calendar-modal-title {
+            flex: 0 0 auto;
+            margin: 0;
+            color: var(--calendar-text);
+            font-size: 0.98rem;
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+        .calendar-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border: 1px solid transparent;
+            border-radius: 7px;
+            background: transparent;
+            color: var(--calendar-muted);
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .calendar-close:hover {
+            border-color: var(--calendar-border);
+            background: var(--calendar-hover);
+            color: var(--calendar-text);
+        }
+        .calendar-close:focus-visible,
+        .calendar-empty-action:focus-visible,
+        #calendarView.fc .fc-button:focus-visible {
+            outline: 2px solid var(--calendar-today);
+            outline-offset: 2px;
+        }
+        .calendar-meta-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+            flex: 1;
+            color: var(--calendar-muted);
+            font-size: 0.7rem;
+        }
+        .calendar-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .calendar-legend-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 2px;
+        }
+        .calendar-legend-dot.assignment { background: #D96C67; }
+        .calendar-legend-dot.notice { background: #4C9A72; }
+        .calendar-event-count {
+            margin-left: auto;
+            color: var(--calendar-faint);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        #calendarView {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            padding: 14px 18px 18px;
+            color: var(--calendar-text);
+            font-family: 'S-CoreDream-3Light', 'Apple SD Gothic Neo', sans-serif;
+            font-weight: 300;
+            --fc-border-color: var(--calendar-border);
+            --fc-page-bg-color: var(--calendar-bg);
+            --fc-neutral-bg-color: var(--calendar-surface);
+            --fc-today-bg-color: var(--calendar-today-soft);
+            --fc-list-event-hover-bg-color: var(--calendar-hover);
+        }
+        #calendarView.fc { height: 100%; }
+        #calendarView.fc .fc-toolbar {
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        #calendarView.fc .fc-toolbar-title {
+            color: var(--calendar-text);
+            font-family: inherit;
+            font-size: 1.18rem !important;
+            font-weight: 300 !important;
+            letter-spacing: -0.025em;
+        }
+        #calendarView.fc .fc-button {
+            min-width: 32px;
+            height: 32px;
+            padding: 0 10px;
+            border: 1px solid var(--calendar-border) !important;
+            border-radius: 7px !important;
+            background: var(--calendar-bg) !important;
+            box-shadow: none !important;
+            color: var(--calendar-text) !important;
+            font-size: 0.76rem;
+            font-weight: 300;
+            line-height: 30px;
+            text-transform: none;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        #calendarView.fc .fc-button:hover:not(:disabled) {
+            border-color: var(--calendar-border-strong) !important;
+            background: var(--calendar-hover) !important;
+        }
+        #calendarView.fc .fc-button:disabled {
+            color: var(--calendar-faint) !important;
+            opacity: 1;
+        }
+        #calendarView.fc .fc-button-active {
+            border-color: var(--calendar-border-strong) !important;
+            background: #EEEEEC !important;
+        }
+        #calendarView.fc .fc-button-group { gap: 4px; }
+        #calendarView.fc .fc-button-group > .fc-button { margin-left: 0; }
+        #calendarView.fc-theme-standard th,
+        #calendarView.fc-theme-standard td { border-color: var(--calendar-border); }
+        #calendarView .fc-scrollgrid {
+            overflow: hidden;
+            border-color: var(--calendar-border);
+            border-radius: 8px;
+        }
+        #calendarView .fc-col-header-cell {
+            height: 36px;
+            border-bottom-color: var(--calendar-border-strong);
+            background: var(--calendar-surface);
+            vertical-align: middle;
+        }
+        #calendarView .fc-col-header-cell-cushion {
+            padding: 8px;
+            color: var(--calendar-muted);
+            font-size: 0.72rem;
+            font-weight: 300;
+            text-decoration: none;
+        }
+        #calendarView .fc-daygrid-day { min-height: 62px; }
+        #calendarView .fc-daygrid-day-frame { min-height: 62px; }
+        #calendarView .fc-daygrid-day-top { flex-direction: row; padding: 6px 7px 2px; }
+        #calendarView .fc-daygrid-day-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 24px;
+            height: 24px;
+            padding: 0 5px;
+            border-radius: 6px;
+            color: var(--calendar-muted);
+            font-size: 0.76rem;
+            font-weight: 300;
+            text-decoration: none;
+        }
+        #calendarView .fc-day-other .fc-daygrid-day-number { color: var(--calendar-faint); }
+        #calendarView .fc-day-today .fc-daygrid-day-number {
+            background: var(--calendar-today);
+            color: #FFFFFF;
+            font-weight: 300;
+        }
+        #calendarView .fc-daygrid-day:hover { background: rgba(55, 53, 47, 0.025); }
+        #calendarView .fc-daygrid-event {
+            margin: 2px 5px 0;
+            padding: 2px 6px;
+            overflow: hidden;
+            border: 0 !important;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 300;
+            line-height: 1.45;
+            transition: filter 0.15s ease, box-shadow 0.15s ease;
+        }
+        #calendarView .fc-daygrid-event:hover {
+            filter: saturate(1.06) brightness(0.98);
+            box-shadow: inset 0 0 0 1px rgba(55, 53, 47, 0.08);
+        }
+        #calendarView .fc-event-title { overflow: hidden; text-overflow: ellipsis; }
+        #calendarView .fc-event { cursor: default; }
+        #calendarView .calendar-event--assignment {
+            background: #F9E5E3 !important;
+            color: #8E3935 !important;
+        }
+        #calendarView .calendar-event--notice {
+            background: #E4F1EA !important;
+            color: #2F6E50 !important;
+        }
+        #calendarView .calendar-event--default {
+            background: #E8EAF4 !important;
+            color: #4F5680 !important;
+        }
+        #calendarView .fc-more-link {
+            margin: 2px 6px;
+            color: var(--calendar-muted);
+            font-size: 0.68rem;
+            font-weight: 300;
+        }
+        #calendarView .fc-list {
+            overflow: hidden;
+            border-color: var(--calendar-border);
+            border-radius: 8px;
+        }
+        #calendarView .fc-list-day-cushion {
+            padding: 8px 12px;
+            background: var(--calendar-surface);
+        }
+        #calendarView .fc-list-day-text,
+        #calendarView .fc-list-day-side-text {
+            color: var(--calendar-muted);
+            font-size: 0.74rem;
+            font-weight: 300;
+            text-decoration: none;
+        }
+        #calendarView .fc-list-event-title { color: var(--calendar-text); font-size: 0.82rem; }
+        #calendarView .fc-list-event-time { color: var(--calendar-faint); font-size: 0.74rem; }
+        .calendar-state {
+            display: flex;
+            min-height: 420px;
+            padding: 48px 24px;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .calendar-state-content { max-width: 330px; }
+        .calendar-state-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            margin-bottom: 14px;
+            border: 1px solid var(--calendar-border);
+            border-radius: 9px;
+            background: var(--calendar-surface);
+            color: var(--calendar-muted);
+            font-size: 1rem;
+        }
+        .calendar-state h4 {
+            margin: 0 0 6px;
+            color: var(--calendar-text);
+            font-size: 0.92rem;
+            font-weight: 300;
+        }
+        .calendar-state p {
+            margin: 0;
+            color: var(--calendar-muted);
+            font-size: 0.8rem;
+            line-height: 1.55;
+        }
+        .calendar-empty-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            height: 34px;
+            margin-top: 16px;
+            padding: 0 12px;
+            border: 1px solid var(--calendar-border-strong);
+            border-radius: 7px;
+            background: var(--calendar-bg);
+            color: var(--calendar-text);
+            font-size: 0.76rem;
+            font-weight: 300;
+            cursor: pointer;
+        }
+        .calendar-empty-action:hover { background: var(--calendar-hover); }
+        .calendar-skeleton {
+            width: 100%;
+            min-height: 420px;
+            border: 1px solid var(--calendar-border);
+            border-radius: 8px;
+            background: repeating-linear-gradient(to right, transparent 0, transparent calc(14.285% - 1px), var(--calendar-border) calc(14.285% - 1px), var(--calendar-border) 14.285%), repeating-linear-gradient(to bottom, var(--calendar-surface) 0, var(--calendar-surface) 36px, var(--calendar-border) 36px, var(--calendar-border) 37px, transparent 37px, transparent 104px);
+            opacity: 0.65;
+        }
 
         /* Analysis Status Badge (Simple Pill Style) */
         .analysis-overlay {
@@ -1469,78 +2059,145 @@
             pointer-events: none;
             z-index: 20;
         }
-        .analysis-overlay:not(.hidden) { 
-            opacity: 1; transform: translateY(0); 
-            pointer-events: auto;
-        }
-
-        .status-text { font-size: 0.85rem; font-weight: 600; color: #475569; }
 
         /* Typing Indicator (3 Dots) */
         .typing-indicator { display: flex; align-items: center; gap: 4px; }
-        .typing-indicator span {
-            width: 5px; height: 5px;
-            background: var(--accent-primary);
-            border-radius: 50%;
-            animation: typing-bounce 1.4s infinite ease-in-out both;
-        }
-        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
         
         @keyframes typing-bounce {
             0%, 80%, 100% { transform: scale(0); opacity: 0.5; } 
             40% { transform: scale(1); opacity: 1; }
         }
 
-        .analysis-overlay .status-icon-container {
-            display: none; /* Hidden by default */
-            font-size: 1.1rem; /* Adjust size */
-            flex-shrink: 0;
-            line-height: 1;
-        }
-
         /* Loading State */
         .analysis-overlay .typing-indicator { display: flex; }
-        .analysis-overlay .status-icon-container { display: none; }
 
         /* Success State */
         .analysis-overlay.analysis-success .typing-indicator { display: none; }
-        .analysis-overlay.analysis-success .status-icon-container { display: block; color: #10B981; }
-        .analysis-overlay.analysis-success .status-text { color: #065F46; }
 
         /* Error State */
         .analysis-overlay.analysis-error .typing-indicator { display: none; }
-        .analysis-overlay.analysis-error .status-icon-container { display: block; color: #EF4444; }
-        .analysis-overlay.analysis-error .status-text { color: #991B1B; }
         
         @media (max-width: 768px) {
             /* Mobile Optimization: Smaller Logo & Text */
             .hero-logo { width: 52px; height: 52px; font-size: 1.5rem; margin-bottom: 16px; border-radius: 18px; }
-            .hero-text { font-size: 1.5rem; margin-bottom: 8px; }
-            .hero-sub { font-size: 0.9rem; }
 
             .sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-105%); box-shadow: 20px 0 50px rgba(0,0,0,0.1); }
             .sidebar.open { transform: translateX(0); }
             .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.2); z-index: 45; display: none; backdrop-filter: blur(2px); }
             .sidebar-overlay.open { display: block; }
             .mobile-header { display: flex; }
-            .hero-container { margin-top: 12vh; }
-            .paper-sheet { padding: 2rem 1.5rem; transform: none; margin: 1rem; }
-            .doc-viewer.template-mode { padding: 1rem 0; }
-            .canvas-panel {
-                top: 0;
-                right: 0;
-                bottom: 0;
-                left: 0;
-                width: 100%;
-                border-radius: 0;
-            }
-            .canvas-body { padding: 0; }
-            body.canvas-open .scroll-container { padding-right: 0; }
-            body.canvas-open .input-region { right: 0; }
             .modal-box { width: 92%; padding: 28px; }
             .modal-box.login-modal { padding: 32px 20px; width: 92%; }
             .btn-close-icon { top: 12px; right: 12px; }
+            #modalCalendar {
+                align-items: stretch;
+                background: var(--calendar-bg);
+                backdrop-filter: none;
+            }
+            #modalCalendar .calendar-modal {
+                width: 100%;
+                max-width: none;
+                height: 100dvh;
+                max-height: none;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            .calendar-modal-header { align-items: flex-start; padding: 13px 14px 11px; }
+            .calendar-header-copy { flex-wrap: wrap; gap: 7px 12px; }
+            .calendar-meta-bar { flex: 1 0 100%; gap: 10px; }
+            #calendarView { padding: 14px 12px 18px; }
+            #calendarView.fc .fc-toolbar {
+                flex-wrap: wrap;
+                align-items: center;
+                row-gap: 10px;
+            }
+            #calendarView.fc .fc-toolbar-chunk:first-child {
+                flex: 1 0 100%;
+            }
+            #calendarView.fc .fc-toolbar-title { font-size: 1.05rem !important; }
+            #calendarView.fc .fc-daygrid-day,
+            #calendarView.fc .fc-daygrid-day-frame { min-height: 62px; }
+            #calendarView.fc .fc-daygrid-event {
+                margin-inline: 3px;
+                padding-inline: 4px;
+                font-size: 0.64rem;
+            }
+            .calendar-state { min-height: 360px; }
+            .calendar-skeleton { min-height: 360px; }
+
+            /* ── 채팅 본문. 학생들은 폰·태블릿으로 더 많이 쓴다 ── */
+            .doc-viewer { padding: 0 14px 1rem; padding-top: 56px; }
+            .message-row { gap: 10px; margin-bottom: 26px; }
+            .role-avatar { width: 28px; height: 28px; border-radius: 9px; font-size: 0.8rem; }
+            .message-content { font-size: 0.98rem; line-height: 1.7; }
+            .scroll-container { padding-bottom: 150px; }
+
+            /* 탭 대상은 손가락 크기(44px 이상)여야 빗맞지 않는다. */
+            .choice-list { max-width: none; }
+            .choice-btn { min-height: 48px; padding: 12px 16px; font-size: 1rem; }
+            .choice-btn:only-child { align-self: stretch; }
+            .act-btn { min-height: 40px; padding: 9px 14px; }
+
+            /* 실험 머리말·완료 카드는 화면 폭을 그대로 쓴다. */
+            .exp-head .message-content,
+            .exp-done .message-content,
+            .resume-box { max-width: none; padding: 12px 14px; }
+            .resume-open { min-height: 40px; }
+            .exp-phases { gap: 4px 10px; font-size: 0.74rem; padding-left: 16px; }
+
+            /* iOS는 16px 미만 입력에 포커스하면 화면을 멋대로 확대한다. */
+            textarea { font-size: 16px; }
+            /* 홈 바(iPhone 하단 제스처 영역)에 입력창이 깔리지 않게 띄운다. */
+            .input-region { padding: 0 10px calc(10px + env(safe-area-inset-bottom)); }
+            /* 포커스 시 떠오르는 효과는 모바일 키보드와 겹쳐 덜컹거린다. */
+            .input-wrapper:focus-within { transform: none; }
+
+            /* 눌러볼 화면(demo)은 좁은 화면에서 조금 더 높게 — 안의 UI가 눌리지 않게. */
+            .demo-frame { height: 260px; }
+
+            /* 국면 진행 바. 머리말은 스크롤돼 사라지므로 여기서 위치를 계속 알린다. */
+            .phase-bar {
+                display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+                position: sticky; top: 0; z-index: 20;
+                /* .doc-viewer의 좌우 여백(14px)을 상쇄해 화면 끝까지 채운다. */
+                margin: 0 -14px 8px;
+                padding: 8px 12px calc(8px + env(safe-area-inset-top, 0px));
+                background: rgba(248, 250, 252, 0.94);
+                backdrop-filter: blur(8px);
+                border-bottom: 1px solid #E2E8F0;
+            }
+            .phase-bar::-webkit-scrollbar { display: none; }
+            .phase-dot {
+                flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px;
+                padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+                font-size: 0.72rem; font-weight: 500;
+                background: #F1F5F9; color: #94A3B8;
+            }
+            .phase-dot.done { background: #E2E8F0; color: #64748B; }
+            .phase-dot.now {
+                background: var(--accent-primary); color: #fff; font-weight: 600;
+            }
+            body[data-theme="dark"] .phase-bar {
+                background: rgba(15, 23, 42, 0.94); border-color: #1E293B;
+            }
+            body[data-theme="dark"] .phase-dot { background: #111827; color: #64748B; }
+            body[data-theme="dark"] .phase-dot.done { background: #1E293B; color: #94A3B8; }
+            body[data-theme="dark"] .phase-dot.now { background: #E2E8F0; color: #0F172A; }
+            /* 진행 바가 위를 차지하므로 첫 메시지 여백은 줄인다. */
+            .doc-viewer { padding-top: 20px; }
+
+            /* 측정값 표. 폰으로 실험 현장에서 쓰는 자리라 여기가 본진이다. */
+            .measure-card { max-width: none; }
+            /* 16px 미만이면 iOS가 포커스할 때 화면을 확대한다. */
+            .measure-input { font-size: 16px; padding: 13px 10px; min-width: 68px; }
+            .measure-drop { width: 36px; height: 36px; }
+            /* 기록 버튼은 엄지로 확실히 눌려야 한다. */
+            .measure-send { min-height: 44px; padding: 11px 22px; font-size: 0.92rem; }
+            .measure-add { min-height: 40px; }
+
+            /* 사이드바 서랍은 화면의 대부분을 덮되 손가락이 빠져나갈 틈은 남긴다. */
+            .sidebar { width: min(300px, 84vw); }
         }
         .user-info {
             display: flex; flex-direction: column; gap: 2px; flex: 1;
@@ -1764,20 +2421,13 @@
         body[data-theme="dark"] .theme-toggle-btn { background: #1E293B; }
         body[data-theme="dark"] .theme-toggle-btn[aria-pressed="true"] { background: #E2E8F0; }
         body[data-theme="dark"] .theme-toggle-btn[aria-pressed="true"] .theme-toggle-thumb { background: #0B0F17; }
-        body[data-theme="dark"] .hero-logo { background: linear-gradient(135deg, #0F172A, #111827); border-color: #1E293B; box-shadow: none; }
-        body[data-theme="dark"] .hero-logo i { background: none; -webkit-text-fill-color: #fff; color: #fff; }
-        body[data-theme="dark"] .hero-text { color: #E2E8F0; }
-        body[data-theme="dark"] .hero-sub { color: #94A3B8; }
         body[data-theme="dark"] .role-avatar.user { background: #0F172A; color: #CBD5E1; border-color: #1E293B; }
         body[data-theme="dark"] .message-content { color: #CBD5E1; }
         body[data-theme="dark"] .message-name { color: #64748B; }
         body[data-theme="dark"] .loading-bubble { background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(17, 24, 39, 0.95)); border-color: #1E293B; box-shadow: 0 14px 30px -18px rgba(0,0,0,0.6); }
         body[data-theme="dark"] .loading-line { background: #1E293B; }
         body[data-theme="dark"] .loading-text { color: #94A3B8; }
-        body[data-theme="dark"] .paper-sheet { background: #0F172A; color: #E2E8F0; border-color: #1E293B; box-shadow: 0 25px 50px -16px rgba(0,0,0,0.55); }
         body[data-theme="dark"] .paper-title { border-bottom-color: #1E293B; color: #E2E8F0; }
-        body[data-theme="dark"] .paper-body { color: #CBD5E1; }
-        body[data-theme="dark"] .section-fill-panel { background: #0F172A; border-color: #1E293B; box-shadow: 0 18px 35px -22px rgba(0,0,0,0.6); }
         body[data-theme="dark"] .section-fill-item { background: #111827; color: #E2E8F0; }
         body[data-theme="dark"] .section-fill-status { color: #94A3B8; }
         body[data-theme="dark"] .input-region { background: linear-gradient(to top, rgba(11, 15, 23, 0.95) 40%, transparent 100%); }
@@ -1785,8 +2435,6 @@
         body[data-theme="dark"] .input-wrapper:focus-within { background: rgba(15, 23, 42, 0.95); border-color: #64748B; box-shadow: 0 20px 40px -14px rgba(0,0,0,0.65), 0 0 0 2px rgba(148, 163, 184, 0.15); }
         body[data-theme="dark"] textarea { color: #E2E8F0; }
         body[data-theme="dark"] textarea::placeholder { color: #64748B; }
-        body[data-theme="dark"] .btn-attach { color: #94A3B8; }
-        body[data-theme="dark"] .btn-attach:hover { background: #1E293B; color: #E2E8F0; }
         body[data-theme="dark"] .btn-send { background: #1E293B; color: #64748B; }
         body[data-theme="dark"] .btn-send.active,
         body[data-theme="dark"] .btn-send.loading {
@@ -1794,32 +2442,9 @@
             box-shadow: 0 4px 12px var(--accent-glow);
         }
         body[data-theme="dark"] .btn-send.loading { opacity: 0.9; }
-        body[data-theme="dark"] .attach-menu { background: #0F172A; border-color: #1E293B; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.7); }
-        body[data-theme="dark"] .attach-item { color: #CBD5E1; }
-        body[data-theme="dark"] .attach-item:hover { background: #111827; color: #E2E8F0; }
-        body[data-theme="dark"] .attach-item i { color: #64748B; }
-        body[data-theme="dark"] .file-badge-float { background: #0F172A; border-color: #1E293B; color: #CBD5E1; box-shadow: 0 10px 25px -8px rgba(0,0,0,0.6); }
-        body[data-theme="dark"] .inline-edit-bubble { background: #0F172A; border-color: #1E293B; box-shadow: 0 18px 35px -18px rgba(0,0,0,0.6); }
-        body[data-theme="dark"] .inline-edit-input { background: #111827; border-color: #1E293B; color: #E2E8F0; }
         /* Previous Dark Mode Override Removed as it is now integrated */
         body[data-theme="dark"] .canvas-message-card { background: #0F172A; border-color: #1E293B; box-shadow: none; }
-        body[data-theme="dark"] .canvas-message-card:hover { border-color: #334155; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.6); }
-        body[data-theme="dark"] .canvas-card-kicker { color: #64748B; }
-        body[data-theme="dark"] .canvas-card-kicker::before { background: #64748B; }
-        body[data-theme="dark"] .canvas-card-title { color: #E2E8F0; }
-        body[data-theme="dark"] .canvas-card-summary { color: #94A3B8; }
-        body[data-theme="dark"] .canvas-card-cta { background: #111827; color: #E2E8F0; }
-        body[data-theme="dark"] .canvas-message-card:hover .canvas-card-cta { background: #E2E8F0; color: #0B0F17; }
-        body[data-theme="dark"] .verification-card { background: #0F172A; border-color: #1E293B; box-shadow: none; }
-        body[data-theme="dark"] .verification-title { color: #E2E8F0; }
-        body[data-theme="dark"] .verification-list { color: #CBD5E1; }
-        body[data-theme="dark"] .verification-note { color: #94A3B8; }
-        body[data-theme="dark"] .verification-btn.ghost { background: #111827; color: #CBD5E1; }
-        body[data-theme="dark"] .modal-box:not(.login-modal):not(.profile-modal) { background: #0F172A; border-color: #1E293B; }
-        body[data-theme="dark"] .modal-box.template-modal { background: #0F172A; }
-        body[data-theme="dark"] .template-search { background: #111827; border-color: #1E293B; }
-        body[data-theme="dark"] .template-card { background: #0F172A; border-color: #1E293B; box-shadow: 0 10px 20px -18px rgba(0,0,0,0.6); }
-        body[data-theme="dark"] .template-card:hover { border-color: #334155; box-shadow: 0 18px 30px -18px rgba(0,0,0,0.7); }
+        body[data-theme="dark"] .modal-box:not(.login-modal):not(.profile-modal):not(.riro-signin) { background: #0F172A; border-color: #1E293B; }
         body[data-theme="dark"] .template-badge { background: rgba(226, 232, 240, 0.12); color: #E2E8F0; }
         body[data-theme="dark"] .template-badge.file { background: rgba(14, 165, 233, 0.2); color: #7DD3FC; }
         body[data-theme="dark"] .modal-box:not(.login-modal) .input-glass-container { background: #111827; border-color: #1E293B; }
@@ -1827,29 +2452,76 @@
         body[data-theme="dark"] .modal-box:not(.login-modal) .form-input { color: #E2E8F0; }
         body[data-theme="dark"] .modal-box:not(.login-modal) .form-input::placeholder { color: #64748B; }
         body[data-theme="dark"] .modal-box.login-modal {
-            background: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96));
-            border-color: rgba(148, 163, 184, 0.25);
+            background: #0F172A;
+            border-color: #1E293B;
+            color: #E2E8F0;
             box-shadow: 0 30px 60px -24px rgba(0,0,0,0.8);
         }
-        body[data-theme="dark"] .modal-box.login-modal::before {
-            background: radial-gradient(circle at top, rgba(30, 41, 59, 0.85), rgba(2, 6, 23, 0.98));
+        body[data-theme="dark"] .login-brand {
+            background: #111827;
+            border-color: #1E293B;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.6);
         }
+        body[data-theme="dark"] .login-heading h3 { color: #E2E8F0; }
+        body[data-theme="dark"] .login-heading p,
+        body[data-theme="dark"] .login-footnote,
+        body[data-theme="dark"] .auth-field-help,
+        body[data-theme="dark"] .auth-divider { color: #94A3B8; }
+        /* 리로 로그인 화면은 원본이 라이트 전용이라 다크 테마에서도 그대로 유지.
+           닫기 버튼만 흰 카드 위에서 보이도록 라이트 스타일로 되돌린다. */
+        body[data-theme="dark"] .modal-box.riro-signin .btn-close-icon { background: #F8FAFC; border-color: #E2E8F0; color: #64748B; }
+        body[data-theme="dark"] .modal-box.riro-signin .btn-close-icon:hover { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
+        body[data-theme="dark"] .auth-divider::before,
+        body[data-theme="dark"] .auth-divider::after { background: #1E293B; }
         body[data-theme="dark"] .modal-box.login-modal .input-glass-container {
-            background: rgba(15, 23, 42, 0.7);
-            border-color: rgba(148, 163, 184, 0.28);
+            background: #111827;
+            border-color: #1E293B;
         }
         body[data-theme="dark"] .modal-box.login-modal .input-glass-container:focus-within {
-            background: rgba(15, 23, 42, 0.9);
-            border-color: rgba(148, 163, 184, 0.55);
+            background: #0F172A;
+            border-color: #334155;
+            box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
+        }
+        body[data-theme="dark"] .modal-box.login-modal .input-glass-container i { color: #64748B; }
+        body[data-theme="dark"] .modal-box.login-modal .input-glass-container:focus-within i { color: #E2E8F0; }
+        body[data-theme="dark"] .modal-box.login-modal .form-input { color: #E2E8F0; }
+        body[data-theme="dark"] .modal-box.login-modal .form-input::placeholder { color: #475569; }
+        body[data-theme="dark"] .modal-box.login-modal input:-webkit-autofill,
+        body[data-theme="dark"] .modal-box.login-modal input:-webkit-autofill:hover,
+        body[data-theme="dark"] .modal-box.login-modal input:-webkit-autofill:focus,
+        body[data-theme="dark"] .modal-box.login-modal input:-webkit-autofill:active{
+            -webkit-box-shadow: 0 0 0 100px #111827 inset !important;
+            -webkit-text-fill-color: #E2E8F0 !important;
         }
         body[data-theme="dark"] .modal-box.login-modal .btn-primary-3d {
-            background: #1E293B;
-            color: #E2E8F0;
+            background: #E2E8F0;
+            color: #0B0F17;
             box-shadow: 0 12px 24px -12px rgba(0,0,0,0.7);
         }
         body[data-theme="dark"] .modal-box.login-modal .btn-primary-3d:hover {
-            background: #E2E8F0;
-            color: #0B0F17;
+            background: #FFFFFF;
+            box-shadow: 0 18px 30px -14px rgba(0,0,0,0.8);
+        }
+        body[data-theme="dark"] .modal-box.login-modal .btn-secondary-3d {
+            background: #111827;
+            color: #E2E8F0;
+            border-color: #1E293B;
+        }
+        body[data-theme="dark"] .modal-box.login-modal .btn-secondary-3d:hover {
+            background: #111827;
+            color: #E2E8F0;
+            border-color: #334155;
+            box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
+        }
+        body[data-theme="dark"] .auth-social-btn {
+            background: #111827;
+            border-color: #1E293B;
+            color: #E2E8F0;
+        }
+        body[data-theme="dark"] .auth-social-btn:hover,
+        body[data-theme="dark"] .auth-social-btn:focus-visible {
+            border-color: #334155;
+            box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
         }
         body[data-theme="dark"] .btn-close-icon {
             background: rgba(148, 163, 184, 0.12);
@@ -1857,23 +2529,42 @@
             color: #E2E8F0;
         }
         body[data-theme="dark"] .btn-close-icon:hover { background: #E2E8F0; color: #0B0F17; }
-        body[data-theme="dark"] .img-placeholder-box { background: #0F172A; border-color: #1E293B; color: #94A3B8; }
-        body[data-theme="dark"] .img-placeholder-box:hover { background: #111827; }
         body[data-theme="dark"] .spinner { border-color: rgba(226, 232, 240, 0.2); border-top-color: #E2E8F0; }
-        body[data-theme="dark"] .analysis-overlay { background: rgba(15, 23, 42, 0.95); border-color: #1E293B; box-shadow: 0 10px 25px -8px rgba(0,0,0,0.6); }
-        body[data-theme="dark"] .status-text { color: #94A3B8; }
-        body[data-theme="dark"] .analysis-overlay.analysis-success .status-text { color: #34D399; }
-        body[data-theme="dark"] .analysis-overlay.analysis-error .status-text { color: #FCA5A5; }
-        body[data-theme="dark"] #calendarView { --fc-border-color: #1E293B; --fc-today-bg-color: #111827; }
-        body[data-theme="dark"] .fc-toolbar-title { color: #E2E8F0; }
-        body[data-theme="dark"] .fc-daygrid-day-number { color: #94A3B8; }
-        body[data-theme="dark"] .fc-col-header-cell-cushion { color: #CBD5E1; }
-        body[data-theme="dark"] .fc-button-primary { background: #E2E8F0 !important; color: #0B0F17 !important; }
-        body[data-theme="dark"] .download-option { background: #0B1220; border-color: #1E293B; }
-        body[data-theme="dark"] .download-option:hover { background: #111827; border-color: #38BDF8; }
+        body[data-theme="dark"] #modalCalendar {
+            --calendar-bg: #161616;
+            --calendar-surface: #1D1D1D;
+            --calendar-border: #2B2B2B;
+            --calendar-border-strong: #3A3A3A;
+            --calendar-text: #E8E8E6;
+            --calendar-muted: #A4A4A0;
+            --calendar-faint: #6F6F6B;
+            --calendar-hover: #242424;
+            --calendar-today: #7A7AE6;
+            --calendar-today-soft: #20202E;
+        }
+        body[data-theme="dark"] #modalCalendar .calendar-modal { background: var(--calendar-bg); border-color: var(--calendar-border); }
+        body[data-theme="dark"] #calendarView.fc .fc-button-active { background: #2A2A2A !important; }
+        body[data-theme="dark"] #calendarView .fc-daygrid-day:hover { background: rgba(255, 255, 255, 0.02); }
+        body[data-theme="dark"] #calendarView .calendar-event--assignment { background: #3A2726 !important; color: #E4A29E !important; }
+        body[data-theme="dark"] #calendarView .calendar-event--notice { background: #20342B !important; color: #95C9AD !important; }
+        body[data-theme="dark"] #calendarView .calendar-event--default { background: #292B3D !important; color: #AEB2DB !important; }
         body[data-theme="dark"] .btn-secondary { background: #111827; border-color: #1E293B; color: #E2E8F0; }
         body[data-theme="dark"] .btn-secondary:hover { background: #1F2937; color: #F8FAFC; }
+
+        /* ---------- 연구 서사 대화 ---------- */
+        /* AI가 생각하는 동안 표시. 별도 카드 없이 메시지 자리에서 그대로 뛴다. */
+        .research-dots { display: inline-flex; gap: 5px; align-items: center; }
+        .research-dots i {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #94A3B8; display: inline-block;
+            animation: research-pulse 1.25s ease-in-out infinite;
+        }
+        .research-dots i:nth-child(2) { animation-delay: 0.16s; }
+        .research-dots i:nth-child(3) { animation-delay: 0.32s; }
+        @keyframes research-pulse { 0%, 60%, 100% { opacity: 0.28; } 30% { opacity: 1; } }
+
     </style>
+    <link rel="stylesheet" href="/static/css/score-dream.css">
 </head>
 <body>
 
@@ -1883,17 +2574,32 @@
         <button class="btn-new-chat" id="btnNewChat">
             <i class="bi bi-stars"></i> <span>새로운 작업</span>
         </button>
-        <div style="flex:1; overflow-y:auto;">
+        <!-- 긴 대화 제목이 사이드바를 가로로 밀지 않도록 x축은 잠근다. -->
+        <div style="flex:1; overflow-y:auto; overflow-x:hidden; min-width:0;">
             <div class="nav-label">Workspace</div>
-            <button class="nav-item">
-                <i class="bi bi-chat-square-text"></i>
-                <span style="overflow:hidden; text-overflow:ellipsis;">수행평가 계획서</span>
-            </button>
+            <a class="nav-item" href="/research"><i class="bi bi-diagram-3"></i> 3년 연구 서사</a>
+            <a class="nav-item" href="/editor"><i class="bi bi-file-earmark-text"></i> HWP 편집기</a>
             <div class="nav-label">Tools</div>
             <button class="nav-item" id="btnOpenAuth"><i class="bi bi-person-badge"></i> 계정 로그인</button>
             <button class="nav-item" id="btnOpenCalendar"><i class="bi bi-calendar-check"></i> 과제 캘린더</button>
             <button class="nav-item" id="btnOpenLogin"><i class="bi bi-cloud-arrow-up"></i> 리로스쿨 연동</button>
-            <button class="nav-item" id="btnDownloadSide"><i class="bi bi-download"></i> 문서 저장</button>
+
+            <!-- 지금까지 만든 대화를 폴더로 나눠 모아 둔다.
+                 설계(연구 서사)와 실험(과목별)이 같은 채팅방에서 진행되므로
+                 여기서 갈라 놓지 않으면 서로 섞여 읽힌다. -->
+            <div class="nav-label">History</div>
+            <div id="historyList"></div>
+
+            <!-- ChatGPT 사용량. 한도에 걸리면 AI 단계가 전부 멈추므로 미리 보인다. -->
+            <div class="nav-label">Usage</div>
+            <div class="usage-box" id="usageBox">
+                <div class="usage-head">
+                    <span class="usage-name" id="usageName">ChatGPT</span>
+                    <span class="usage-pct" id="usagePct">–</span>
+                </div>
+                <div class="usage-bar"><span class="usage-fill" id="usageFill" style="width:0%"></span></div>
+                <div class="usage-note" id="usageNote">연결하면 표시돼요</div>
+            </div>
         </div>
         <div class="theme-toggle-row">
             <div class="theme-toggle-label">
@@ -1926,6 +2632,20 @@
             <i class="bi bi-layout-sidebar"></i>
         </button>
 
+        <!-- 채팅 옆 로드맵 요약. 진행 단계만 점으로 보여주고 누르면 /research로 간다. -->
+        <div class="roadmap-peek-wrap" id="roadmapPeek" hidden>
+            <a class="roadmap-peek" href="/research" aria-describedby="roadmapPeekHint">
+                <span class="peek-label">3년 로드맵</span>
+                <span class="peek-track" id="roadmapPeekTrack" aria-hidden="true"></span>
+                <span class="peek-count" id="roadmapPeekCount">0 / 6</span>
+            </a>
+            <button class="peek-help" type="button" id="roadmapPeekHelp"
+                    aria-expanded="false" aria-controls="roadmapPeekHint" aria-label="이 카드가 무엇인지 보기">
+                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </button>
+            <p class="peek-hint" id="roadmapPeekHint" hidden>누르면 3년 로드맵으로 이동해요.</p>
+        </div>
+
         <header class="mobile-header">
             <button class="btn-icon" id="btnMenu" style="color:white; background:none; border:none; font-size:1.4rem;"><i class="bi bi-list"></i></button>
             <div style="font-weight:700; font-size:1.1rem;">DOC Agent</div>
@@ -1933,56 +2653,27 @@
                 <button class="btn-icon theme-toggle-icon" id="btnThemeToggleMobile" data-theme-toggle aria-pressed="false" title="다크 모드 토글" style="background:none; border:none; font-size:1.1rem;">
                     <i class="bi bi-moon-stars" data-theme-icon></i>
                 </button>
-                <button class="btn-icon" id="btnDownloadMobile" style="color:white; background:none; border:none; font-size:1.2rem;"><i class="bi bi-download"></i></button>
             </div>
         </header>
 
         <div class="scroll-container" id="scrollContainer">
-            <div id="homeView" class="hero-container">
-                <div class="hero-logo"><i class="bi bi-stars"></i></div>
-                <div class="hero-text">How can I help you?</div>
-                <div class="hero-sub">문서 생성, 과제 관리, 캘린더 확인까지.</div>
+            <!-- 첫 화면은 인사말이 아니라 '지금 할 일'이다. 서버가 다음 단계를
+                 알고 있으므로(/api/research/next) 빈 입력창 앞에 세우지 않는다.
+                 내용은 home.js가 채운다. -->
+            <div id="homeView" class="home">
+                <div class="home-card" id="homeCard">
+                    <div class="home-skeleton" aria-hidden="true"></div>
+                </div>
             </div>
 
             <div id="resultView" class="doc-viewer">
                 <div id="chatStream" style="display:flex; flex-direction:column; width:100%;"></div>
                 
-                <div id="sectionFillPanel" class="section-fill-panel hidden"></div>
-
-                <div id="paperArea" class="paper-sheet">
-                    <div class="paper-title" id="docTitle">문서 제목</div>
-                    <iframe id="docFrame" class="doc-frame hidden" title="문서 미리보기"></iframe>
-                    <div id="docContent" class="paper-body markdown-body"></div>
-                </div>
-                <div style="height: 60px;"></div>
             </div>
         </div>
 
         <div class="input-region">
             <div class="input-wrapper">
-                <div id="fileBadge" class="file-badge-float hidden">
-                    <i class="bi bi-file-earmark-fill" style="color:var(--accent-primary);"></i> 
-                    <span id="fileName">File</span>
-                    <i class="bi bi-x" id="btnRemoveFile" style="cursor:pointer; margin-left:6px;"></i>
-                </div>
-
-                <!-- Analysis Status Badge (Simple & Minimal) -->
-                <div id="analysisOverlay" class="analysis-overlay hidden">
-                    <span class="status-icon-container"></span> <!-- For success/error icons -->
-                    <div class="typing-indicator">
-                        <span></span><span></span><span></span>
-                    </div>
-                    <span class="status-text">문서 분석 중...</span>
-                </div>
-
-                <div class="attach-menu" id="attachMenu">
-                    <button class="attach-item" id="btnSelectTemplate"><i class="bi bi-grid-1x2"></i> 양식 선택</button>
-                    <button class="attach-item" id="btnUploadTemplate"><i class="bi bi-upload"></i> 양식 업로드</button>
-                    <button class="attach-item" id="btnToggleRiro"><i class="bi bi-calendar-event"></i> 리로스쿨 모드</button>
-                </div>
-                <input type="file" id="fileInput" hidden>
-                
-                <button class="btn-attach" id="btnAttach"><i class="bi bi-plus-lg" style="font-size:1.2rem;"></i></button>
                 <textarea id="userRequest" rows="1" placeholder="메시지를 입력하세요..."></textarea>
                 <button id="btnSend" class="btn-send">
                     <i class="bi bi-arrow-up" id="iconSend" style="font-weight:bold; font-size:1.1rem;"></i>
@@ -1992,81 +2683,13 @@
         </div>
     </main>
 
-    <div id="inlineEditBubble" class="inline-edit-bubble hidden">
-        <div class="inline-edit-row">
-            <input type="text" id="inlineEditInput" class="inline-edit-input" placeholder="어떻게 수정할까요?">
-            <button type="button" id="inlineEditSubmit" class="inline-edit-submit">적용</button>
-        </div>
-    </div>
-    <div id="editCover" class="edit-cover hidden"></div>
-    <div id="canvasOverlay" class="canvas-overlay hidden">
-        <div class="canvas-panel">
-            <div id="canvasResizeHandle" class="canvas-resize-handle" role="separator" aria-orientation="vertical" aria-label="Canvas 폭 조절" tabindex="0"></div>
-            <div class="canvas-header">
-                <div class="canvas-title">Canvas</div>
-                <button type="button" id="btnCanvasClose" class="canvas-close" aria-label="닫기">×</button>
-            </div>
-            <div id="canvasBody" class="canvas-body"></div>
-        </div>
-    </div>
-
-    <div id="modalTemplate" class="modal-wrap">
-        <div class="modal-box template-modal">
-            <button class="btn-close-icon" id="closeTemplateModal"><i class="bi bi-x-lg"></i></button>
-            <div class="template-modal-header">
-                <h3>양식 선택</h3>
-                <p>업로드가 없다면 미리 준비된 양식으로 바로 시작하세요.</p>
-                <div class="template-search">
-                    <i class="bi bi-search"></i>
-                    <input type="text" id="templateSearch" placeholder="양식 검색">
-                </div>
-            </div>
-            <div id="templateList" class="template-grid"></div>
-            <div id="templateEmpty" class="template-empty hidden">사용 가능한 템플릿이 없습니다.</div>
-        </div>
-    </div>
-
-    <div id="modalDownload" class="modal-wrap">
-        <div class="modal-box download-modal">
-            <button class="btn-close-icon" id="closeDownloadModal"><i class="bi bi-x-lg"></i></button>
-            <div class="download-modal-header">
-                <h3>다운로드 옵션</h3>
-                <p id="downloadHint">한글에서 열려면 HWP를 선택하세요.</p>
-            </div>
-            <div class="download-options">
-                <label class="download-option">
-                    <input type="radio" name="downloadFormat" value="hwp" checked>
-                    <div class="download-option-body">
-                        <div class="download-option-title">HWP</div>
-                        <div class="download-option-desc">한글에서 바로 열 수 있는 HWP로 저장합니다.</div>
-                    </div>
-                </label>
-                <label class="download-option">
-                    <input type="radio" name="downloadFormat" value="pdf">
-                    <div class="download-option-body">
-                        <div class="download-option-title">PDF</div>
-                        <div class="download-option-desc">HTML 문서를 PDF로 변환합니다.</div>
-                    </div>
-                </label>
-                <label class="download-option">
-                    <input type="radio" name="downloadFormat" value="hwpx_xml">
-                    <div class="download-option-body">
-                        <div class="download-option-title">HWPX XML (텍스트)</div>
-                        <div class="download-option-desc">HTML을 XML 태그로 변환한 텍스트 파일입니다.</div>
-                    </div>
-                </label>
-            </div>
-            <div class="download-actions">
-                <button class="btn-secondary" id="btnDownloadCancel">취소</button>
-                <button class="btn-primary-3d" id="btnDownloadConfirm">다운로드</button>
-            </div>
-        </div>
-    </div>
-
     <div id="modalAuth" class="modal-wrap">
         <div class="modal-box login-modal">
             <button class="btn-close-icon" id="closeAuth"><i class="bi bi-x-lg"></i></button>
             <div class="login-simple">
+                <div class="login-brand">
+                    <i class="bi bi-stars" aria-hidden="true"></i>
+                </div>
                 <div class="login-heading">
                     <h3>계정 로그인</h3>
                     <p>내 문서를 저장하고 이어서 작업하려면 로그인하세요.</p>
@@ -2077,6 +2700,21 @@
                         <input type="text" id="authName" class="form-input" placeholder="이름 (회원가입 시)">
                     </div>
                     <div class="input-glass-container">
+                        <i class="bi bi-mortarboard"></i>
+                        <input
+                            type="text"
+                            id="authStudentNumber"
+                            class="form-input"
+                            inputmode="numeric"
+                            maxlength="4"
+                            pattern="[1-3][1-9](0[1-9]|[1-9][0-9])"
+                            aria-label="학년 반 번호로 구성된 학번 4자리"
+                            aria-describedby="authStudentNumberHelp"
+                            placeholder="학번 4자리 (예: 2412)"
+                        >
+                    </div>
+                    <p class="auth-field-help" id="authStudentNumberHelp"><strong>2412</strong> = 2학년 4반 12번 · 학년은 매년 3월 자동 변경</p>
+                    <div class="input-glass-container">
                         <i class="bi bi-envelope"></i>
                         <input type="email" id="authEmail" class="form-input" placeholder="이메일">
                     </div>
@@ -2085,9 +2723,9 @@
                         <input type="password" id="authPassword" class="form-input" placeholder="비밀번호">
                     </div>
                 </div>
-                <div style="display:flex; gap:10px; margin-top:12px;">
+                <div style="display:flex; gap:10px;">
                     <button id="btnAuthLogin" class="btn-primary-3d" style="flex:1;">로그인</button>
-                    <button id="btnAuthRegister" class="btn-primary-3d" style="flex:1; background:#0EA5E9;">회원가입</button>
+                    <button id="btnAuthRegister" class="btn-primary-3d btn-secondary-3d" style="flex:1;">회원가입</button>
                 </div>
                 <div class="login-footnote" id="authStatus"><i class="bi bi-shield-check"></i>이메일/비밀번호를 입력하세요.</div>
                 <div class="auth-divider"><span>또는</span></div>
@@ -2159,45 +2797,91 @@
     </div>
 
     <div id="modalLogin" class="modal-wrap">
-        <div class="modal-box login-modal">
+        <div class="modal-box riro-signin">
             <button class="btn-close-icon" id="closeLogin"><i class="bi bi-x-lg"></i></button>
-            <div class="login-simple">
-                <div class="login-heading">
-                    <h3>리로스쿨 로그인</h3>
-                    <p>학교 일정과 과제를 한 번에 연동하세요.</p>
-                </div>
-                <div class="login-fields">
-                    <div class="input-glass-container">
-                        <i class="bi bi-building"></i>
-                        <input type="text" id="riroSchool" class="form-input" placeholder="학교 이름">
-                    </div>
-                    <div class="input-glass-container">
-                        <i class="bi bi-person"></i>
-                        <input type="text" id="riroId" class="form-input" placeholder="아이디">
-                    </div>
-                    <div class="input-glass-container">
-                        <i class="bi bi-lock-fill"></i>
-                        <input type="password" id="riroPw" class="form-input" placeholder="비밀번호">
+            <div class="renewal_signin_wrap">
+                <div class="top_section">
+                    <img class="logo" src="/static/images/riro/logo_ic.svg" alt="리로스쿨" width="32" height="32">
+                    <div class="text">
+                        <p>안녕하세요!</p>
+                        <p><strong id="riroSchoolLabel">우리 학교</strong> 리로스쿨입니다.</p>
                     </div>
                 </div>
-                <button id="btnLoginAction" class="btn-primary-3d">연동하기</button>
-                <div class="login-footnote"><i class="bi bi-shield-check"></i>정보는 암호화되어 전송돼요.</div>
+                <div class="contents">
+                    <div class="signin_notice" id="riroAuthNotice">
+                        <p>리로스쿨 연동은 DOC Agent 계정으로 로그인한 뒤에 가능합니다.</p>
+                        <a href="/login?next=%2F" id="riroAuthNoticeLink">DOC Agent 로그인하러 가기</a>
+                    </div>
+                    <ul class="tabs">
+                        <li class="tab on" id="riroTabStudent">
+                            <img class="check_ic" id="riroTab1Img" src="/static/images/riro/check_regular.svg" alt="">
+                            <div class="check_text">학생 · 교사</div>
+                        </li>
+                        <li class="tab" id="riroTabParent">
+                            <img class="check_ic" id="riroTab2Img" src="/static/images/riro/non_check_regular.svg" alt="">
+                            <div class="check_text">학부모</div>
+                        </li>
+                    </ul>
+                    <form class="signin_form" onsubmit="return false;">
+                        <!-- 실제 리로는 학교별 하위 도메인으로 접속해 이 칸이 없다.
+                             우리는 어느 학교인지 받아야 해서 같은 input_normal로 한 칸 더 둔다. -->
+                        <div class="school_input">
+                            <input class="input_normal" type="text" id="riroSchool"
+                                   placeholder="학교 리로스쿨 주소 (예: okgwa)"
+                                   autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+                        </div>
+                        <div class="id_input">
+                            <input class="input_normal" type="text" id="riroId" placeholder="학교 아이디 또는 통합 아이디(이메일)">
+                            <div class="id_info">
+                                <img class="id_info_ic" src="/static/images/riro/info_red.svg" alt="안내">
+                                <p>리로스쿨 통합가입 회원은 <strong>이메일을 입력</strong>하세요.</p>
+                            </div>
+                        </div>
+                        <div class="password_input">
+                            <input class="input_normal" type="password" id="riroPw" placeholder="비밀번호" autocomplete="off">
+                        </div>
+                        <button class="button_normal" type="button" id="btnLoginAction">로그인</button>
+                        <p class="signin_error" id="riroStatus" role="status" aria-live="polite"></p>
+                    </form>
+                    <ul class="find_btn_area">
+                        <li class="find_btn" id="riroFindId">아이디 찾기</li>
+                        <li class="find_btn" id="riroFindPw">비밀번호 찾기</li>
+                    </ul>
+                </div>
+                <div class="none_signup" id="riroNoneSignup">
+                    <div class="none_signup_text">
+                        <p>학부모 회원가입은 <strong>리로스쿨 앱</strong>에서만 가능합니다.</p>
+                        <p>자녀 '개인 정보'에 학부모 휴대폰 번호가 등록되어야 회원가입 가능합니다.</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="modalCalendar" class="modal-wrap">
-        <div class="modal-box" style="max-width:680px;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-                <h3 style="color:white; margin:0;">Calendar</h3>
-                <i class="bi bi-x-lg" id="closeCalendar" style="color:#888; cursor:pointer;"></i>
-            </div>
-            <div id="calendarView"></div>
-        </div>
+    <div id="modalCalendar" class="modal-wrap calendar-modal-wrap" role="dialog" aria-modal="true" aria-labelledby="calendarModalTitle">
+        <section class="modal-box calendar-modal">
+            <header class="calendar-modal-header">
+                <div class="calendar-header-copy">
+                    <h2 class="calendar-modal-title" id="calendarModalTitle">과제 캘린더</h2>
+                    <div class="calendar-meta-bar" aria-label="일정 범례">
+                        <span class="calendar-legend-item"><span class="calendar-legend-dot assignment"></span>수행평가</span>
+                        <span class="calendar-legend-item"><span class="calendar-legend-dot notice"></span>학교 공지</span>
+                        <span class="calendar-event-count" id="calendarEventCount">일정 확인 중</span>
+                    </div>
+                </div>
+                <button class="calendar-close" id="closeCalendar" type="button" aria-label="캘린더 닫기">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </header>
+            <div id="calendarView" aria-live="polite"></div>
+        </section>
     </div>
 
-    <div id="toast" style="position:fixed; bottom:100px; right:20px; padding:12px 24px; background:#333; color:white; border-radius:10px; opacity:0; pointer-events:none; transition:0.3s;">Saved</div>
+    <div id="toast" class="app-toast" role="status" aria-live="polite"></div>
     
-    <script src="/static/js/index.js?v=45"></script>
+    <script src="/static/js/shell.js?v=1"></script>
+    <script src="/static/js/home.js?v=1"></script>
+    <script src="/static/js/guide.js?v=41"></script>
+    <script src="/static/js/history.js?v=20260729"></script>
 </body>
 </html>

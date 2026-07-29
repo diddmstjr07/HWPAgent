@@ -1,0 +1,21 @@
+{
+  "name": "hwp-agent-rhwp-studio",
+  "version": "0.7.7",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "e2e": "node e2e/text-flow.test.mjs"
+  },
+  "dependencies": {
+    "@rhwp/core": "file:../hwp-node/node_modules/@rhwp/core"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.40",
+    "puppeteer-core": "^24.42.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
+  }
+}
